@@ -7,7 +7,6 @@ import '../../core/app_export.dart';
 import 'package:drama_now/models/user/order_history_item.dart';
 import 'package:drama_now/services/api/api_client.dart';
 import 'package:drama_now/services/auth/auth_service.dart';
-import '../../l10n/app_localizations.dart';
 import '../../widgets/top_toast.dart';
 
 /// Screen displaying list of purchase/subscription history
@@ -72,7 +71,6 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? AppTheme.backgroundDark : AppTheme.backgroundLight;
     final textColor =
