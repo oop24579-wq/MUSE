@@ -1,0 +1,56 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Older releases of these two use Gradle APIs removed in 9.x.
+        classpath 'com.google.gms:google-services:4.4.4'
+        classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.2'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Gradle 9 removed the mutable `buildDir` property; `layout.buildDirectory` is
+// the replacement. Same result as before — build output lands in <repo>/build
+// rather than under android/ — but expressed with the API that still exists.
+rootProject.layout.buildDirectory.set(file('../build'))
+subprojects {
+    project.layout.buildDirectory.set(
+            rootProject.layout.buildDirectory.dir(project.name)
+    )
+}
+// Several pub packages (fluttertoast among them) still pin compileSdk 33, and
+// AGP 8.13 fails the build over it where 8.9 only warned. Their dependencies
+// require 34+. Overriding here is the standard fix — compileSdk only controls
+// which APIs the library compiles against, so raising it does not change
+// runtime behaviour or the minimum supported device.
+//
+// This must come *before* the evaluationDependsOn block below: that forces
+// ':app' to evaluate during configuration, and afterEvaluate cannot be
+// registered on a project that has already finished evaluating.
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android {
+                if (compileSdk == null || compileSdk < 36) {
+                    compileSdk = 36
+                }
+            }
+        }
+    }
+}
+
+subprojects {
+    project.evaluationDependsOn(':app')
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.layout.buildDirectory
+}

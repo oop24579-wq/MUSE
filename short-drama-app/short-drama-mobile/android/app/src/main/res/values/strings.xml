@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RadioPod</string>
+    <string name="admob_app_id">ca-app-pub-8421512402846188~2616664865</string>
+    <string name="facebook_app_id"></string>
+    <string name="facebook_client_token"></string>
+    <string name="fb_login_protocol_scheme"></string>
+</resources>

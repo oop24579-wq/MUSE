@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>604333749944-n4knmhc2ti91iutj482lrp29a4ktroum.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.604333749944-n4knmhc2ti91iutj482lrp29a4ktroum</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>604333749944-fn6vl3oq00e3rednksp496g815906v1e.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyAvEAnc22P-X8dsy6iocSHos0ENuWVymPs</string>
+	<key>GCM_SENDER_ID</key>
+	<string>604333749944</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.shortdrama.watchios</string>
+	<key>PROJECT_ID</key>
+	<string>short-drama-c8029</string>
+	<key>STORAGE_BUCKET</key>
+	<string>short-drama-c8029.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:604333749944:ios:3b4fe45c0e045ce31e264d</string>
+</dict>
+</plist>

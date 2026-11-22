@@ -1,0 +1,5 @@
+// Copy to `Signing.xcconfig` and fill in your own Apple Developer Team ID.
+// Find it at https://developer.apple.com/account -> Membership details.
+// Xcode's automatic signing needs this to resolve a provisioning profile;
+// without it, open Runner.xcworkspace and pick your team in Signing & Capabilities.
+DEVELOPMENT_TEAM =

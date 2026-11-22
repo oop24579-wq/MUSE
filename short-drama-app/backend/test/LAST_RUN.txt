@@ -1,0 +1,34 @@
+Server booted on http://127.0.0.1:41583 with temp DB /tmp/dramanow-test-42Gz3Z/app.db
+PASS 1. health/root responds
+PASS 2. dev firebase auth creates user + welcome coin bonus (30)
+PASS 3. refresh flow: new tokens issued; old refresh token rejected
+PASS 4. GET /categories returns genres with required fields
+PASS 5. GET /home sections shape
+PASS 6. discover filters popular/latest/ranking all return series[]
+PASS 7. search?q= returns matches
+PASS 8. series detail shape
+PASS 9. episodes list contains NO videoUrl field anywhere
+PASS 10. playback free episode -> 200 with videoUrl
+PASS 11. playback locked coin episode -> 403
+PASS 12. unlock with insufficient balance -> INSUFFICIENT_COINS
+PASS 13. grant coins via admin -> unlock succeeds -> balance decreased by coinCost -> playback 200
+PASS 14. VIP-only episode: 403 for non-VIP; admin sets VIP -> playback 200
+PASS 15. checkin: first claim pays; second claim same day does NOT double-pay
+PASS 16. reward task complete: once pays, second time does not
+PASS 17. favorite a series -> appears in GET /me/library/my-list
+PASS 18. POST /me/watch-history -> appears in history and in continue (incomplete)
+PASS 19. notifications: admin broadcast -> unread >=1 -> read -> unread 0
+PASS 20. admin genre create -> reflected in GET /categories -> admin delete -> gone
+PASS 21. GET /admin/stats returns the counters
+PASS 22. admin endpoints reject missing/wrong X-Admin-Token (401)
+PASS 23. GET /admin/settings returns the settings object
+PASS 24. PATCH episode_unlock_coin_cost=5 -> fresh user unlock deducts 5 (not 30); restored after
+PASS 25. PATCH checkin_amounts day-1=77 -> new user GET /rewards days[0].coins == 77; restored after
+PASS 26. maintenance mode: app endpoints 503, admin still 200, restore -> app works again
+PASS 27. reward tasks admin CRUD: create -> visible in GET /rewards -> delete -> gone
+PASS 28. GET /admin/notifications includes the broadcast from case 19
+PASS 29. GET /admin/transactions includes the coin-grant transaction from case 13
+PASS 30. premium_playback_mode=all_playback -> free playback 403 for non-VIP; back to disabled -> 200; original restored
+
+SUMMARY: total=30 passed=30 failed=0
+RESULT: ALL PASS

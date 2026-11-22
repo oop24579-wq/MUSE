@@ -1,0 +1,1485 @@
+{
+  "@@locale": "en",
+  "appTitle": "HERO DRAMA",
+  "@appTitle": {
+    "description": "The title of the application"
+  },
+  "settings": "Settings",
+  "@settings": {
+    "description": "Settings screen title"
+  },
+  "language": "Language",
+  "@language": {
+    "description": "Language selection label"
+  },
+  "selectLanguage": "Select Language",
+  "@selectLanguage": {
+    "description": "Language selection dialog title"
+  },
+  "languageChanged": "Language changed to {languageName}",
+  "@languageChanged": {
+    "description": "Success message when language is changed",
+    "placeholders": {
+      "languageName": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToChangeLanguage": "Failed to change language: {error}",
+  "@failedToChangeLanguage": {
+    "description": "Error message when language change fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "pickToEdit": "Browse Stations",
+  "@pickToEdit": {
+    "description": "Browse stations category title"
+  },
+  "selectPhotoFromGallery": "Find stations by genre, country, or language",
+  "@selectPhotoFromGallery": {
+    "description": "Browse stations category subtitle"
+  },
+  "selectFromGallery": "Select from gallery",
+  "@selectFromGallery": {
+    "description": "Gallery selection label"
+  },
+  "uploadAndEdit": "Upload and Edit",
+  "@uploadAndEdit": {
+    "description": "Upload and edit button text"
+  },
+  "pleaseSelectImageFirst": "Please select an image first",
+  "@pleaseSelectImageFirst": {
+    "description": "Error message when no image is selected"
+  },
+  "featured": "Featured Stations",
+  "@featured": {
+    "description": "Featured stations category title"
+  },
+  "exploreFeaturedEdits": "Explore curated radio picks",
+  "@exploreFeaturedEdits": {
+    "description": "Featured stations category subtitle"
+  },
+  "pro": "Pro",
+  "@pro": {
+    "description": "Pro subscription label"
+  },
+  "darkMode": "Dark mode",
+  "@darkMode": {
+    "description": "Switch to dark appearance; settings row label"
+  },
+  "lightMode": "Light mode",
+  "@lightMode": {
+    "description": "Switch to light appearance; settings row label"
+  },
+  "getFreeSongs": "Get Pro perks",
+  "@getFreeSongs": {
+    "description": "Settings row and sheet title for earning free songs"
+  },
+  "rewardDailyCheckIn": "Daily Check-in",
+  "@rewardDailyCheckIn": {
+    "description": "Reward task title: daily check-in"
+  },
+  "rewardDailyCheckInToday": "✦ {amount} today",
+  "@rewardDailyCheckInToday": {
+    "description": "Daily check-in reward amount line",
+    "placeholders": {
+      "amount": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardDailyCheckInTomorrowHint": "Check in tomorrow for ✦ {amount}",
+  "@rewardDailyCheckInTomorrowHint": {
+    "description": "Hint for next check-in reward",
+    "placeholders": {
+      "amount": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardClaimed": "Claimed",
+  "@rewardClaimed": {
+    "description": "Reward task already completed state"
+  },
+  "rewardClaim": "Claim",
+  "@rewardClaim": {
+    "description": "Button to claim a daily check-in reward"
+  },
+  "rewardShare": "Share",
+  "@rewardShare": {
+    "description": "Button to open the share sheet for share rewards"
+  },
+  "rewardCreditsEarned": "+{count} perk",
+  "@rewardCreditsEarned": {
+    "description": "Toast when free song credits are granted",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardCreditsEarnedPlural": "+{count} perks",
+  "@rewardCreditsEarnedPlural": {
+    "description": "Toast when multiple free song credits are granted",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardAlreadyClaimedToday": "Already claimed today",
+  "@rewardAlreadyClaimedToday": {
+    "description": "Daily check-in already completed"
+  },
+  "rewardLimitReached": "Limit reached for today",
+  "@rewardLimitReached": {
+    "description": "Share or invite reward limit reached"
+  },
+  "rewardActionFailed": "Could not complete reward. Try again.",
+  "@rewardActionFailed": {
+    "description": "Generic free songs reward failure"
+  },
+  "rewardDailyShareCreation": "Daily Share Creation",
+  "@rewardDailyShareCreation": {
+    "description": "Reward task title: share to earn"
+  },
+  "rewardPerShareSuffix": " / share, max {maxShares}",
+  "@rewardPerShareSuffix": {
+    "description": "Suffix for per-share reward line after gold amount",
+    "placeholders": {
+      "maxShares": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardShareEarnedFooter": "You can earn up to ✦ {maxPerDay} per day from sharing; you've earned ✦ {earnedSoFar} so far.",
+  "@rewardShareEarnedFooter": {
+    "description": "Footer explaining share rewards progress",
+    "placeholders": {
+      "maxPerDay": {
+        "type": "int"
+      },
+      "earnedSoFar": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardView": "View",
+  "@rewardView": {
+    "description": "Reward sheet button to open share flow"
+  },
+  "rewardInviteNewFriend": "Invite New Friend",
+  "@rewardInviteNewFriend": {
+    "description": "Reward task title: invite friends"
+  },
+  "rewardPerFriendSuffix": " / friend",
+  "@rewardPerFriendSuffix": {
+    "description": "Suffix after gold amount for invite rewards"
+  },
+  "rewardInviteFriendsFooter": "You can invite up to {maxFriends} friends to earn Pro perks and have invited {invitedCount} so far.",
+  "@rewardInviteFriendsFooter": {
+    "description": "Footer explaining invite limits and progress",
+    "placeholders": {
+      "maxFriends": {
+        "type": "int"
+      },
+      "invitedCount": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInvite": "Invite",
+  "@rewardInvite": {
+    "description": "Reward sheet button to invite friends"
+  },
+  "settingsProfileFriendsPlaceholder": "{count} friends",
+  "@settingsProfileFriendsPlaceholder": {
+    "description": "Profile card friends line until invites exist",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsProfileUpgradeSubtitle": "Unlimited episodes, ad-free & exclusive dramas",
+  "@settingsProfileUpgradeSubtitle": {
+    "description": "Profile card subtitle encouraging upgrade"
+  },
+  "settingsProfileProSubtitle": "Unlimited episodes & ad-free unlocked",
+  "@settingsProfileProSubtitle": {
+    "description": "Profile card subtitle for Pro users"
+  },
+  "settingsProfileUpgrade": "Upgrade",
+  "@settingsProfileUpgrade": {
+    "description": "Profile card upgrade button"
+  },
+  "settingsPromoBannerTitle": "Go Pro",
+  "@settingsPromoBannerTitle": {
+    "description": "Settings promo banner headline for free users"
+  },
+  "settingsProBannerTitle": "VIP Member",
+  "@settingsProBannerTitle": {
+    "description": "Settings promo banner headline for Pro users"
+  },
+  "settingsContactUs": "Contact us",
+  "@settingsContactUs": {
+    "description": "Settings social links card header"
+  },
+  "settingsProfileSignIn": "Sign in",
+  "@settingsProfileSignIn": {
+    "description": "Profile card sign-in CTA for guests"
+  },
+  "settingsProfileInvite": "Invite",
+  "@settingsProfileInvite": {
+    "description": "Profile card invite button placeholder"
+  },
+  "settingsProfileSongBalanceHint": "Pro listening perks available on your account.",
+  "@settingsProfileSongBalanceHint": {
+    "description": "Semantics label for balance info icon"
+  },
+  "settingsGetFreeSongsRow": "Get Pro perks",
+  "@settingsGetFreeSongsRow": {
+    "description": "Tappable row opening rewards sheet"
+  },
+  "weeklyStreakSectionTitle": "Weekly streak",
+  "@weeklyStreakSectionTitle": {
+    "description": "Label above weekly visit dots"
+  },
+  "weeklyStreakClaimGift": "Claim",
+  "@weeklyStreakClaimGift": {
+    "description": "Weekly streak gift button when week is complete"
+  },
+  "weeklyStreakClaimed": "Claimed",
+  "@weeklyStreakClaimed": {
+    "description": "Weekly streak after gift collected"
+  },
+  "weeklyStreakDayMon": "Mon",
+  "weeklyStreakDayTue": "Tue",
+  "weeklyStreakDayWed": "Wed",
+  "weeklyStreakDayThu": "Thu",
+  "weeklyStreakDayFri": "Fri",
+  "weeklyStreakDaySat": "Sat",
+  "weeklyStreakDaySun": "Sun",
+  "weeklyStreakModalTitle": "Weekly gift",
+  "@weeklyStreakModalTitle": {
+    "description": "Dialog title for 7-day reward"
+  },
+  "weeklyStreakModalBody": "You visited every day this week!",
+  "@weeklyStreakModalBody": {
+    "description": "Dialog body when streak complete"
+  },
+  "weeklyStreakModalReward": "+{count} free perks",
+  "@weeklyStreakModalReward": {
+    "description": "Dialog reward line",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "weeklyStreakModalFootnote": "Added to your Pro perk balance.",
+  "@weeklyStreakModalFootnote": {
+    "description": "Dialog footnote for weekly gift"
+  },
+  "weeklyStreakCollect": "Collect perks",
+  "@weeklyStreakCollect": {
+    "description": "Confirm claim button"
+  },
+  "weeklyStreakCollecting": "Collecting…",
+  "@weeklyStreakCollecting": {
+    "description": "Claim in progress"
+  },
+  "weeklyStreakSuccess": "{count} free perks added!",
+  "@weeklyStreakSuccess": {
+    "description": "Toast after successful claim",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "weeklyStreakClaimFailed": "Could not claim reward. Try again later.",
+  "@weeklyStreakClaimFailed": {
+    "description": "Claim error toast"
+  },
+  "weeklyStreakUnavailable": "Weekly reward unavailable.",
+  "@weeklyStreakUnavailable": {
+    "description": "When RPC fails or is not deployed"
+  },
+  "reminder": "Reminder",
+  "@reminder": {
+    "description": "Notification reminder label"
+  },
+  "notifications": "Notifications",
+  "@notifications": {
+    "description": "Notifications toggle label"
+  },
+  "notificationsEnabled": "Notifications enabled",
+  "@notificationsEnabled": {
+    "description": "Toast when notifications are enabled"
+  },
+  "notificationsDisabled": "Notifications are disabled. You can enable them in your device settings.",
+  "@notificationsDisabled": {
+    "description": "Toast when notifications are disabled"
+  },
+  "notificationsDisabledShort": "Disabled",
+  "@notificationsDisabledShort": {
+    "description": "Short label when notifications are disabled"
+  },
+  "notificationSettingsDescription": "Manage your push notification preferences",
+  "@notificationSettingsDescription": {
+    "description": "Subtitle in notification settings bottom sheet"
+  },
+  "pushNotifications": "Push Notifications",
+  "@pushNotifications": {
+    "description": "Label for push notifications toggle"
+  },
+  "redeemCode": "Redeem Code",
+  "@redeemCode": {
+    "description": "Redeem code menu item"
+  },
+  "rateUs": "Rate Us",
+  "@rateUs": {
+    "description": "Rate us menu item"
+  },
+  "support": "Support",
+  "@support": {
+    "description": "Support menu item"
+  },
+  "restorePurchase": "Restore Purchase",
+  "@restorePurchase": {
+    "description": "Restore purchase menu item"
+  },
+  "chatHistory": "Chat History",
+  "@chatHistory": {
+    "description": "Chat history menu item"
+  },
+  "termsOfUse": "Terms of Use",
+  "@termsOfUse": {
+    "description": "Terms of use menu item"
+  },
+  "privacyPolicy": "Privacy Policy",
+  "@privacyPolicy": {
+    "description": "Privacy policy menu item"
+  },
+  "followUsOnInstagram": "Follow us on Instagram",
+  "@followUsOnInstagram": {
+    "description": "Settings link label for Instagram"
+  },
+  "followUsOnFacebook": "Follow us on Facebook",
+  "@followUsOnFacebook": {
+    "description": "Settings link label for Facebook"
+  },
+  "followUsOnX": "Follow us on X",
+  "@followUsOnX": {
+    "description": "Settings link label for X (Twitter)"
+  },
+  "followUsOnTiktok": "Follow us on TikTok",
+  "@followUsOnTiktok": {
+    "description": "Settings link label for TikTok"
+  },
+  "initializingServices": "Initializing services...",
+  "@initializingServices": {
+    "description": "Splash screen initialization message"
+  },
+  "loadingConfiguration": "Loading configuration...",
+  "@loadingConfiguration": {
+    "description": "Splash screen configuration loading message"
+  },
+  "ready": "Ready!",
+  "@ready": {
+    "description": "Splash screen ready message"
+  },
+  "retry": "Retry",
+  "@retry": {
+    "description": "Retry button text"
+  },
+  "selectPhoto": "Select Photo",
+  "@selectPhoto": {
+    "description": "Photo selection screen title"
+  },
+  "takeAPicture": "Take a picture",
+  "@takeAPicture": {
+    "description": "Take photo button label"
+  },
+  "recentlyUsed": "Recently Used",
+  "@recentlyUsed": {
+    "description": "Recently used photos section title"
+  },
+  "uploadFromGallery": "Upload from Gallery",
+  "@uploadFromGallery": {
+    "description": "Upload from gallery section title"
+  },
+  "continueButton": "Continue",
+  "@continueButton": {
+    "description": "Continue button text"
+  },
+  "describeWhatYouWant": "Describe what you want",
+  "@describeWhatYouWant": {
+    "description": "Input prompt hint text"
+  },
+  "inputPromptHintExample": "e.g., \"Make it brighter\" or \"Remove the background\"",
+  "@inputPromptHintExample": {
+    "description": "Example hint text for input prompt field"
+  },
+  "writeYourPromptToEditThisImage": "Write your prompt to edit this image",
+  "@writeYourPromptToEditThisImage": {
+    "description": "Help message for manual prompt mode"
+  },
+  "uploadedImage": "Uploaded Image",
+  "@uploadedImage": {
+    "description": "User message text when image is uploaded"
+  },
+  "errorLoadingChat": "Error loading chat: {error}",
+  "@errorLoadingChat": {
+    "description": "Error message when loading chat fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "chatDeleted": "Chat deleted",
+  "@chatDeleted": {
+    "description": "Success message when chat is deleted"
+  },
+  "errorDeletingChat": "Error deleting chat: {error}",
+  "@errorDeletingChat": {
+    "description": "Error message when deleting chat fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noChatHistory": "No chat history",
+  "@noChatHistory": {
+    "description": "Empty state message when no chat history"
+  },
+  "yourChatConversationsWillAppearHere": "Your chat conversations will appear here",
+  "@yourChatConversationsWillAppearHere": {
+    "description": "Empty state subtitle for chat history"
+  },
+  "messages": "{count, plural, =0{no messages} =1{1 message} other{{count} messages}}",
+  "@messages": {
+    "description": "Message count text",
+    "placeholders": {
+      "count": {
+        "type": "num",
+        "format": "compact"
+      }
+    }
+  },
+  "justNow": "Just now",
+  "@justNow": {
+    "description": "Time ago text for just now"
+  },
+  "minutesAgo": "{minutes}m ago",
+  "@minutesAgo": {
+    "description": "Time ago text for minutes",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{hours}h ago",
+  "@hoursAgo": {
+    "description": "Time ago text for hours",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "yesterday": "Yesterday",
+  "@yesterday": {
+    "description": "Time ago text for yesterday"
+  },
+  "daysAgo": "{days}d ago",
+  "@daysAgo": {
+    "description": "Time ago text for days",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "signInSignUp": "Sign In / Sign Up",
+  "@signInSignUp": {
+    "description": "Auth card title"
+  },
+  "continueWithGoogle": "Continue with Google",
+  "@continueWithGoogle": {
+    "description": "Settings sign-in bottom sheet primary button"
+  },
+  "continueWithApple": "Continue with Apple",
+  "@continueWithApple": {
+    "description": "Settings sign-in bottom sheet Apple button"
+  },
+  "continueWithEmail": "Continue with Email",
+  "@continueWithEmail": {
+    "description": "Settings sign-in bottom sheet email button"
+  },
+  "saveYourEditsAndSyncAcrossDevices": "Save your edits and sync across devices",
+  "@saveYourEditsAndSyncAcrossDevices": {
+    "description": "Auth card subtitle"
+  },
+  "userIdCopiedToClipboard": "User ID copied to clipboard",
+  "@userIdCopiedToClipboard": {
+    "description": "Success message when user ID is copied"
+  },
+  "deleteAccount": "Delete Account",
+  "@deleteAccount": {
+    "description": "Delete account button label"
+  },
+  "deleteAccountTitle": "Delete Account?",
+  "@deleteAccountTitle": {
+    "description": "Delete account confirmation dialog title"
+  },
+  "deleteAccountWarning": "This will permanently delete your account and all associated data, including saved stations, playlists, downloads, and subscriptions. This action cannot be undone.",
+  "@deleteAccountWarning": {
+    "description": "Delete account confirmation warning message"
+  },
+  "deleteAccountConfirm": "Delete My Account",
+  "@deleteAccountConfirm": {
+    "description": "Confirm delete account button"
+  },
+  "deleteAccountCancel": "Cancel",
+  "@deleteAccountCancel": {
+    "description": "Cancel delete account button"
+  },
+  "deleteAccountSuccess": "Your account deletion request has been submitted",
+  "@deleteAccountSuccess": {
+    "description": "Success message after account deletion request"
+  },
+  "deleteAccountFailed": "Could not submit account deletion. Please try again.",
+  "@deleteAccountFailed": {
+    "description": "Error message when account deletion fails"
+  },
+  "deleteAccountProcessing": "Submitting deletion request…",
+  "@deleteAccountProcessing": {
+    "description": "Loading message while deleting account"
+  },
+  "signedOutSuccessfully": "Signed out successfully",
+  "@signedOutSuccessfully": {
+    "description": "Success message when user signs out"
+  },
+  "successfullySignedInWithGoogle": "Successfully signed in with Google",
+  "@successfullySignedInWithGoogle": {
+    "description": "Success message for Google sign in"
+  },
+  "googleSignInCancelledOrFailed": "Google sign-in was cancelled or failed",
+  "@googleSignInCancelledOrFailed": {
+    "description": "Error message for Google sign in failure"
+  },
+  "errorSigningInWithGoogle": "Error signing in with Google: {error}",
+  "@errorSigningInWithGoogle": {
+    "description": "Error message for Google sign in error",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "appleSignInOnlyAvailableOnIOS": "Apple Sign-In is only available on iOS and macOS",
+  "@appleSignInOnlyAvailableOnIOS": {
+    "description": "Error message when Apple sign in is not available"
+  },
+  "successfullySignedInWithApple": "Successfully signed in with Apple",
+  "@successfullySignedInWithApple": {
+    "description": "Success message for Apple sign in"
+  },
+  "appleSignInCancelledOrFailed": "Apple sign-in was cancelled or failed",
+  "@appleSignInCancelledOrFailed": {
+    "description": "Error message for Apple sign in failure"
+  },
+  "errorSigningInWithApple": "Error signing in with Apple: {error}",
+  "@errorSigningInWithApple": {
+    "description": "Error message for Apple sign in error",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "emailAuthentication": "Email Authentication",
+  "@emailAuthentication": {
+    "description": "Email auth bottom sheet title"
+  },
+  "signInOrCreateNewAccount": "Sign in or create a new account",
+  "@signInOrCreateNewAccount": {
+    "description": "Email auth bottom sheet subtitle"
+  },
+  "signIn": "Sign In",
+  "@signIn": {
+    "description": "Sign in tab label"
+  },
+  "register": "Register",
+  "@register": {
+    "description": "Register tab label"
+  },
+  "email": "Email",
+  "@email": {
+    "description": "Email field label"
+  },
+  "enterYourEmail": "Enter your email",
+  "@enterYourEmail": {
+    "description": "Email field hint"
+  },
+  "pleaseEnterYourEmail": "Please enter your email",
+  "@pleaseEnterYourEmail": {
+    "description": "Email validation error"
+  },
+  "pleaseEnterValidEmail": "Please enter a valid email",
+  "@pleaseEnterValidEmail": {
+    "description": "Email format validation error"
+  },
+  "password": "Password",
+  "@password": {
+    "description": "Password field label"
+  },
+  "enterYourPassword": "Enter your password",
+  "@enterYourPassword": {
+    "description": "Password field hint"
+  },
+  "pleaseEnterYourPassword": "Please enter your password",
+  "@pleaseEnterYourPassword": {
+    "description": "Password validation error"
+  },
+  "passwordMustBeAtLeast6Characters": "Password must be at least 6 characters",
+  "@passwordMustBeAtLeast6Characters": {
+    "description": "Password length validation error"
+  },
+  "confirmPassword": "Confirm Password",
+  "@confirmPassword": {
+    "description": "Confirm password field label"
+  },
+  "enterPasswordAgain": "Enter password again",
+  "@enterPasswordAgain": {
+    "description": "Confirm password field hint"
+  },
+  "createAPassword": "Create a password",
+  "@createAPassword": {
+    "description": "Password field hint for registration"
+  },
+  "reEnterYourPassword": "Re-enter your password",
+  "@reEnterYourPassword": {
+    "description": "Confirm password field hint for registration"
+  },
+  "pleaseEnterAPassword": "Please enter a password",
+  "@pleaseEnterAPassword": {
+    "description": "Password validation error for registration"
+  },
+  "passwordsDoNotMatch": "Passwords do not match",
+  "@passwordsDoNotMatch": {
+    "description": "Password mismatch validation error"
+  },
+  "forgotPassword": "Forgot Password?",
+  "@forgotPassword": {
+    "description": "Forgot password link text"
+  },
+  "successfullySignedIn": "Successfully signed in",
+  "@successfullySignedIn": {
+    "description": "Success message for email sign in"
+  },
+  "signInFailed": "Sign in failed. Please check your email and password.",
+  "@signInFailed": {
+    "description": "Error message for sign in failure"
+  },
+  "error": "Error: {error}",
+  "@error": {
+    "description": "Generic error message",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "accountCreatedSuccessfully": "Account created successfully! Please check your email for verification.",
+  "@accountCreatedSuccessfully": {
+    "description": "Success message for account creation"
+  },
+  "registrationFailed": "Registration failed. Please try again.",
+  "@registrationFailed": {
+    "description": "Error message for registration failure"
+  },
+  "pleaseEnterValidEmailAddress": "Please enter a valid email address",
+  "@pleaseEnterValidEmailAddress": {
+    "description": "Email validation error for password reset"
+  },
+  "passwordResetEmailSent": "Password reset email sent! Please check your inbox.",
+  "@passwordResetEmailSent": {
+    "description": "Success message for password reset email"
+  },
+  "failedToSendPasswordResetEmail": "Failed to send password reset email. Please try again.",
+  "@failedToSendPasswordResetEmail": {
+    "description": "Error message for password reset email failure"
+  },
+  "takeYourPhotosToNewHeights": "Live radio & podcasts\nworldwide",
+  "@takeYourPhotosToNewHeights": {
+    "description": "Getting started screen headline"
+  },
+  "getStarted": "Get Started",
+  "@getStarted": {
+    "description": "Get started button text"
+  },
+  "byContinuingYouAcceptOur": "By continuing, you accept our ",
+  "@byContinuingYouAcceptOur": {
+    "description": "Terms acceptance text prefix"
+  },
+  "termsOfService": "Terms of Service",
+  "@termsOfService": {
+    "description": "Terms of service link text"
+  },
+  "andAcknowledgeReceiptOfOur": " and acknowledge\nreceipt of our ",
+  "@andAcknowledgeReceiptOfOur": {
+    "description": "Terms acceptance text middle"
+  },
+  "welcomeToAiMusicMaker": "Welcome to HERO DRAMA!",
+  "@welcomeToAiMusicMaker": {
+    "description": "Privacy consent screen welcome message"
+  },
+  "customizeYourExperience": "Customize your experience",
+  "@customizeYourExperience": {
+    "description": "Privacy consent screen title"
+  },
+  "privacyConsentDescription": "We use tracking technologies that either are essential for the app to function correctly or are used to produce aggregated statistics. With your consent, we and our third-party partners will also use tracking technologies to improve the in-app experience, and to provide you with personalized services and targeted advertising. To give your consent, tap Accept All and Continue.",
+  "@privacyConsentDescription": {
+    "description": "Privacy consent screen main description"
+  },
+  "privacyConsentAlternative": "Alternatively, you can customize your privacy settings by tapping Customize Preferences, or by going to Privacy Settings at any time. If you don't want us to use non-technical tracking technologies, tap Refuse.",
+  "@privacyConsentAlternative": {
+    "description": "Privacy consent screen alternative description"
+  },
+  "forMoreInformationAboutHowWeProcess": "For more information about how we process your personal data through tracking technologies, take a look at our ",
+  "@forMoreInformationAboutHowWeProcess": {
+    "description": "Privacy policy link prefix"
+  },
+  "acceptAllAndContinue": "Accept All and Continue",
+  "@acceptAllAndContinue": {
+    "description": "Accept all button text"
+  },
+  "refuse": "Refuse",
+  "@refuse": {
+    "description": "Refuse button text"
+  },
+  "customizePreferences": "Customize Preferences",
+  "@customizePreferences": {
+    "description": "Customize preferences link text"
+  },
+  "processingSubscription": "Processing subscription...",
+  "@processingSubscription": {
+    "description": "Subscription processing message"
+  },
+  "userNotAuthenticated": "User not authenticated",
+  "@userNotAuthenticated": {
+    "description": "Error message when user is not authenticated"
+  },
+  "errorLoadingChatHistory": "Error loading chat history: {error}",
+  "@errorLoadingChatHistory": {
+    "description": "Error message when loading chat history fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "notSignedIn": "Not signed in",
+  "@notSignedIn": {
+    "description": "Text shown when user is not signed in"
+  },
+  "user": "User",
+  "@user": {
+    "description": "Default user display name"
+  },
+  "userId": "User ID",
+  "@userId": {
+    "description": "User ID label"
+  },
+  "signOut": "Sign Out",
+  "@signOut": {
+    "description": "Sign out button text"
+  },
+  "songDescription": "Station search",
+  "@songDescription": {
+    "description": "Tab label for song description input"
+  },
+  "lyrics": "Podcasts",
+  "@lyrics": {
+    "description": "Tab label for lyrics input"
+  },
+  "imageToSong": "By mood",
+  "@imageToSong": {
+    "description": "Tab label for image to song conversion"
+  },
+  "selectGenre": "Select Genre",
+  "@selectGenre": {
+    "description": "Label for genre selection section"
+  },
+  "selectMood": "Select Mood",
+  "@selectMood": {
+    "description": "Label for mood selection section"
+  },
+  "moodHappy": "Happy",
+  "@moodHappy": {
+    "description": "Happy mood label"
+  },
+  "moodSad": "Sad",
+  "@moodSad": {
+    "description": "Sad mood label"
+  },
+  "moodEnergetic": "Energetic",
+  "@moodEnergetic": {
+    "description": "Energetic mood label"
+  },
+  "moodRomantic": "Romantic",
+  "@moodRomantic": {
+    "description": "Romantic mood label"
+  },
+  "moodChill": "Chill",
+  "@moodChill": {
+    "description": "Chill mood label"
+  },
+  "moodMelancholic": "Melancholic",
+  "@moodMelancholic": {
+    "description": "Melancholic mood label"
+  },
+  "moodUplifting": "Uplifting",
+  "@moodUplifting": {
+    "description": "Uplifting mood label"
+  },
+  "moodDark": "Dark",
+  "@moodDark": {
+    "description": "Dark mood label"
+  },
+  "moodPeaceful": "Peaceful",
+  "@moodPeaceful": {
+    "description": "Peaceful mood label"
+  },
+  "moodIntense": "Intense",
+  "@moodIntense": {
+    "description": "Intense mood label"
+  },
+  "moodDreamy": "Dreamy",
+  "@moodDreamy": {
+    "description": "Dreamy mood label"
+  },
+  "moodNostalgic": "Nostalgic",
+  "@moodNostalgic": {
+    "description": "Nostalgic mood label"
+  },
+  "tabHome": "Home",
+  "@tabHome": {
+    "description": "Home tab label"
+  },
+  "tabSearch": "Search",
+  "@tabSearch": {
+    "description": "Search tab label"
+  },
+  "tabRadio": "Radio",
+  "@tabRadio": {
+    "description": "Radio tab label"
+  },
+  "tabPodcasts": "Podcasts",
+  "@tabPodcasts": {
+    "description": "Podcasts tab label"
+  },
+  "tabPlaylist": "Playlist",
+  "@tabPlaylist": {
+    "description": "Playlist tab label"
+  },
+  "settingsPodcastAutoDownload": "Auto-download new episodes",
+  "@settingsPodcastAutoDownload": {
+    "description": "Settings toggle for automatic podcast downloads"
+  },
+  "settingsPodcastAutoDownloadHint": "Pro feature — download new episodes on Wi‑Fi",
+  "@settingsPodcastAutoDownloadHint": {
+    "description": "Subtitle for auto-download toggle"
+  },
+  "settingsPodcastInbox": "New episode alerts",
+  "@settingsPodcastInbox": {
+    "description": "Settings toggle for podcast inbox notifications"
+  },
+  "settingsStreamingQuality": "Streaming quality",
+  "@settingsStreamingQuality": {
+    "description": "Settings row for audio stream quality"
+  },
+  "settingsQualityStandard": "Standard",
+  "@settingsQualityStandard": {
+    "description": "Standard streaming quality label"
+  },
+  "settingsQualityHigh": "High",
+  "@settingsQualityHigh": {
+    "description": "High streaming quality label (Pro)"
+  },
+  "settingsCarModeDefault": "Car mode by default",
+  "@settingsCarModeDefault": {
+    "description": "Settings toggle for default car mode"
+  },
+  "tabCreate": "Create",
+  "@tabCreate": {
+    "description": "Main tab label for Create"
+  },
+  "tabExplore": "Explore",
+  "@tabExplore": {
+    "description": "Main tab label for Explore"
+  },
+  "tabLibrary": "Library",
+  "@tabLibrary": {
+    "description": "Main tab label for Library"
+  },
+  "pressAgainToExit": "Press back again to exit",
+  "@pressAgainToExit": {
+    "description": "Android back hint on Create tab before closing the app"
+  },
+  "exploreRecentPublicTitle": "New Shows",
+  "@exploreRecentPublicTitle": {
+    "description": "Section title above public recent songs on Explore"
+  },
+  "hotPlaylists": "Hot Playlists",
+  "@hotPlaylists": {
+    "description": "Section title for explore category carousel"
+  },
+  "topArtists": "Top Podcasters",
+  "@topArtists": {
+    "description": "Section title for top creators on Explore"
+  },
+  "topSongs": "Top Stations",
+  "@topSongs": {
+    "description": "Section title for trending songs on Explore"
+  },
+  "newReleases": "New Episodes",
+  "@newReleases": {
+    "description": "Section title for newest public songs on Explore"
+  },
+  "explorePlaysCount": "{count} plays",
+  "@explorePlaysCount": {
+    "description": "Play count label on Explore lists",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeholderSongDescription": "Search jazz, news, rock, or talk radio...",
+  "@placeholderSongDescription": {
+    "description": "Placeholder text for song description input"
+  },
+  "placeholderLyrics": "Search podcasts or episodes...",
+  "@placeholderLyrics": {
+    "description": "Placeholder text for lyrics input"
+  },
+  "placeholderImageToSong": "Describe the station or show mood...",
+  "@placeholderImageToSong": {
+    "description": "Placeholder text for image to song input"
+  },
+  "readyToStartHeadline": "Live radio & podcasts worldwide",
+  "@readyToStartHeadline": {
+    "description": "Ready to Start screen headline"
+  },
+  "readyToStartLegalText": "By tapping next, you are agreeing to {appName} Terms of Use & Privacy Policy.",
+  "@readyToStartLegalText": {
+    "description": "Legal disclaimer on Ready to Start screen",
+    "placeholders": {
+      "appName": {
+        "type": "String"
+      }
+    }
+  },
+  "songIdeasHeading": "Station ideas",
+  "@songIdeasHeading": {
+    "description": "Section title above default song prompt chips"
+  },
+  "musicVideoIdeasHeading": "Podcast ideas",
+  "@musicVideoIdeasHeading": {
+    "description": "Section title above music video prompt chips"
+  },
+  "songIdeasCategoryAllGenres": "All genres / trending stations",
+  "@songIdeasCategoryAllGenres": {
+    "description": "Subtitle chip category for generic song prompts"
+  },
+  "songIdeasCategoryTrending": "Trending shows",
+  "@songIdeasCategoryTrending": {
+    "description": "Subtitle chip category for music video prompts"
+  },
+  "communityCollections": "Community Collections",
+  "@communityCollections": {
+    "description": "Section title for community playlist cards"
+  },
+  "communityCollectionsDesc": "Created by our community",
+  "@communityCollectionsDesc": {
+    "description": "Subtitle for community playlist section"
+  },
+  "trending": "Trending",
+  "@trending": {
+    "description": "Section title for trending songs"
+  },
+  "popularThisWeek": "Popular This Week",
+  "@popularThisWeek": {
+    "description": "Section title for popular songs column"
+  },
+  "paywallUnlockLine1": "Unlock",
+  "@paywallUnlockLine1": {
+    "description": "Paywall headline first line"
+  },
+  "paywallUnlockLine2": "VIP Access",
+  "@paywallUnlockLine2": {
+    "description": "Paywall headline second line"
+  },
+  "paywallHeadline": "Watch without limits with {appName}",
+  "@paywallHeadline": {
+    "description": "Paywall main headline with app name",
+    "placeholders": {
+      "appName": {
+        "type": "String"
+      }
+    }
+  },
+  "paywallSocialProof": "Over 80% of viewers choose this plan",
+  "@paywallSocialProof": {
+    "description": "Social proof pill above annual plan on paywall"
+  },
+  "paywallContinue": "Continue",
+  "@paywallContinue": {
+    "description": "Primary paywall CTA button label"
+  },
+  "paywallPerWeek": "{price} per week",
+  "@paywallPerWeek": {
+    "description": "Annual plan per-week price breakdown",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "paywallPerWeekLabel": "per week",
+  "@paywallPerWeekLabel": {
+    "description": "Second line under weekly price on plan cards"
+  },
+  "paywallFeatureCreateMusic": "Unlimited episodes",
+  "paywallFeatureIdeasToSongs": "Ad-free watching",
+  "paywallFeatureYourLyrics": "VIP-only dramas",
+  "paywallFeatureNoAds": "HD streaming",
+  "paywallWhatAreSongs": "Help?",
+  "@paywallWhatAreSongs": {
+    "description": "Chip that opens Pro help dialog on paywall"
+  },
+  "paywallHelpTitle": "What's in VIP",
+  "@paywallHelpTitle": {
+    "description": "Title for Pro help dialog on paywall"
+  },
+  "paywallHelpFeature1": "Watch every episode, no coins needed",
+  "paywallHelpFeature2": "Exclusive VIP-only series and premieres",
+  "paywallHelpFeature3": "Ad-free, HD streaming",
+  "paywallHelpFeature4": "Download episodes for offline viewing",
+  "paywallHelpGotIt": "Got it",
+  "@paywallHelpGotIt": {
+    "description": "Dismiss button for Pro help dialog"
+  },
+  "paywallSongsExplainerBody": "Pro unlocks ad-free listening, offline podcast downloads, premium radio stations, and high-quality streams.",
+  "@paywallSongsExplainerBody": {
+    "description": "Short bullet explainer for free vs Pro song limits and ads on paywall"
+  },
+  "paywallSongsExplainerThanks": "Thanks 😊",
+  "@paywallSongsExplainerThanks": {
+    "description": "Dismiss button for What are songs? dialog on paywall"
+  },
+  "paywallPlanYearly": "Yearly",
+  "paywallPlanMonthly": "Monthly",
+  "paywallPlanWeekly": "Weekly",
+  "paywallBillingYear": "{price}/Year",
+  "@paywallBillingYear": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "paywallBillingJustYear": "just {price}/year",
+  "@paywallBillingJustYear": {
+    "description": "Annual plan subtitle on left side of plan card",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "paywallBillingJustMonth": "just {price}/month",
+  "@paywallBillingJustMonth": {
+    "description": "Monthly plan subtitle on left side of plan card",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "paywallBillingWeek": "{price}/Week",
+  "@paywallBillingWeek": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "paywallSavePercent": "Save {percent}%",
+  "@paywallSavePercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "paywallCancelAnytime": "Cancel Anytime, Auto Renewable",
+  "paywallSubscribe": "Subscribe",
+  "paywallTerms": "Terms of Use",
+  "paywallPrivacy": "Privacy Policy",
+  "paywallRestore": "Restore Purchase",
+  "paywallGotIt": "OK",
+  "paywallNoPackages": "No subscription packages available.",
+  "paywallPurchaseFailed": "Purchase failed",
+  "paywallRestoreSuccess": "Purchases restored. Pro is active.",
+  "paywallRestoreNone": "No active subscription found to restore.",
+  "paywallRestoreFailed": "Restore failed",
+  "paywallClose": "Close",
+  "topUpBuy": "Buy",
+  "@topUpBuy": {
+    "description": "Top-up paywall primary purchase button"
+  },
+  "paywallRetry": "Retry",
+  "addCoverTitle": "Add a station preset",
+  "addCoverDescription": "Save a station with a custom name for quick access.",
+  "addCoverNameLabel": "Preset name",
+  "addCoverNameHint": "My morning news",
+  "addCoverAudioLabel": "Station stream",
+  "addCoverUploadAudio": "Paste stream URL",
+  "addCoverImageLabel": "Station logo (optional)",
+  "addCoverUploadImage": "Upload logo",
+  "addCoverSave": "Save preset",
+  "addCoverTermsPrefix": "I confirm I have rights to use this station stream and agree to the ",
+  "addCoverTermsLink": "Terms of Use",
+  "cancel": "Cancel",
+  "createYourFirstSong": "Find Your First Station",
+  "noGeneratedSongs": "Your saved stations will appear here",
+  "tabMySongs": "My Stations",
+  "tabMyVideos": "My Episodes",
+  "tabMyVoices": "My Presets",
+  "createYourFirstVideo": "Subscribe to a Podcast",
+  "noGeneratedVideos": "Your downloaded episodes will appear here",
+  "createYourOwnVoice": "Create Your Preset",
+  "noSavedVoices": "Your saved presets will appear here",
+  "settingsFaqDialogTitle": "Frequently asked questions",
+  "settingsFaqQ1": "What's included in the Free plan?",
+  "settingsFaqA1": "The Free plan lets you browse radio stations and podcasts, save favorites, and listen with standard streaming quality. Upgrade to Pro for ad-free listening, offline downloads, and premium stations.",
+  "settingsFaqQ2": "What does Pro include?",
+  "settingsFaqA2": "Pro unlocks ad-free radio and podcasts, offline episode downloads, premium stations, high-quality streams, and unlimited presets and playlists.",
+  "settingsFaqQ3": "Can I download podcasts for offline listening?",
+  "settingsFaqA3": "Yes. Pro subscribers can download podcast episodes for offline listening on Wi‑Fi or mobile data, depending on your settings.",
+  "settingsFaqQ4": "Can I listen to live radio worldwide?",
+  "settingsFaqA4": "Yes. Browse 100,000+ live radio stations by genre, country, and language. Save presets and jump back to your favorites anytime.",
+  "settingsFaqQ5": "What audio quality is available?",
+  "settingsFaqA5": "Free users get standard streaming quality. Pro includes high-quality streams for supported stations and podcasts.",
+  "settingsFaqQ6": "Can I cancel anytime?",
+  "settingsFaqA6": "Yes. You can cancel your subscription whenever you want. You'll keep Pro access until the end of your current billing period.",
+  "settingsFaqQ7": "Do you offer refunds?",
+  "settingsFaqA7": "If you run into an issue, contact us and we'll help. Refund eligibility can vary depending on usage and billing; we'll review requests case-by-case.",
+  "settingsFaqQ8": "Can I switch plans later?",
+  "settingsFaqA8": "Yes. You can upgrade or downgrade at any time. Changes take effect immediately or at the next billing cycle depending on the plan change.",
+  "settingsFaqQ9": "How do podcast subscriptions work?",
+  "settingsFaqA9": "Subscribe to any podcast in one tap. New episodes appear in your library, and you can resume playback exactly where you left off.",
+  "settingsFaqQ10": "How do playlists and presets work?",
+  "settingsFaqA10": "Save radio stations as presets, build playlists, and keep your listening history synced across sessions so you can continue where you stopped.",
+  "settingsFaqQ11": "Which content is Pro-only?",
+  "settingsFaqA11": "Some premium stations, offline downloads, ad-free listening, and high-quality streams require Pro. Free users can still explore most radio and podcast content.",
+  "proBudgetHelpTitle": "How Pro listening works",
+  "@proBudgetHelpTitle": {
+    "description": "Title for Pro song credits help dialog"
+  },
+  "proBudgetHelpBullet1": "Pro removes ads from radio and podcast playback and unlocks premium listening features.",
+  "@proBudgetHelpBullet1": {
+    "description": "Pro budget help dialog bullet 1"
+  },
+  "proBudgetHelpBullet2": "Your saved stations, presets, and playlists stay synced while you listen across the app.",
+  "@proBudgetHelpBullet2": {
+    "description": "Pro budget help dialog bullet 2"
+  },
+  "proBudgetHelpBullet3": "Offline downloads let you save podcast episodes and listen without a connection.",
+  "@proBudgetHelpBullet3": {
+    "description": "Pro budget help dialog bullet 3"
+  },
+  "proBudgetHelpBullet4": "Tap the Pro badge anytime to view plans or restore your subscription.",
+  "@proBudgetHelpBullet4": {
+    "description": "Pro budget help dialog bullet 4"
+  },
+  "proBudgetHelpGotIt": "Got it",
+  "@proBudgetHelpGotIt": {
+    "description": "Dismiss Pro budget help dialog"
+  },
+  "headerHelpChip": "Help?",
+  "@headerHelpChip": {
+    "description": "Small help chip next to Pro badge"
+  },
+  "splashTagline": "Short dramas you cannot stop watching",
+  "@splashTagline": {
+    "description": "Splash screen tagline under app name"
+  },
+  "splashInitErrorTitle": "Initialization Error",
+  "splashInitErrorMessage": "Failed to initialize the app. Please check your permissions and try again.",
+  "tabAiCovers": "Discover",
+  "@tabAiCovers": {
+    "description": "Main bottom nav tab for AI cover voices"
+  },
+  "tabMusicVideo": "Offline",
+  "@tabMusicVideo": {
+    "description": "Create tab label for music video mode"
+  },
+  "placeholderMusicVideo": "Search podcasts to download...",
+  "@placeholderMusicVideo": {
+    "description": "Prompt placeholder on music video create tab"
+  },
+  "aiCoversPill": "Premium",
+  "aiCoversPillCount": "+{count} premium",
+  "@aiCoversPillCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aiCoverVoicesSheetTitle": "Premium Stations",
+  "searchVoicesHint": "Search presets…",
+  "yourVoices": "Your presets",
+  "noVoicesYet": "No presets yet",
+  "categoryOther": "Other",
+  "aiCoversClear": "Clear",
+  "selectMusicModel": "Stream quality",
+  "signInToAddCoverVoice": "Please sign in to save a preset",
+  "musicVideoPromoTitle": "Offline listening",
+  "musicVideoPromoSubtitle": "Download episodes\nfor offline play",
+  "musicVideoPromoCreate": "Browse",
+  "musicGeneratedSuccess": "Now playing!",
+  "musicVideoGeneratedSuccess": "Download started!",
+  "describeMusicVideoConcept": "Choose a podcast episode to download",
+  "noVideoCreditsRemaining": "No download credits remaining. Upgrade to Pro to continue.",
+  "musicVideoGeneratingHeadline": "Preparing your download...",
+  "musicVideoReadyHeadline": "Episode ready offline!",
+  "musicVideoReadyToast": "Episode downloaded! Open your library to listen offline.",
+  "musicVideoGenerateFailed": "Failed to download episode: {error}",
+  "@musicVideoGenerateFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "musicReadyToast": "Station ready! Tap play to listen live.",
+  "notAuthenticated": "Not authenticated",
+  "songDeleted": "Removed from library",
+  "errorDeletingSong": "Error removing item: {error}",
+  "@errorDeletingSong": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noPreviewForVoice": "No preview available for this preset",
+  "maleVoice": "Talk radio",
+  "femaleVoice": "Music station",
+  "aiCoverVoiceLabel": "Station preset",
+  "genderMale": "Male",
+  "genderFemale": "Female",
+  "videoStatusCompleted": "Completed",
+  "videoStatusGenerating": "Downloading",
+  "videoStatusFailed": "Failed",
+  "recordVoiceTitle": "Name Preset",
+  "recordVoiceRerecord": "Re-record",
+  "recordVoiceUseThis": "Use This",
+  "recordVoiceMicRequired": "Microphone access required",
+  "recordVoiceMicSettingsHint": "Please enable microphone access\nin your device settings.",
+  "recordVoiceOpenSettings": "Open Settings",
+  "recordVoiceRecording": "Recording...",
+  "recordVoiceComplete": "Recording complete",
+  "recordVoiceTapToStart": "Tap to name your preset",
+  "recordVoicePlaying": "Playing...",
+  "recordVoiceTapPreview": "Tap to preview",
+  "recordVoiceTip1": "Speak clearly when naming",
+  "recordVoiceTip2": "Keep it short and memorable",
+  "recordVoiceTip3": "Use a quiet environment",
+  "uploadFile": "Upload File",
+  "recordVoiceButton": "Record Name",
+  "coverVoiceAdded": "Preset saved",
+  "audioFileMaxSize": "Audio file must be less than {size}MB",
+  "@audioFileMaxSize": {
+    "placeholders": {
+      "size": {
+        "type": "int"
+      }
+    }
+  },
+  "imageFileMaxSize": "Image file must be less than {size}MB",
+  "@imageFileMaxSize": {
+    "placeholders": {
+      "size": {
+        "type": "int"
+      }
+    }
+  },
+  "addYourOwnVoice": "Add your\nown preset",
+  "@addYourOwnVoice": {
+    "description": "Label on dashed card to create a custom AI cover voice (sheet and AI Covers tab)"
+  },
+  "aiCoverPageTitle": "Discover",
+  "@aiCoverPageTitle": {
+    "description": "Title on the AI Cover tab page"
+  },
+  "aiCoverPickSongSection": "1. Pick a station",
+  "aiCoverChooseSongHint": "Choose a station to save.",
+  "aiCoverChooseVoiceSection": "2. Choose a preset",
+  "aiCoverSearchHint": "Search",
+  "aiCoverFilterHot": "Hot 🔥",
+  "aiCoverFilterMyVoices": "My Presets",
+  "aiCoverFilterNew": "New ✨",
+  "aiCoverFilterSimilar": "Similar",
+  "aiCoverCreateVoice": "Create Preset",
+  "aiCoverCreateButton": "Save station",
+  "aiCoverSelectSong": "Please choose a station",
+  "aiCoverSelectVoice": "Please choose a preset",
+  "aiCoverPickFromLibrary": "From my library",
+  "aiCoverUploadAudio": "Upload audio file",
+  "aiCoverPickSongTitle": "Pick a station",
+  "aiCoverGenderFilter": "Genre filter",
+  "aiCoverGenderAll": "All",
+  "recordedAudio": "Recorded audio",
+  "maxFileSizeHint": "Max {size}MB",
+  "@maxFileSizeHint": {
+    "placeholders": {
+      "size": {
+        "type": "int"
+      }
+    }
+  },
+  "manageSubscriptions": "Manage Subscriptions",
+  "@manageSubscriptions": {
+    "description": "Settings row to open App Store / Play subscription management"
+  },
+  "settingsPurchasesRestoredSuccess": "Purchases restored successfully",
+  "@settingsPurchasesRestoredSuccess": {
+    "description": "Toast after successful restore from settings"
+  },
+  "settingsRestorePurchasesError": "Error restoring purchases: {error}",
+  "@settingsRestorePurchasesError": {
+    "description": "Toast when restore purchases fails from settings",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotOpenSubscriptionPage": "Could not open subscription page. Please visit your device's app store settings.",
+  "@couldNotOpenSubscriptionPage": {
+    "description": "Error when subscription management URL fails to open"
+  },
+  "couldNotOpenLink": "Could not open link",
+  "@couldNotOpenLink": {
+    "description": "Generic error when a settings URL fails to open"
+  },
+  "topUpSheetTitle": "Top-ups",
+  "@topUpSheetTitle": {
+    "description": "Unified top-up paywall sheet title"
+  },
+  "topUpBalanceHint": "Balance: {count} listening credits",
+  "@topUpBalanceHint": {
+    "description": "Pro user unified credit balance on top-up sheet",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "topUpPerCredit": "{price} / credit",
+  "@topUpPerCredit": {
+    "description": "Per-credit price line on checkout bar",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpTierSmall": "Small",
+  "topUpTierMedium": "Medium",
+  "topUpTierLarge": "Large",
+  "topUpRecommended": "RECOMMENDED",
+  "topUpBestValue": "BEST VALUE",
+  "topUpCreditsLabel": "credits",
+  "topUpExtraCredits": "{count} credits",
+  "@topUpExtraCredits": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "topUpSelectPack": "Select a pack",
+  "topUpNoPacksInSize": "No packs in this size",
+  "topUpProductsNotConfigured": "Top-up products are not configured. Add topup_product_ids in Remote Config.",
+  "topUpProductsLoadFailed": "Could not load top-up products. Check RevenueCat + store IDs match Remote Config.",
+  "topUpPurchaseSetupFailed": "Purchase setup failed. Please try again.",
+  "topUpPurchaseSuccess": "Top-up added! You now have {count} credits.",
+  "@topUpPurchaseSuccess": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "topUpPurchaseFailed": "Purchase failed: {error}",
+  "@topUpPurchaseFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpSignInRequired": "Please sign in to purchase top-ups.",
+  "proBudgetLongPressToast": "You still have {dailyLeft, plural, one{1 free listen} other{{dailyLeft} free listens}} left today, and {topUpLeft, plural, one{1 bonus listen} other{{topUpLeft} bonus listens}} ready when you need them.",
+  "@proBudgetLongPressToast": {
+    "description": "Toast when long-pressing Pro badge; daily and top-up counts",
+    "placeholders": {
+      "dailyLeft": {
+        "type": "int"
+      },
+      "topUpLeft": {
+        "type": "int"
+      }
+    }
+  },
+  "forceUpdateTitle": "Update Required",
+  "@forceUpdateTitle": {
+    "description": "Title for mandatory app update dialog"
+  },
+  "forceUpdateMessage": "A new version of the app is available. Please update to continue using the app.",
+  "@forceUpdateMessage": {
+    "description": "Message for mandatory app update dialog"
+  },
+  "optionalUpdateTitle": "Update Available",
+  "@optionalUpdateTitle": {
+    "description": "Title for optional app update dialog"
+  },
+  "optionalUpdateMessage": "A new version is available with improvements and bug fixes. Would you like to update?",
+  "@optionalUpdateMessage": {
+    "description": "Message for optional app update dialog"
+  },
+  "updateNow": "Update Now",
+  "@updateNow": {
+    "description": "Button to open the app store for an update"
+  },
+  "maybeLater": "Maybe Later",
+  "@maybeLater": {
+    "description": "Dismiss optional update dialog"
+  }
+}
+

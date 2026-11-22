@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HERO DRAMA — Admin</title>
+<style>
+:root{--bg:#0b0b10;--panel:#15151d;--panel2:#1c1c27;--border:#2a2a3a;--text:#f2f2f5;--muted:#9a9aad;--accent:#e91e63;--accent2:#ff2e7e;--accent-grad:linear-gradient(135deg,#d90452,#ff2e7e);--ok:#2ecc71;--warn:#ffb020;--danger:#ff4757;--radius:12px}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
+a{color:var(--accent2)}
+button{cursor:pointer;font:inherit}
+.btn{background:var(--accent-grad);color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:600}
+.btn:hover{filter:brightness(1.12)}
+.btn.secondary{background:var(--panel2);color:var(--text);border:1px solid var(--border)}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
+.btn.small{padding:4px 10px;font-size:13px;border-radius:6px}
+.btn:disabled{opacity:.5;cursor:default}
+input,select,textarea{width:100%;background:#0f0f16;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:inherit}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);border-color:transparent}
+label{display:block;font-size:12px;color:var(--muted);margin:0 0 4px;text-transform:uppercase;letter-spacing:.04em}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+tr:hover td{background:rgba(255,255,255,.02)}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px}
+.stat .num{font-size:32px;font-weight:800;background:var(--accent-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.stat .lbl{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.05em}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.form-grid .wide{grid-column:span 2}
+@media(max-width:640px){.form-grid .wide{grid-column:span 1}}
+.check{display:flex;align-items:center;gap:8px;padding-top:18px}
+.check input{width:auto}
+.check label{margin:0;text-transform:none;font-size:14px;color:var(--text)}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--panel2);border:1px solid var(--accent);color:var(--text);padding:12px 18px;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.5);z-index:99;max-width:90vw}
+.toast.err{border-color:var(--danger)}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;background:var(--panel2);border:1px solid var(--border)}
+.badge.vip{background:#3a2b00;border-color:var(--warn);color:var(--warn)}
+.badge.free{border-color:var(--ok);color:var(--ok)}
+.muted{color:var(--muted)} .small{font-size:13px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+.thumb{width:44px;height:60px;object-fit:cover;border-radius:6px;background:#000}
+.hidden{display:none!important}
+/* layout */
+#app{display:flex;min-height:100vh}
+aside{width:230px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);padding:18px 12px;display:flex;flex-direction:column;gap:4px}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 16px}
+.brand img{width:44px;height:44px;border-radius:10px;object-fit:cover}
+.brand .t1{font-weight:900;font-size:18px;letter-spacing:.03em;line-height:1.1}
+.brand .t2{color:var(--accent2);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em}
+nav button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--muted);padding:10px 12px;border-radius:8px;font-weight:600}
+nav button:hover{color:var(--text);background:var(--panel2)}
+nav button.active{color:#fff;background:var(--accent-grad)}
+main{flex:1;padding:22px;min-width:0;overflow-x:auto}
+main h2{margin:0 0 16px;font-size:22px}
+@media(max-width:760px){#app{flex-direction:column}aside{width:100%;flex-direction:row;flex-wrap:wrap;align-items:center}nav{display:flex;flex-wrap:wrap}nav button{width:auto}main{padding:14px}}
+/* login */
+#login{position:fixed;inset:0;background:radial-gradient(1000px 600px at 50% 20%,#2a0a1c,var(--bg));display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+#login .box{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:32px;width:380px;max-width:100%;text-align:center}
+#login img{width:84px;height:84px;border-radius:18px}
+#login h1{margin:14px 0 2px;font-size:26px;letter-spacing:.03em}
+#login p{color:var(--muted);margin:0 0 20px}
+#login form{text-align:left;display:grid;gap:12px}
+.picker-item{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:6px}
+.dub-row{display:grid;grid-template-columns:120px 1fr auto;gap:8px;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="box">
+    <img src="logo.png" alt="HERO DRAMA logo">
+    <h1>HERO DRAMA</h1>
+    <p>Admin Dashboard</p>
+    <form id="loginForm">
+      <div><label for="tokenInput">Admin Token</label>
+      <input id="tokenInput" type="password" placeholder="X-Admin-Token" autocomplete="off"></div>
+      <div id="loginError" class="small" style="color:var(--danger)"></div>
+      <button class="btn" type="submit">Sign in</button>
+      <p class="small muted" style="margin:0">Dev default: <code>dev-admin-token-change-me</code></p>
+    </form>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <aside>
+    <div class="brand"><img src="logo.png" alt="HERO DRAMA logo"><div><div class="t1">HERO DRAMA</div><div class="t2">Admin</div></div></div>
+    <nav id="nav">
+      <button data-section="overview" class="active">Overview</button>
+      <button data-section="genres">Genres</button>
+      <button data-section="series">Series</button>
+      <button data-section="episodes">Episodes</button>
+      <button data-section="home">Home Sections</button>
+      <button data-section="users">Users</button>
+      <button data-section="rewards">Rewards &amp; Economy</button>
+      <button data-section="notifications">Notifications</button>
+      <button data-section="settings">App Settings</button>
+      <button data-section="transactions">Transactions</button>
+    </nav>
+    <div class="spacer"></div>
+    <button class="btn secondary" id="logoutBtn">Logout</button>
+  </aside>
+  <main>
+    <!-- OVERVIEW -->
+    <section id="sec-overview">
+      <h2>Overview</h2>
+      <div class="grid" id="statsGrid"><p class="muted">Loading…</p></div>
+      <button class="btn secondary" id="refreshStats">Refresh</button>
+      <div class="form-grid" style="margin-top:16px;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">
+        <div class="card" style="margin:0"><h3 style="margin-top:0">Top 5 Series (by views)</h3><div id="topSeries"></div></div>
+        <div class="card" style="margin:0"><h3 style="margin-top:0">Recent Transactions</h3><div id="recentTx"></div></div>
+      </div>
+    </section>
+
+    <!-- GENRES -->
+    <section id="sec-genres" class="hidden">
+      <h2>Genres</h2>
+      <div class="card">
+        <h3 id="genreFormTitle" style="margin-top:0">New Genre</h3>
+        <form id="genreForm"><input type="hidden" id="g_id">
+          <div class="form-grid">
+            <div><label>Name *</label><input id="g_name" required></div>
+            <div><label>Slug *</label><input id="g_slug" required placeholder="romance"></div>
+            <div><label>Sort Order</label><input id="g_sortOrder" type="number" value="0"></div>
+            <div><label>Color Hex</label><input id="g_colorHex" placeholder="#e91e63"></div>
+            <div class="wide"><label>Icon URL</label><input id="g_iconUrl"></div>
+            <div class="wide"><label>Description</label><textarea id="g_description" rows="2"></textarea></div>
+          </div>
+          <div class="row" style="margin-top:12px"><button class="btn" type="submit">Save Genre</button><button class="btn secondary" type="button" id="genreReset">Clear</button></div>
+        </form>
+      </div>
+      <div class="card"><div style="overflow-x:auto"><table><thead><tr><th></th><th>Name</th><th>Slug</th><th>Sort</th><th>Color</th><th></th></tr></thead><tbody id="genreRows"></tbody></table></div></div>
+    </section>
+
+    <!-- SERIES -->
+    <section id="sec-series" class="hidden">
+      <h2>Series</h2>
+      <div class="card">
+        <h3 id="seriesFormTitle" style="margin-top:0">New Series</h3>
+        <form id="seriesForm"><input type="hidden" id="s_id">
+          <div class="form-grid">
+            <div><label>Title *</label><input id="s_title" required></div>
+            <div><label>Slug *</label><input id="s_slug" required placeholder="my-series"></div>
+            <div><label>Genre</label><select id="s_genreId"><option value="">— none —</option></select></div>
+            <div><label>Tagline</label><input id="s_tagline"></div>
+            <div class="wide"><label>Synopsis</label><textarea id="s_synopsis" rows="3"></textarea></div>
+            <div class="wide"><label>Cover Image URL</label><input id="s_coverImageUrl"></div>
+            <div class="wide"><label>Hero Image URL</label><input id="s_heroImageUrl"></div>
+            <div class="wide"><label>Trailer URL</label><input id="s_trailerUrl"></div>
+            <div><label>Release Year</label><input id="s_releaseYear" type="number"></div>
+            <div><label>Total Episodes</label><input id="s_totalEpisodes" type="number" value="0"></div>
+            <div><label>Total Seasons</label><input id="s_totalSeasons" type="number" value="1"></div>
+            <div><label>Language</label><input id="s_language" value="en"></div>
+            <div><label>Rating Avg</label><input id="s_ratingAvg" type="number" step="0.1" min="0" max="10"></div>
+            <div><label>Rank Score</label><input id="s_rankScore" type="number" step="0.01"></div>
+            <div><label>Sort Order</label><input id="s_sortOrder" type="number" value="0"></div>
+            <div class="wide"><label>Tags (comma separated)</label><input id="s_tags" placeholder="romance, ceo, revenge"></div>
+            <div class="wide"><label>Dub Languages (comma separated)</label><input id="s_dubLanguages" placeholder="es, ar"></div>
+            <div class="check"><input type="checkbox" id="s_isVipOnly"><label for="s_isVipOnly">VIP Only</label></div>
+            <div class="check"><input type="checkbox" id="s_isExclusive"><label for="s_isExclusive">Exclusive</label></div>
+            <div class="check"><input type="checkbox" id="s_isNew"><label for="s_isNew">New</label></div>
+            <div class="check"><input type="checkbox" id="s_isHot"><label for="s_isHot">Hot</label></div>
+            <div class="check"><input type="checkbox" id="s_isCompleted"><label for="s_isCompleted">Completed</label></div>
+            <div class="check"><input type="checkbox" id="s_isFeatured"><label for="s_isFeatured">Featured</label></div>
+            <div class="check"><input type="checkbox" id="s_isDubbed"><label for="s_isDubbed">Dubbed</label></div>
+          </div>
+          <div class="row" style="margin-top:12px"><button class="btn" type="submit">Save Series</button><button class="btn secondary" type="button" id="seriesReset">Clear</button></div>
+        </form>
+      </div>
+      <div class="card"><div style="overflow-x:auto"><table><thead><tr><th></th><th>Title</th><th>Genre</th><th>Year</th><th>Eps</th><th>Views</th><th>Flags</th><th></th></tr></thead><tbody id="seriesRows"></tbody></table></div></div>
+    </section>
+
+    <!-- EPISODES -->
+    <section id="sec-episodes" class="hidden">
+      <h2>Episodes</h2>
+      <div class="card"><label>Series</label><div class="row"><select id="epSeriesPick" style="max-width:420px"></select><button class="btn secondary" id="epReload">Reload</button></div></div>
+      <div class="card">
+        <h3 id="epFormTitle" style="margin-top:0">New Episode</h3>
+        <form id="epForm"><input type="hidden" id="e_id">
+          <div class="form-grid">
+            <div><label>Episode Number *</label><input id="e_episodeNumber" type="number" required value="1"></div>
+            <div><label>Season Number</label><input id="e_seasonNumber" type="number" value="1"></div>
+            <div><label>Title</label><input id="e_title"></div>
+            <div><label>Duration (seconds)</label><input id="e_durationSeconds" type="number"></div>
+            <div class="wide"><label>Description</label><textarea id="e_description" rows="2"></textarea></div>
+            <div class="wide"><label>Video URL (server-side)</label><input id="e_videoUrl"></div>
+            <div class="wide"><label>Thumbnail URL</label><input id="e_thumbnailUrl"></div>
+            <div><label>Coin Cost</label><input id="e_coinCost" type="number" value="0"></div>
+            <div><label>Sort Order</label><input id="e_sortOrder" type="number"></div>
+            <div class="check"><input type="checkbox" id="e_isFree"><label for="e_isFree">Free</label></div>
+            <div class="check"><input type="checkbox" id="e_isVipOnly"><label for="e_isVipOnly">VIP Only</label></div>
+          </div>
+          <div style="margin-top:14px"><label>Dub Tracks</label><div id="dubRows"></div>
+          <button class="btn secondary small" type="button" id="addDub">+ Add dub track</button></div>
+          <div class="row" style="margin-top:12px"><button class="btn" type="submit">Save Episode</button><button class="btn secondary" type="button" id="epReset">Clear</button></div>
+        </form>
+      </div>
+      <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Title</th><th>Duration</th><th>Access</th><th>Coins</th><th>Views</th><th>Dubs</th><th></th></tr></thead><tbody id="epRows"></tbody></table></div></div>
+      <div class="card">
+        <h3 style="margin-top:0">Cast — <span id="castSeriesName" class="muted">pick a series above</span></h3>
+        <form id="castForm"><input type="hidden" id="c_id">
+          <div class="form-grid">
+            <div><label>Actor Name *</label><input id="c_name"></div>
+            <div><label>Character Name</label><input id="c_characterName"></div>
+            <div><label>Sort Order</label><input id="c_sortOrder" type="number" value="0"></div>
+            <div class="wide"><label>Photo URL</label><input id="c_photoUrl"></div>
+          </div>
+          <div class="row" style="margin-top:12px"><button class="btn" type="submit">Save Cast Member</button><button class="btn secondary" type="button" id="castReset">Clear</button></div>
+        </form>
+        <div style="overflow-x:auto;margin-top:12px"><table><thead><tr><th></th><th>Actor</th><th>Character</th><th>Sort</th><th></th></tr></thead><tbody id="castRows"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- HOME SECTIONS -->
+    <section id="sec-home" class="hidden">
+      <h2>Home Sections</h2>
+      <div class="card">
+        <h3 id="homeFormTitle" style="margin-top:0">New Home Section</h3>
+        <form id="homeForm"><input type="hidden" id="h_id">
+          <div class="form-grid">
+            <div><label>Title *</label><input id="h_title" required></div>
+            <div><label>Slug *</label><input id="h_slug" required placeholder="featured"></div>
+            <div><label>Subtitle</label><input id="h_subtitle"></div>
+            <div><label>Section Type *</label><select id="h_sectionType">
+              <option value="featured_hero">featured_hero</option><option value="series_carousel">series_carousel</option>
+              <option value="ranking_list">ranking_list</option><option value="new_releases">new_releases</option>
+              <option value="hot_grid">hot_grid</option><option value="vertical_grid">vertical_grid</option>
+              <option value="genre_grid">genre_grid</option></select></div>
+            <div><label>Sort Order</label><input id="h_sortOrder" type="number" value="0"></div>
+          </div>
+          <div style="margin-top:14px"><label>Series (in display order)</label>
+            <div id="homePicked"></div>
+            <div class="row"><select id="homeAddPick" style="max-width:420px"></select><button class="btn secondary small" type="button" id="homeAddBtn">Add series</button></div>
+          </div>
+          <div class="row" style="margin-top:12px"><button class="btn" type="submit">Save Section</button><button class="btn secondary" type="button" id="homeReset">Clear</button></div>
+        </form>
+      </div>
+      <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Title</th><th>Slug</th><th>Type</th><th>Sort</th><th>Series</th><th></th></tr></thead><tbody id="homeRows"></tbody></table></div></div>
+    </section>
+
+    <!-- USERS -->
+    <section id="sec-users" class="hidden">
+      <h2>Users</h2>
+      <div class="card"><div class="row" style="margin-bottom:10px"><input id="userSearch" placeholder="Search by email / name (server-side)…" style="max-width:320px"><button class="btn secondary" id="usersReload">Reload</button></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>User</th><th>Platform</th><th>App</th><th>Locale</th><th>Coins</th><th>VIP</th><th>Grant Coins</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div></div>
+      <div class="card hidden" id="userSummaryCard"><h3 style="margin-top:0">User Summary</h3><div id="userSummary"></div></div>
+    </section>
+
+    <!-- NOTIFICATIONS -->
+    <section id="sec-notifications" class="hidden">
+      <h2>Notifications</h2>
+      <div class="card" style="max-width:640px">
+        <h3 style="margin-top:0">Broadcast Notification</h3>
+        <p class="muted small">Sends a notification to every registered user.</p>
+        <form id="bcForm" style="display:grid;gap:12px">
+          <div><label>Title *</label><input id="bc_title" required></div>
+          <div><label>Body</label><textarea id="bc_body" rows="4"></textarea></div>
+          <div><button class="btn" type="submit">Send Broadcast</button></div>
+          <div id="bcResult" class="small"></div>
+        </form>
+      </div>
+      <div class="card"><h3 style="margin-top:0">Sent Broadcasts</h3><div style="overflow-x:auto"><table><thead><tr><th>Title</th><th>Body</th><th>Sent To</th><th>When</th></tr></thead><tbody id="bcRows"></tbody></table></div></div>
+    </section>
+
+    <!-- REWARDS & ECONOMY -->
+    <section id="sec-rewards" class="hidden">
+      <h2>Rewards &amp; Economy</h2>
+      <div class="card" style="max-width:760px">
+        <h3 style="margin-top:0">Economy Settings</h3>
+        <form id="ecoForm" style="display:grid;gap:12px">
+          <div class="form-grid">
+            <div><label>Welcome Coin Bonus</label><input id="eco_welcome" type="number" min="0"></div>
+            <div><label>Episode Unlock Coin Cost (default)</label><input id="eco_unlock" type="number" min="0"></div>
+            <div><label>Rewarded-Ad Amount</label><input id="eco_adAmount" type="number" min="0"></div>
+            <div><label>Rewarded-Ad Daily Cap</label><input id="eco_adCap" type="number" min="0"></div>
+          </div>
+          <div><label>Daily Check-in Amounts (7 days)</label>
+            <div class="row" id="ecoCheckin"></div>
+          </div>
+          <div><button class="btn" type="submit">Save Economy Settings</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h3 id="taskFormTitle" style="margin-top:0">New Reward Task</h3>
+        <form id="taskForm"><input type="hidden" id="t_origSlug">
+          <div class="form-grid">
+            <div><label>Slug *</label><input id="t_slug" required placeholder="connect_email"></div>
+            <div><label>Title *</label><input id="t_title" required></div>
+            <div><label>Coins</label><input id="t_coins" type="number" value="0"></div>
+            <div><label>Action Type</label><input id="t_actionType" placeholder="watch_episodes"></div>
+            <div><label>Target</label><input id="t_target" type="number" value="1"></div>
+            <div><label>Sort Order</label><input id="t_sortOrder" type="number" value="0"></div>
+            <div class="wide"><label>Description</label><input id="t_description"></div>
+            <div class="check"><input type="checkbox" id="t_active" checked><label for="t_active">Active</label></div>
+          </div>
+          <div class="row" style="margin-top:12px"><button class="btn" type="submit">Save Task</button><button class="btn secondary" type="button" id="taskReset">Clear</button></div>
+        </form>
+      </div>
+      <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Slug</th><th>Title</th><th>Coins</th><th>Action</th><th>Target</th><th>Sort</th><th>Active</th><th></th></tr></thead><tbody id="taskRows"></tbody></table></div></div>
+    </section>
+
+    <!-- APP SETTINGS -->
+    <section id="sec-settings" class="hidden">
+      <h2>App Settings</h2>
+      <div class="card" style="max-width:640px">
+        <form id="appSettingsForm" style="display:grid;gap:16px">
+          <div class="check" style="padding:0"><input type="checkbox" id="set_maintenance"><label for="set_maintenance"><strong>Maintenance Mode</strong> — all app API calls return 503 (admin stays up)</label></div>
+          <div class="check" style="padding:0"><input type="checkbox" id="set_ads"><label for="set_ads"><strong>Ads Enabled</strong> — rewarded-ad coin claims</label></div>
+          <div><label>Premium Playback Mode</label><select id="set_premium">
+            <option value="disabled">disabled — premium gating off</option>
+            <option value="premium_content">premium_content — VIP-only content requires VIP</option>
+            <option value="all_playback">all_playback — ALL playback requires VIP</option></select></div>
+          <div><button class="btn" type="submit">Save App Settings</button></div>
+          <div id="settingsResult" class="small"></div>
+        </form>
+      </div>
+    </section>
+
+    <!-- TRANSACTIONS -->
+    <section id="sec-transactions" class="hidden">
+      <h2>Coin Transactions</h2>
+      <div class="card">
+        <div class="row" style="margin-bottom:10px"><select id="txType" style="max-width:220px"><option value="">All types</option></select><button class="btn secondary" id="txReload">Reload</button><span class="muted small" id="txTotal"></span></div>
+        <div style="overflow-x:auto"><table><thead><tr><th>When</th><th>User</th><th>Type</th><th>Amount</th><th>Balance After</th><th>Ref</th></tr></thead><tbody id="txRows"></tbody></table></div>
+        <div class="row" style="margin-top:10px"><button class="btn secondary small" id="txPrev">← Prev</button><span class="small muted" id="txPage"></span><button class="btn secondary small" id="txNext">Next →</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+'use strict';
+const API = '/api/v1/admin';
+const TOKEN_KEY = 'heroDramaAdminToken';
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = (id) => { const v = $(id).value.trim(); return v === '' ? undefined : Number(v); };
+const str = (id) => $(id).value.trim();
+let cache = { genres: [], series: [], users: [], homePicked: [] };
+
+function toast(msg, isErr) {
+  const t = document.createElement('div'); t.className = 'toast' + (isErr ? ' err' : ''); t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 4000);
+}
+function token() { return sessionStorage.getItem(TOKEN_KEY) || ''; }
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token(), ...(opts.headers || {}) } });
+  let data = null; try { data = await res.json(); } catch (e) {}
+  if (res.status === 401) { showLogin('Session expired or invalid token.'); throw new Error('Unauthorized'); }
+  if (!res.ok) throw new Error((data && data.error && data.error.message) || ('HTTP ' + res.status));
+  return data ? data.data : null;
+}
+const get = (p) => api(p);
+const post = (p, b) => api(p, { method: 'POST', body: JSON.stringify(b || {}) });
+const patch = (p, b) => api(p, { method: 'PATCH', body: JSON.stringify(b || {}) });
+const del = (p) => api(p, { method: 'DELETE' });
+
+function showLogin(msg) {
+  sessionStorage.removeItem(TOKEN_KEY);
+  $('app').classList.add('hidden'); $('login').classList.remove('hidden');
+  $('loginError').textContent = msg || '';
+}
+function showApp() { $('login').classList.add('hidden'); $('app').classList.remove('hidden'); }
+
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const t = str('tokenInput'); if (!t) return;
+  sessionStorage.setItem(TOKEN_KEY, t);
+  try { await get('/stats'); showApp(); loadSection('overview'); toast('Signed in'); }
+  catch (err) { showLogin('Invalid admin token.'); }
+});
+$('logoutBtn').addEventListener('click', () => { showLogin(''); $('tokenInput').value = ''; });
+
+/* navigation */
+const loaders = { overview: loadStats, genres: loadGenres, series: loadSeriesSection, episodes: loadEpisodesSection, home: loadHome, users: loadUsers, rewards: loadRewards, notifications: loadNotifications, settings: loadAppSettings, transactions: loadTransactions };
+const SECTIONS = ['overview','genres','series','episodes','home','users','rewards','notifications','settings','transactions'];
+function loadSection(name) {
+  document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.section === name));
+  SECTIONS.forEach((s) => $('sec-' + s).classList.toggle('hidden', s !== name));
+  const fn = loaders[name]; if (fn) fn().catch((e) => { if (e.message !== 'Unauthorized') toast(e.message, true); });
+}
+$('nav').addEventListener('click', (e) => { const b = e.target.closest('button[data-section]'); if (b) loadSection(b.dataset.section); });
+
+/* ---------- Overview ---------- */
+async function loadStats() {
+  const s = await get('/stats');
+  const cards = [['Users', s.users], ['New Users Today', s.newUsersToday], ['VIP Users', s.vipUsers], ['Series', s.series], ['Episodes', s.episodes], ['Total Views', s.views], ['Coins Granted', s.coinsGranted], ['Coins in Circulation', s.coinsInCirculation]];
+  $('statsGrid').innerHTML = cards.map(([l, v]) => `<div class="stat"><div class="num">${esc(v)}</div><div class="lbl">${l}</div></div>`).join('');
+  $('topSeries').innerHTML = (s.topSeries || []).map((t, i) => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--border)"><span class="badge">${i + 1}</span><span class="spacer">${esc(t.title)}</span><strong>${esc(t.viewCount)}</strong></div>`).join('') || '<p class="muted small">No series yet.</p>';
+  $('recentTx').innerHTML = (s.recentTransactions || []).map((t) => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--border)"><span class="spacer small">${esc(t.userEmail || t.userName || t.userId)} · ${esc(t.type)}</span><strong style="color:${t.amount >= 0 ? 'var(--ok)' : 'var(--danger)'}">${t.amount >= 0 ? '+' : ''}${esc(t.amount)}</strong></div>`).join('') || '<p class="muted small">No transactions yet.</p>';
+}
+$('refreshStats').addEventListener('click', () => loadStats().catch((e) => toast(e.message, true)));
+
+/* ---------- Genres ---------- */
+function genreOptions(sel) { return '<option value="">— none —</option>' + cache.genres.map((g) => `<option value="${esc(g.id)}" ${g.id === sel ? 'selected' : ''}>${esc(g.name)}</option>`).join(''); }
+async function refreshGenres() { const r = await get('/genres'); cache.genres = r.items || []; }
+async function loadGenres() {
+  await refreshGenres();
+  $('genreRows').innerHTML = cache.genres.map((g) => `<tr>
+    <td>${g.iconUrl ? `<img class="thumb" style="width:36px;height:36px" src="${esc(g.iconUrl)}" alt="">` : ''}</td>
+    <td><strong>${esc(g.name)}</strong><div class="muted small">${esc(g.description || '')}</div></td>
+    <td><code>${esc(g.slug)}</code></td><td>${esc(g.sortOrder)}</td>
+    <td>${g.colorHex ? `<span class="badge" style="border-color:${esc(g.colorHex)}">${esc(g.colorHex)}</span>` : ''}</td>
+    <td class="row"><button class="btn secondary small" data-edit-genre="${esc(g.id)}">Edit</button><button class="btn danger small" data-del-genre="${esc(g.id)}">Delete</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">No genres yet.</td></tr>';
+}
+function resetGenreForm() { $('genreForm').reset(); $('g_id').value = ''; $('genreFormTitle').textContent = 'New Genre'; }
+$('genreReset').addEventListener('click', resetGenreForm);
+$('genreForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = { name: str('g_name'), slug: str('g_slug'), description: str('g_description') || null, iconUrl: str('g_iconUrl') || null, colorHex: str('g_colorHex') || null, sortOrder: num('g_sortOrder') || 0 };
+  try { if ($('g_id').value) { await patch('/genres/' + encodeURIComponent($('g_id').value), body); toast('Genre updated'); } else { await post('/genres', body); toast('Genre created'); } resetGenreForm(); loadGenres(); }
+  catch (err) { toast(err.message, true); }
+});
+$('genreRows').addEventListener('click', async (e) => {
+  const ed = e.target.closest('[data-edit-genre]'), dl = e.target.closest('[data-del-genre]');
+  if (ed) { const g = cache.genres.find((x) => x.id === ed.dataset.editGenre); if (!g) return;
+    $('g_id').value = g.id; $('g_name').value = g.name || ''; $('g_slug').value = g.slug || ''; $('g_description').value = g.description || ''; $('g_iconUrl').value = g.iconUrl || ''; $('g_colorHex').value = g.colorHex || ''; $('g_sortOrder').value = g.sortOrder ?? 0; $('genreFormTitle').textContent = 'Edit Genre'; window.scrollTo({top:0,behavior:'smooth'}); }
+  if (dl) { if (!confirm('Delete this genre?')) return; try { await del('/genres/' + encodeURIComponent(dl.dataset.delGenre)); toast('Genre deleted'); loadGenres(); } catch (err) { toast(err.message, true); } }
+});
+
+/* ---------- Series ---------- */
+async function refreshSeries() { const r = await get('/series'); cache.series = r.items || []; }
+async function loadSeriesSection() {
+  await Promise.all([refreshGenres(), refreshSeries()]);
+  $('s_genreId').innerHTML = genreOptions($('s_genreId').value);
+  $('seriesRows').innerHTML = cache.series.map((s) => { const flags = [['VIP', s.isVipOnly], ['Exclusive', s.isExclusive], ['New', s.isNew], ['Hot', s.isHot], ['Done', s.isCompleted], ['Featured', s.isFeatured]].filter(([, v]) => v).map(([l]) => `<span class="badge">${l}</span>`).join(' ');
+    return `<tr><td>${s.coverImageUrl ? `<img class="thumb" src="${esc(s.coverImageUrl)}" alt="">` : ''}</td>
+    <td><strong>${esc(s.title)}</strong><div class="muted small"><code>${esc(s.slug)}</code> · ${esc(s.language || '')}</div></td>
+    <td>${esc(s.genreName || '')}</td><td>${esc(s.releaseYear ?? '')}</td><td>${esc(s.totalEpisodes)}</td><td>${esc(s.viewCount)}</td><td>${flags}</td>
+    <td class="row"><button class="btn secondary small" data-edit-series="${esc(s.id)}">Edit</button><button class="btn danger small" data-del-series="${esc(s.id)}">Delete</button></td></tr>`; }).join('') || '<tr><td colspan="8" class="muted">No series yet.</td></tr>';
+}
+function resetSeriesForm() { $('seriesForm').reset(); $('s_id').value = ''; $('s_language').value = 'en'; $('s_totalSeasons').value = 1; $('seriesFormTitle').textContent = 'New Series'; }
+$('seriesReset').addEventListener('click', resetSeriesForm);
+$('seriesForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = { title: str('s_title'), slug: str('s_slug'), synopsis: str('s_synopsis') || null, tagline: str('s_tagline') || null,
+    coverImageUrl: str('s_coverImageUrl') || null, heroImageUrl: str('s_heroImageUrl') || null, trailerUrl: str('s_trailerUrl') || null,
+    genreId: $('s_genreId').value || null, releaseYear: num('s_releaseYear'), totalEpisodes: num('s_totalEpisodes') || 0, totalSeasons: num('s_totalSeasons') || 1,
+    language: str('s_language') || 'en', ratingAvg: num('s_ratingAvg'), rankScore: num('s_rankScore'), sortOrder: num('s_sortOrder') || 0,
+    tags: str('s_tags') ? str('s_tags').split(',').map((t) => t.trim()).filter(Boolean) : [],
+    dubLanguages: str('s_dubLanguages') ? str('s_dubLanguages').split(',').map((t) => t.trim()).filter(Boolean) : [],
+    isVipOnly: $('s_isVipOnly').checked, isExclusive: $('s_isExclusive').checked, isNew: $('s_isNew').checked, isHot: $('s_isHot').checked,
+    isCompleted: $('s_isCompleted').checked, isFeatured: $('s_isFeatured').checked, isDubbed: $('s_isDubbed').checked };
+  Object.keys(body).forEach((k) => body[k] === undefined && delete body[k]);
+  try { if ($('s_id').value) { await patch('/series/' + encodeURIComponent($('s_id').value), body); toast('Series updated'); } else { await post('/series', body); toast('Series created'); } resetSeriesForm(); loadSeriesSection(); }
+  catch (err) { toast(err.message, true); }
+});
+$('seriesRows').addEventListener('click', async (e) => {
+  const ed = e.target.closest('[data-edit-series]'), dl = e.target.closest('[data-del-series]');
+  if (ed) { const s = cache.series.find((x) => x.id === ed.dataset.editSeries); if (!s) return;
+    $('s_id').value = s.id; $('s_title').value = s.title || ''; $('s_slug').value = s.slug || ''; $('s_genreId').innerHTML = genreOptions(s.genreId); $('s_genreId').value = s.genreId || '';
+    $('s_tagline').value = s.tagline || ''; $('s_synopsis').value = s.synopsis || ''; $('s_coverImageUrl').value = s.coverImageUrl || ''; $('s_heroImageUrl').value = s.heroImageUrl || ''; $('s_trailerUrl').value = s.trailerUrl || '';
+    $('s_releaseYear').value = s.releaseYear ?? ''; $('s_totalEpisodes').value = s.totalEpisodes ?? 0; $('s_totalSeasons').value = s.totalSeasons ?? 1; $('s_language').value = s.language || 'en';
+    $('s_ratingAvg').value = s.ratingAvg ?? ''; $('s_rankScore').value = s.rankScore ?? ''; $('s_sortOrder').value = s.sortOrder ?? 0;
+    $('s_tags').value = (s.tags || []).join(', '); $('s_dubLanguages').value = (s.dubLanguages || []).join(', ');
+    $('s_isVipOnly').checked = !!s.isVipOnly; $('s_isExclusive').checked = !!s.isExclusive; $('s_isNew').checked = !!s.isNew; $('s_isHot').checked = !!s.isHot; $('s_isCompleted').checked = !!s.isCompleted; $('s_isFeatured').checked = !!s.isFeatured; $('s_isDubbed').checked = !!s.isDubbed;
+    $('seriesFormTitle').textContent = 'Edit Series'; window.scrollTo({top:0,behavior:'smooth'}); }
+  if (dl) { if (!confirm('Delete this series AND all its episodes?')) return; try { await del('/series/' + encodeURIComponent(dl.dataset.delSeries)); toast('Series deleted'); loadSeriesSection(); } catch (err) { toast(err.message, true); } }
+});
+
+/* ---------- Episodes ---------- */
+let epCache = [];
+function dubRow(lang, url) { const d = document.createElement('div'); d.className = 'dub-row'; d.innerHTML = `<input placeholder="lang (e.g. es)" value="${esc(lang || '')}" data-dub-lang><input placeholder="Dub video URL" value="${esc(url || '')}" data-dub-url><button type="button" class="btn danger small">Remove</button>`; d.querySelector('button').addEventListener('click', () => d.remove()); return d; }
+$('addDub').addEventListener('click', () => $('dubRows').appendChild(dubRow()));
+function collectDubs() { return [...$('dubRows').querySelectorAll('.dub-row')].map((r) => ({ lang: r.querySelector('[data-dub-lang]').value.trim(), videoUrl: r.querySelector('[data-dub-url]').value.trim() })).filter((d) => d.lang && d.videoUrl); }
+async function loadEpisodesSection() {
+  await refreshSeries();
+  const prev = $('epSeriesPick').value;
+  $('epSeriesPick').innerHTML = cache.series.map((s) => `<option value="${esc(s.id)}">${esc(s.title)}</option>`).join('');
+  if (prev && cache.series.some((s) => s.id === prev)) $('epSeriesPick').value = prev;
+  await loadEpisodes(); await loadCast();
+}
+async function loadEpisodes() {
+  const sid = $('epSeriesPick').value; if (!sid) { $('epRows').innerHTML = '<tr><td colspan="8" class="muted">Create a series first.</td></tr>'; return; }
+  const r = await get('/episodes?seriesId=' + encodeURIComponent(sid)); epCache = r.items || [];
+  $('epRows').innerHTML = epCache.map((ep) => `<tr><td>${esc(ep.episodeNumber)}</td><td><strong>${esc(ep.title || '')}</strong><div class="muted small">${esc(ep.videoUrl || '')}</div></td>
+    <td>${ep.durationSeconds ? esc(ep.durationSeconds) + 's' : ''}</td>
+    <td>${ep.isFree ? '<span class="badge free">Free</span>' : ''} ${ep.isVipOnly ? '<span class="badge vip">VIP</span>' : ''}</td>
+    <td>${esc(ep.coinCost)}</td><td>${esc(ep.viewCount)}</td><td>${(ep.dubs || []).map((d) => esc(d.lang)).join(', ')}</td>
+    <td class="row"><button class="btn secondary small" data-edit-ep="${esc(ep.id)}">Edit</button><button class="btn danger small" data-del-ep="${esc(ep.id)}">Delete</button></td></tr>`).join('') || '<tr><td colspan="8" class="muted">No episodes for this series.</td></tr>';
+}
+$('epSeriesPick').addEventListener('change', () => { loadEpisodes().catch((e) => toast(e.message, true)); loadCast().catch((e) => toast(e.message, true)); });
+
+/* ---------- Cast (per series, inside Episodes) ---------- */
+let castCache = [];
+async function loadCast() {
+  const sid = $('epSeriesPick').value; const s = cache.series.find((x) => x.id === sid);
+  $('castSeriesName').textContent = s ? s.title : 'pick a series above';
+  if (!sid) { $('castRows').innerHTML = ''; return; }
+  const r = await get('/series/' + encodeURIComponent(sid) + '/cast'); castCache = r.items || [];
+  $('castRows').innerHTML = castCache.map((c) => `<tr><td>${c.photoUrl ? `<img class="thumb" style="width:36px;height:36px;border-radius:50%" src="${esc(c.photoUrl)}" alt="">` : ''}</td>
+    <td><strong>${esc(c.name)}</strong></td><td>${esc(c.characterName || '')}</td><td>${esc(c.sortOrder)}</td>
+    <td class="row"><button class="btn secondary small" data-edit-cast="${esc(c.id)}">Edit</button><button class="btn danger small" data-del-cast="${esc(c.id)}">Delete</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">No cast members yet.</td></tr>';
+}
+function resetCastForm() { $('castForm').reset(); $('c_id').value = ''; $('c_sortOrder').value = 0; }
+$('castReset').addEventListener('click', resetCastForm);
+$('castForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const sid = $('epSeriesPick').value; if (!sid) { toast('Pick a series first', true); return; }
+  const body = { name: str('c_name'), characterName: str('c_characterName') || null, photoUrl: str('c_photoUrl') || null, sortOrder: num('c_sortOrder') || 0 };
+  if (!body.name && !$('c_id').value) { toast('Actor name is required', true); return; }
+  try { if ($('c_id').value) { await patch('/series/' + encodeURIComponent(sid) + '/cast/' + encodeURIComponent($('c_id').value), body); toast('Cast member updated'); } else { await post('/series/' + encodeURIComponent(sid) + '/cast', body); toast('Cast member added'); } resetCastForm(); loadCast(); }
+  catch (err) { toast(err.message, true); }
+});
+$('castRows').addEventListener('click', async (e) => {
+  const ed = e.target.closest('[data-edit-cast]'), dl = e.target.closest('[data-del-cast]'); const sid = $('epSeriesPick').value;
+  if (ed) { const c = castCache.find((x) => x.id === ed.dataset.editCast); if (!c) return;
+    $('c_id').value = c.id; $('c_name').value = c.name || ''; $('c_characterName').value = c.characterName || ''; $('c_photoUrl').value = c.photoUrl || ''; $('c_sortOrder').value = c.sortOrder ?? 0; window.scrollTo({top: document.body.scrollHeight, behavior:'smooth'}); }
+  if (dl) { if (!confirm('Remove this cast member from the series?')) return; try { await del('/series/' + encodeURIComponent(sid) + '/cast/' + encodeURIComponent(dl.dataset.delCast)); toast('Cast member removed'); loadCast(); } catch (err) { toast(err.message, true); } }
+});
+$('epReload').addEventListener('click', () => loadEpisodesSection().catch((e) => toast(e.message, true)));
+function resetEpForm() { $('epForm').reset(); $('e_id').value = ''; $('e_episodeNumber').value = 1; $('e_seasonNumber').value = 1; $('dubRows').innerHTML = ''; $('epFormTitle').textContent = 'New Episode'; }
+$('epReset').addEventListener('click', resetEpForm);
+$('epForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const sid = $('epSeriesPick').value; if (!sid) { toast('Pick a series first', true); return; }
+  const body = { seriesId: sid, episodeNumber: num('e_episodeNumber'), seasonNumber: num('e_seasonNumber') || 1, title: str('e_title') || null,
+    description: str('e_description') || null, videoUrl: str('e_videoUrl') || null, thumbnailUrl: str('e_thumbnailUrl') || null,
+    durationSeconds: num('e_durationSeconds'), coinCost: num('e_coinCost') || 0, sortOrder: num('e_sortOrder'), isFree: $('e_isFree').checked, isVipOnly: $('e_isVipOnly').checked, dubs: collectDubs() };
+  Object.keys(body).forEach((k) => body[k] === undefined && delete body[k]);
+  try { if ($('e_id').value) { await patch('/episodes/' + encodeURIComponent($('e_id').value), body); toast('Episode updated'); } else { await post('/episodes', body); toast('Episode created'); } resetEpForm(); loadEpisodes(); }
+  catch (err) { toast(err.message, true); }
+});
+$('epRows').addEventListener('click', async (e) => {
+  const ed = e.target.closest('[data-edit-ep]'), dl = e.target.closest('[data-del-ep]');
+  if (ed) { const ep = epCache.find((x) => x.id === ed.dataset.editEp); if (!ep) return;
+    $('e_id').value = ep.id; $('e_episodeNumber').value = ep.episodeNumber ?? 1; $('e_seasonNumber').value = ep.seasonNumber ?? 1; $('e_title').value = ep.title || ''; $('e_description').value = ep.description || '';
+    $('e_videoUrl').value = ep.videoUrl || ''; $('e_thumbnailUrl').value = ep.thumbnailUrl || ''; $('e_durationSeconds').value = ep.durationSeconds ?? ''; $('e_coinCost').value = ep.coinCost ?? 0; $('e_sortOrder').value = ep.sortOrder ?? '';
+    $('e_isFree').checked = !!ep.isFree; $('e_isVipOnly').checked = !!ep.isVipOnly; $('dubRows').innerHTML = ''; (ep.dubs || []).forEach((d) => $('dubRows').appendChild(dubRow(d.lang, d.videoUrl)));
+    $('epFormTitle').textContent = 'Edit Episode'; window.scrollTo({top:0,behavior:'smooth'}); }
+  if (dl) { if (!confirm('Delete this episode?')) return; try { await del('/episodes/' + encodeURIComponent(dl.dataset.delEp)); toast('Episode deleted'); loadEpisodes(); } catch (err) { toast(err.message, true); } }
+});
+
+/* ---------- Home Sections ---------- */
+function seriesTitle(id) { const s = cache.series.find((x) => x.id === id); return s ? s.title : id; }
+function renderHomePicked() {
+  $('homePicked').innerHTML = cache.homePicked.map((id, i) => `<div class="picker-item"><span class="badge">${i + 1}</span><span class="spacer">${esc(seriesTitle(id))}</span>
+    <button type="button" class="btn secondary small" data-up="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
+    <button type="button" class="btn secondary small" data-down="${i}" ${i === cache.homePicked.length - 1 ? 'disabled' : ''}>↓</button>
+    <button type="button" class="btn danger small" data-rm="${i}">Remove</button></div>`).join('') || '<p class="muted small">No series selected yet.</p>';
+}
+$('homePicked').addEventListener('click', (e) => {
+  const up = e.target.closest('[data-up]'), dn = e.target.closest('[data-down]'), rm = e.target.closest('[data-rm]'); const a = cache.homePicked;
+  if (up) { const i = +up.dataset.up; [a[i-1], a[i]] = [a[i], a[i-1]]; } else if (dn) { const i = +dn.dataset.down; [a[i+1], a[i]] = [a[i], a[i+1]]; } else if (rm) { a.splice(+rm.dataset.rm, 1); } else return;
+  renderHomePicked();
+});
+$('homeAddBtn').addEventListener('click', () => { const v = $('homeAddPick').value; if (v && !cache.homePicked.includes(v)) { cache.homePicked.push(v); renderHomePicked(); } });
+async function loadHome() {
+  await refreshSeries();
+  $('homeAddPick').innerHTML = cache.series.map((s) => `<option value="${esc(s.id)}">${esc(s.title)}</option>`).join('');
+  const r = await get('/home-sections'); const items = r.items || [];
+  $('homeRows').innerHTML = items.map((s) => `<tr><td><strong>${esc(s.title)}</strong><div class="muted small">${esc(s.subtitle || '')}</div></td><td><code>${esc(s.slug)}</code></td>
+    <td><span class="badge">${esc(s.sectionType)}</span></td><td>${esc(s.sortOrder)}</td><td class="small">${(s.seriesIds || []).map(esc).length} series<div class="muted">${(s.seriesIds || []).map((id) => esc(seriesTitle(id))).join(' · ')}</div></td>
+    <td class="row"><button class="btn secondary small" data-edit-home="${esc(s.id)}">Edit</button><button class="btn danger small" data-del-home="${esc(s.id)}">Delete</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">No home sections yet.</td></tr>';
+  $('homeRows').dataset.json = JSON.stringify(items);
+}
+function resetHomeForm() { $('homeForm').reset(); $('h_id').value = ''; cache.homePicked = []; renderHomePicked(); $('homeFormTitle').textContent = 'New Home Section'; }
+$('homeReset').addEventListener('click', resetHomeForm);
+$('homeForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = { slug: str('h_slug'), title: str('h_title'), subtitle: str('h_subtitle') || null, sectionType: $('h_sectionType').value, sortOrder: num('h_sortOrder') || 0, seriesIds: cache.homePicked.slice() };
+  try { if ($('h_id').value) { await patch('/home-sections/' + encodeURIComponent($('h_id').value), body); toast('Section updated'); } else { await post('/home-sections', body); toast('Section created'); } resetHomeForm(); loadHome(); }
+  catch (err) { toast(err.message, true); }
+});
+$('homeRows').addEventListener('click', async (e) => {
+  const ed = e.target.closest('[data-edit-home]'), dl = e.target.closest('[data-del-home]');
+  const items = JSON.parse($('homeRows').dataset.json || '[]');
+  if (ed) { const s = items.find((x) => x.id === ed.dataset.editHome); if (!s) return;
+    $('h_id').value = s.id; $('h_title').value = s.title || ''; $('h_slug').value = s.slug || ''; $('h_subtitle').value = s.subtitle || ''; $('h_sectionType').value = s.sectionType; $('h_sortOrder').value = s.sortOrder ?? 0;
+    cache.homePicked = (s.seriesIds || []).slice(); renderHomePicked(); $('homeFormTitle').textContent = 'Edit Home Section'; window.scrollTo({top:0,behavior:'smooth'}); }
+  if (dl) { if (!confirm('Delete this home section?')) return; try { await del('/home-sections/' + encodeURIComponent(dl.dataset.delHome)); toast('Section deleted'); loadHome(); } catch (err) { toast(err.message, true); } }
+});
+
+/* ---------- Users ---------- */
+async function loadUsers() {
+  const q = ($('userSearch').value || '').trim();
+  const r = await get('/users' + (q ? '?q=' + encodeURIComponent(q) : '')); cache.users = r.items || []; renderUsers();
+}
+function renderUsers() {
+  const rows = cache.users;
+  $('userRows').innerHTML = rows.map((u) => `<tr>
+    <td><strong>${esc(u.name || u.email || '(guest)')}</strong><div class="muted small">${esc(u.email || '')} ${u.isGuest ? '· guest' : ''}</div><div class="muted small"><code>${esc(u.id)}</code></div></td>
+    <td>${esc(u.platform || '—')}</td><td>${esc(u.appVersion || '—')}</td><td>${esc(u.locale || '—')}</td>
+    <td><strong>${esc(u.coinBalance)}</strong></td>
+    <td>${u.isVip ? '<span class="badge vip">VIP</span>' : '<span class="muted">—</span>'}</td>
+    <td><div class="row"><input type="number" value="50" style="width:90px" id="coins-${esc(u.id)}"><button class="btn small" data-coins="${esc(u.id)}">Grant</button></div></td>
+    <td><div class="row"><button class="btn secondary small" data-vip="${esc(u.id)}" data-isvip="${u.isVip ? '1' : '0'}">${u.isVip ? 'Remove VIP' : 'Make VIP'}</button><button class="btn secondary small" data-summary="${esc(u.id)}">Summary</button><button class="btn danger small" data-del-user="${esc(u.id)}">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="8" class="muted">No users found.</td></tr>';
+}
+let userSearchTimer = null;
+$('userSearch').addEventListener('input', () => { clearTimeout(userSearchTimer); userSearchTimer = setTimeout(() => loadUsers().catch((e) => toast(e.message, true)), 350); });
+$('usersReload').addEventListener('click', () => loadUsers().catch((e) => toast(e.message, true)));
+$('userRows').addEventListener('click', async (e) => {
+  const c = e.target.closest('[data-coins]'), v = e.target.closest('[data-vip]'), sm = e.target.closest('[data-summary]'), du = e.target.closest('[data-del-user]');
+  if (c) { const amt = parseInt(document.getElementById('coins-' + c.dataset.coins).value, 10); if (isNaN(amt)) { toast('Enter an amount', true); return; }
+    try { const r = await post('/users/' + encodeURIComponent(c.dataset.coins) + '/coins', { amount: amt }); toast('Coins adjusted. New balance: ' + r.balance); loadUsers(); } catch (err) { toast(err.message, true); } }
+  if (v) { const makeVip = v.dataset.isvip !== '1';
+    try { await post('/users/' + encodeURIComponent(v.dataset.vip) + '/vip', { isVip: makeVip }); toast(makeVip ? 'VIP granted' : 'VIP removed'); loadUsers(); } catch (err) { toast(err.message, true); } }
+  if (sm) { try { const s = await get('/users/' + encodeURIComponent(sm.dataset.summary) + '/summary'); const u = s.user;
+      $('userSummaryCard').classList.remove('hidden');
+      $('userSummary').innerHTML = `<p style="margin-top:0"><strong>${esc(u.name || u.email || '(guest)')}</strong> <span class="muted small">${esc(u.email || '')} · <code>${esc(u.id)}</code></span></p>
+      <div class="grid">${[['Coin Balance', s.coinBalance], ['Favorites', s.favorites], ['Following', s.following], ['Liked', s.liked], ['History Entries', s.historyEntries], ['Episode Unlocks', s.unlocks]].map(([l, val]) => `<div class="stat"><div class="num" style="font-size:24px">${esc(val)}</div><div class="lbl">${l}</div></div>`).join('')}</div>
+      <h4>Recent Transactions</h4>${(s.recentTransactions || []).map((t) => `<div class="row" style="padding:5px 0;border-bottom:1px solid var(--border)"><span class="spacer small">${esc(t.type)} · ${esc(t.createdAt)}</span><strong style="color:${t.amount >= 0 ? 'var(--ok)' : 'var(--danger)'}">${t.amount >= 0 ? '+' : ''}${esc(t.amount)}</strong></div>`).join('') || '<p class="muted small">None.</p>'}`;
+      $('userSummaryCard').scrollIntoView({behavior:'smooth'});
+    } catch (err) { toast(err.message, true); } }
+  if (du) { const u = cache.users.find((x) => x.id === du.dataset.delUser); if (!confirm('DELETE user ' + (u ? (u.email || u.name || u.id) : du.dataset.delUser) + ' and ALL their data? This cannot be undone.')) return;
+    try { await del('/users/' + encodeURIComponent(du.dataset.delUser)); toast('User deleted'); $('userSummaryCard').classList.add('hidden'); loadUsers(); } catch (err) { toast(err.message, true); } }
+});
+
+/* ---------- Notifications ---------- */
+async function loadNotifications() {
+  const r = await get('/notifications'); const items = r.items || [];
+  $('bcRows').innerHTML = items.map((b) => `<tr><td><strong>${esc(b.title)}</strong></td><td class="small">${esc(b.body || '')}</td><td>${esc(b.sentCount)}</td><td class="small muted">${esc(b.createdAt)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No broadcasts sent yet.</td></tr>';
+}
+$('bcForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('bcResult').textContent = 'Sending…'; $('bcResult').style.color = '';
+  try { const r = await post('/notifications/broadcast', { title: str('bc_title'), body: str('bc_body') });
+    $('bcResult').textContent = `✓ Broadcast sent to ${r.sent} user(s).`; $('bcResult').style.color = 'var(--ok)'; $('bcForm').reset(); toast('Broadcast sent to ' + r.sent + ' user(s)'); loadNotifications();
+  } catch (err) { $('bcResult').textContent = 'Failed: ' + err.message; $('bcResult').style.color = 'var(--danger)'; }
+});
+
+/* ---------- Rewards & Economy ---------- */
+let taskCache = [];
+async function loadSettingsInto(forms) {
+  const r = await get('/settings'); const s = r.settings;
+  if (forms.includes('eco')) {
+    $('eco_welcome').value = s.welcome_coin_bonus; $('eco_unlock').value = s.episode_unlock_coin_cost;
+    $('eco_adAmount').value = s.ad_reward_amount; $('eco_adCap').value = s.ad_daily_cap;
+    $('ecoCheckin').innerHTML = (s.checkin_amounts || []).map((v, i) => `<div style="width:86px"><label>Day ${i + 1}</label><input type="number" min="0" value="${esc(v)}" data-checkin="${i}"></div>`).join('');
+  }
+  if (forms.includes('app')) { $('set_maintenance').checked = !!s.maintenance_mode; $('set_ads').checked = !!s.ads_enabled; $('set_premium').value = s.premium_playback_mode; }
+  return s;
+}
+async function loadRewards() { await loadSettingsInto(['eco']); await loadTasks(); }
+$('ecoForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const checkin = [...$('ecoCheckin').querySelectorAll('[data-checkin]')].sort((a, b) => a.dataset.checkin - b.dataset.checkin).map((i) => parseInt(i.value, 10) || 0);
+  try { await patch('/settings', { welcome_coin_bonus: num('eco_welcome'), episode_unlock_coin_cost: num('eco_unlock'), ad_reward_amount: num('eco_adAmount'), ad_daily_cap: num('eco_adCap'), checkin_amounts: checkin }); toast('Economy settings saved'); }
+  catch (err) { toast(err.message, true); }
+});
+async function loadTasks() {
+  const r = await get('/reward-tasks'); taskCache = r.items || [];
+  $('taskRows').innerHTML = taskCache.map((t) => `<tr><td><code>${esc(t.slug)}</code></td><td><strong>${esc(t.title)}</strong><div class="muted small">${esc(t.description || '')}</div></td>
+    <td>${esc(t.coins)}</td><td>${esc(t.actionType || '')}</td><td>${esc(t.target)}</td><td>${esc(t.sortOrder)}</td>
+    <td>${t.active ? '<span class="badge free">Active</span>' : '<span class="badge">Off</span>'}</td>
+    <td class="row"><button class="btn secondary small" data-edit-task="${esc(t.slug)}">Edit</button><button class="btn danger small" data-del-task="${esc(t.slug)}">Delete</button></td></tr>`).join('') || '<tr><td colspan="8" class="muted">No reward tasks.</td></tr>';
+}
+function resetTaskForm() { $('taskForm').reset(); $('t_origSlug').value = ''; $('t_slug').disabled = false; $('t_active').checked = true; $('taskFormTitle').textContent = 'New Reward Task'; }
+$('taskReset').addEventListener('click', resetTaskForm);
+$('taskForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = { slug: str('t_slug'), title: str('t_title'), description: str('t_description') || null, coins: num('t_coins') || 0, actionType: str('t_actionType') || null, target: num('t_target') || 1, sortOrder: num('t_sortOrder') || 0, active: $('t_active').checked };
+  try { if ($('t_origSlug').value) { delete body.slug; await patch('/reward-tasks/' + encodeURIComponent($('t_origSlug').value), body); toast('Task updated'); } else { await post('/reward-tasks', body); toast('Task created'); } resetTaskForm(); loadTasks(); }
+  catch (err) { toast(err.message, true); }
+});
+$('taskRows').addEventListener('click', async (e) => {
+  const ed = e.target.closest('[data-edit-task]'), dl = e.target.closest('[data-del-task]');
+  if (ed) { const t = taskCache.find((x) => x.slug === ed.dataset.editTask); if (!t) return;
+    $('t_origSlug').value = t.slug; $('t_slug').value = t.slug; $('t_slug').disabled = true; $('t_title').value = t.title || ''; $('t_description').value = t.description || ''; $('t_coins').value = t.coins ?? 0; $('t_actionType').value = t.actionType || ''; $('t_target').value = t.target ?? 1; $('t_sortOrder').value = t.sortOrder ?? 0; $('t_active').checked = !!t.active; $('taskFormTitle').textContent = 'Edit Reward Task'; window.scrollTo({top:0,behavior:'smooth'}); }
+  if (dl) { if (!confirm('Delete reward task ' + dl.dataset.delTask + '?')) return; try { await del('/reward-tasks/' + encodeURIComponent(dl.dataset.delTask)); toast('Task deleted'); loadTasks(); } catch (err) { toast(err.message, true); } }
+});
+
+/* ---------- App Settings ---------- */
+async function loadAppSettings() { await loadSettingsInto(['app']); }
+$('appSettingsForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try { await patch('/settings', { maintenance_mode: $('set_maintenance').checked, ads_enabled: $('set_ads').checked, premium_playback_mode: $('set_premium').value });
+    $('settingsResult').textContent = '✓ Settings saved — they take effect immediately.'; $('settingsResult').style.color = 'var(--ok)'; toast('App settings saved');
+  } catch (err) { $('settingsResult').textContent = 'Failed: ' + err.message; $('settingsResult').style.color = 'var(--danger)'; }
+});
+
+/* ---------- Transactions ---------- */
+let txOffset = 0; const TX_LIMIT = 50;
+async function loadTransactions() {
+  const type = $('txType').value;
+  const r = await get('/transactions?limit=' + TX_LIMIT + '&offset=' + txOffset + (type ? '&type=' + encodeURIComponent(type) : ''));
+  if (!$('txType').dataset.loaded) { const types = [...new Set((r.items || []).map((t) => t.type))]; types.forEach((t) => { const o = document.createElement('option'); o.value = t; o.textContent = t; $('txType').appendChild(o); }); $('txType').dataset.loaded = '1'; if (type) $('txType').value = type; }
+  $('txRows').innerHTML = (r.items || []).map((t) => `<tr><td class="small muted">${esc(t.createdAt)}</td><td>${esc(t.userName || t.userEmail || '')}<div class="muted small">${esc(t.userEmail || '')}</div></td>
+    <td><span class="badge">${esc(t.type)}</span></td><td><strong style="color:${t.amount >= 0 ? 'var(--ok)' : 'var(--danger)'}">${t.amount >= 0 ? '+' : ''}${esc(t.amount)}</strong></td><td>${esc(t.balanceAfter)}</td><td class="small muted">${esc(t.refId || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No transactions.</td></tr>';
+  $('txTotal').textContent = r.total + ' total';
+  $('txPage').textContent = 'Showing ' + (r.total ? (txOffset + 1) + '–' + Math.min(txOffset + TX_LIMIT, r.total) : '0') + ' of ' + r.total;
+  $('txPrev').disabled = txOffset === 0; $('txNext').disabled = txOffset + TX_LIMIT >= r.total;
+}
+$('txReload').addEventListener('click', () => { txOffset = 0; loadTransactions().catch((e) => toast(e.message, true)); });
+$('txType').addEventListener('change', () => { txOffset = 0; loadTransactions().catch((e) => toast(e.message, true)); });
+$('txPrev').addEventListener('click', () => { txOffset = Math.max(0, txOffset - TX_LIMIT); loadTransactions().catch((e) => toast(e.message, true)); });
+$('txNext').addEventListener('click', () => { txOffset += TX_LIMIT; loadTransactions().catch((e) => toast(e.message, true)); });
+
+/* boot */
+if (token()) { get('/stats').then(() => { showApp(); loadSection('overview'); }).catch(() => showLogin('')); } else showLogin('');
+</script>
+</body>
+</html>

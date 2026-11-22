@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "604333749944",
+    "project_id": "short-drama-c8029",
+    "storage_bucket": "short-drama-c8029.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:604333749944:android:51c7a80253c79ed91e264d",
+        "android_client_info": {
+          "package_name": "com.shortdrama.watch"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "604333749944-fn6vl3oq00e3rednksp496g815906v1e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shortdrama.watch",
+            "certificate_hash": "a5871cec22c01bf0f07f41b049419098392bb6e6"
+          }
+        },
+        {
+          "client_id": "604333749944-ekiuto36p37huo2inttsc1rvpnpu3lrl.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDpb4vlJ-bW17gDsKhJ_C9peZklpHtvgII"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "604333749944-ekiuto36p37huo2inttsc1rvpnpu3lrl.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

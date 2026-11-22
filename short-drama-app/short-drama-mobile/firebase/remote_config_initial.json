@@ -1,0 +1,198 @@
+{
+  "parameters": {
+    "api_base_url": {
+      "defaultValue": { "value": "" },
+      "description": "DramaNow web API origin (e.g. https://your-domain.com) — required",
+      "valueType": "STRING"
+    },
+    "mobile_api_key": {
+      "defaultValue": { "value": "" },
+      "description": "Optional shared mobile API key if your web API expects it",
+      "valueType": "STRING"
+    },
+    "onesignal_app_id": {
+      "defaultValue": { "value": "" },
+      "description": "OneSignal app ID for push notifications",
+      "valueType": "STRING"
+    },
+    "revenuecat_ios_api_key": {
+      "defaultValue": { "value": "" },
+      "description": "RevenueCat public iOS API key",
+      "valueType": "STRING"
+    },
+    "revenuecat_android_api_key": {
+      "defaultValue": { "value": "" },
+      "description": "RevenueCat public Android API key",
+      "valueType": "STRING"
+    },
+    "revenuecat_pro_entitlement_id": {
+      "defaultValue": { "value": "shortdrama_vip" },
+      "description": "RevenueCat VIP entitlement identifier",
+      "valueType": "STRING"
+    },
+    "app_url": {
+      "defaultValue": { "value": "https://shortdrama.app" },
+      "description": "Marketing / support website",
+      "valueType": "STRING"
+    },
+    "terms_url": {
+      "defaultValue": { "value": "https://shortdrama.app/terms" },
+      "valueType": "STRING"
+    },
+    "privacy_url": {
+      "defaultValue": { "value": "https://shortdrama.app/privacy" },
+      "valueType": "STRING"
+    },
+    "show_ready_to_start": {
+      "defaultValue": { "value": "true" },
+      "description": "Onboarding on first launch. false = skip onboarding, go straight to Home on first open (paywall still shows from the 2nd open)",
+      "valueType": "BOOLEAN"
+    },
+    "ready_to_start_headline": {
+      "defaultValue": { "value": "Short dramas you cannot stop watching" },
+      "description": "Optional override for onboarding hero headline",
+      "valueType": "STRING"
+    },
+    "home_default_locale": {
+      "defaultValue": { "value": "en" },
+      "description": "Default locale for HomeSection shelves when device locale has no match",
+      "valueType": "STRING"
+    },
+    "captcha_enabled": {
+      "defaultValue": { "value": "false" },
+      "description": "Enable Cloudflare Turnstile on auth flows",
+      "valueType": "BOOLEAN"
+    },
+    "turnstile_site_key": {
+      "defaultValue": { "value": "" },
+      "valueType": "STRING"
+    },
+    "is_ad_enabled": {
+      "defaultValue": { "value": "true" },
+      "description": "Show ads for non-VIP users",
+      "valueType": "BOOLEAN"
+    },
+    "android_interstitial_ad_unit_id": {
+      "defaultValue": { "value": "" },
+      "valueType": "STRING"
+    },
+    "ios_interstitial_ad_unit_id": {
+      "defaultValue": { "value": "" },
+      "valueType": "STRING"
+    },
+    "android_banner_ad_unit_id": {
+      "defaultValue": { "value": "" },
+      "valueType": "STRING"
+    },
+    "ios_banner_ad_unit_id": {
+      "defaultValue": { "value": "" },
+      "valueType": "STRING"
+    },
+    "feature_vip_only_series": {
+      "defaultValue": { "value": "true" },
+      "description": "Gate isVipOnly series/episodes behind VIP",
+      "valueType": "BOOLEAN"
+    },
+    "feature_offline_downloads": {
+      "defaultValue": { "value": "true" },
+      "description": "Gate episode downloads behind VIP",
+      "valueType": "BOOLEAN"
+    },
+    "feature_hd_streaming": {
+      "defaultValue": { "value": "true" },
+      "description": "Gate HD streaming behind VIP",
+      "valueType": "BOOLEAN"
+    },
+    "premium_playback_mode": {
+      "defaultValue": { "value": "premium_content" },
+      "description": "disabled | premium_content | all_playback — how strictly playback is gated for non-VIP",
+      "valueType": "STRING"
+    },
+    "premium_show_pro_badges": {
+      "defaultValue": { "value": "true" },
+      "description": "Show VIP badges on locked content",
+      "valueType": "BOOLEAN"
+    },
+    "welcome_coin_bonus": {
+      "defaultValue": { "value": "30" },
+      "description": "Coins granted to a new user on first launch",
+      "valueType": "NUMBER"
+    },
+    "episode_unlock_coin_cost": {
+      "defaultValue": { "value": "30" },
+      "description": "Default coin cost to unlock a locked episode",
+      "valueType": "NUMBER"
+    },
+    "discount_offer_enabled": {
+      "defaultValue": { "value": "true" },
+      "valueType": "BOOLEAN"
+    },
+    "discount_offer_show_banner": {
+      "defaultValue": { "value": "true" },
+      "valueType": "BOOLEAN"
+    },
+    "discount_offer_frequency_seconds": {
+      "defaultValue": { "value": "0" },
+      "valueType": "NUMBER"
+    },
+    "discount_offer_delay_ms": {
+      "defaultValue": { "value": "300" },
+      "valueType": "NUMBER"
+    },
+    "discount_offer_timer_seconds": {
+      "defaultValue": { "value": "600" },
+      "valueType": "NUMBER"
+    },
+    "discount_offer_paywall_dismiss_threshold": {
+      "defaultValue": { "value": "5" },
+      "valueType": "NUMBER"
+    },
+    "discount_offer_product_id": {
+      "defaultValue": { "value": "shortdrama_vip_yearly_discount:yearly-discount" },
+      "valueType": "STRING"
+    },
+    "discount_offer_discount_text": {
+      "defaultValue": { "value": "50%" },
+      "valueType": "STRING"
+    },
+    "ios_force_update_enabled": {
+      "defaultValue": { "value": "false" },
+      "valueType": "BOOLEAN"
+    },
+    "ios_min_build_number": {
+      "defaultValue": { "value": "1" },
+      "valueType": "NUMBER"
+    },
+    "ios_latest_build_number": {
+      "defaultValue": { "value": "1" },
+      "valueType": "NUMBER"
+    },
+    "ios_store_url": {
+      "defaultValue": { "value": "https://apps.apple.com/app/idXXXXXXXXXX" },
+      "valueType": "STRING"
+    },
+    "android_force_update_enabled": {
+      "defaultValue": { "value": "false" },
+      "valueType": "BOOLEAN"
+    },
+    "android_min_build_number": {
+      "defaultValue": { "value": "1" },
+      "valueType": "NUMBER"
+    },
+    "android_latest_build_number": {
+      "defaultValue": { "value": "1" },
+      "valueType": "NUMBER"
+    },
+    "android_store_url": {
+      "defaultValue": { "value": "https://play.google.com/store/apps/details?id=com.shortdrama.app" },
+      "valueType": "STRING"
+    }
+  },
+  "version": {
+    "versionNumber": "3",
+    "updateTime": "2026-07-13T12:00:00.000000Z",
+    "updateUser": { "email": "deploy@shortdrama.app" },
+    "updateOrigin": "CONSOLE",
+    "updateType": "INCREMENTAL_UPDATE"
+  }
+}

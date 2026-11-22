@@ -1,0 +1,1 @@
+{"engines":{"node":">=22"},"name":"dramanow-backend","private":true,"scripts":{"dev":"node --watch src/server.js","start":"node src/server.js"},"type":"commonjs","version":"1.0.0"}
