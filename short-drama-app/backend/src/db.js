@@ -65,6 +65,14 @@ CREATE TABLE IF NOT EXISTS watch_history(
   userId TEXT NOT NULL, seriesId TEXT NOT NULL, episodeId TEXT, episodeNumber INTEGER DEFAULT 1,
   positionSeconds INTEGER DEFAULT 0, durationSeconds INTEGER DEFAULT 0, completed INTEGER DEFAULT 0,
   watchedAt TEXT NOT NULL, PRIMARY KEY(userId, seriesId));
+-- Round 2 (S5): per-episode progress. watch_history keeps ONE row per series
+-- (latest episode) for Continue Watching, which made per-episode watched
+-- checkmarks/resume positions impossible. This table keeps one row per
+-- (user, episode); completed is sticky (see the watch-history handler).
+CREATE TABLE IF NOT EXISTS episode_progress(
+  userId TEXT NOT NULL, episodeId TEXT NOT NULL, seriesId TEXT NOT NULL, episodeNumber INTEGER DEFAULT 1,
+  positionSeconds INTEGER DEFAULT 0, durationSeconds INTEGER DEFAULT 0, completed INTEGER DEFAULT 0,
+  updatedAt TEXT NOT NULL, PRIMARY KEY(userId, episodeId));
 CREATE TABLE IF NOT EXISTS episode_unlocks(
   userId TEXT NOT NULL, episodeId TEXT NOT NULL, createdAt TEXT NOT NULL, PRIMARY KEY(userId, episodeId));
 CREATE TABLE IF NOT EXISTS coin_transactions(

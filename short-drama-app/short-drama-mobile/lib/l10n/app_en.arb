@@ -34,14 +34,6 @@
       }
     }
   },
-  "pickToEdit": "Browse Stations",
-  "@pickToEdit": {
-    "description": "Browse stations category title"
-  },
-  "selectPhotoFromGallery": "Find stations by genre, country, or language",
-  "@selectPhotoFromGallery": {
-    "description": "Browse stations category subtitle"
-  },
   "selectFromGallery": "Select from gallery",
   "@selectFromGallery": {
     "description": "Gallery selection label"
@@ -58,10 +50,6 @@
   "@featured": {
     "description": "Featured stations category title"
   },
-  "exploreFeaturedEdits": "Explore curated radio picks",
-  "@exploreFeaturedEdits": {
-    "description": "Featured stations category subtitle"
-  },
   "pro": "Pro",
   "@pro": {
     "description": "Pro subscription label"
@@ -73,10 +61,6 @@
   "lightMode": "Light mode",
   "@lightMode": {
     "description": "Switch to light appearance; settings row label"
-  },
-  "getFreeSongs": "Get Pro perks",
-  "@getFreeSongs": {
-    "description": "Settings row and sheet title for earning Pro perks"
   },
   "rewardDailyCheckIn": "Daily Check-in",
   "@rewardDailyCheckIn": {
@@ -235,14 +219,6 @@
   "settingsProfileInvite": "Invite",
   "@settingsProfileInvite": {
     "description": "Profile card invite button placeholder"
-  },
-  "settingsProfileSongBalanceHint": "Pro drama perks are available on your account.",
-  "@settingsProfileSongBalanceHint": {
-    "description": "Semantics label for balance info icon"
-  },
-  "settingsGetFreeSongsRow": "Get Pro perks",
-  "@settingsGetFreeSongsRow": {
-    "description": "Tappable row opening rewards sheet"
   },
   "weeklyStreakSectionTitle": "Weekly streak",
   "@weeklyStreakSectionTitle": {
@@ -719,10 +695,6 @@
   "@failedToSendPasswordResetEmail": {
     "description": "Error message for password reset email failure"
   },
-  "takeYourPhotosToNewHeights": "Live radio & podcasts\nworldwide",
-  "@takeYourPhotosToNewHeights": {
-    "description": "Getting started screen headline"
-  },
   "getStarted": "Get Started",
   "@getStarted": {
     "description": "Get started button text"
@@ -804,18 +776,6 @@
   "@signOut": {
     "description": "Sign out button text"
   },
-  "songDescription": "Station search",
-  "@songDescription": {
-    "description": "Tab label for drama description input"
-  },
-  "lyrics": "Podcasts",
-  "@lyrics": {
-    "description": "Tab label for lyrics input"
-  },
-  "imageToSong": "By mood",
-  "@imageToSong": {
-    "description": "Tab label for image to drama conversion"
-  },
   "selectGenre": "Select Genre",
   "@selectGenre": {
     "description": "Label for genre selection section"
@@ -880,29 +840,9 @@
   "@tabSearch": {
     "description": "Search tab label"
   },
-  "tabRadio": "Radio",
-  "@tabRadio": {
-    "description": "Radio tab label"
-  },
-  "tabPodcasts": "Podcasts",
-  "@tabPodcasts": {
-    "description": "Podcasts tab label"
-  },
   "tabPlaylist": "Playlist",
   "@tabPlaylist": {
     "description": "Playlist tab label"
-  },
-  "settingsPodcastAutoDownload": "Auto-download new episodes",
-  "@settingsPodcastAutoDownload": {
-    "description": "Settings toggle for automatic podcast downloads"
-  },
-  "settingsPodcastAutoDownloadHint": "Pro feature — download new episodes on Wi‑Fi",
-  "@settingsPodcastAutoDownloadHint": {
-    "description": "Subtitle for auto-download toggle"
-  },
-  "settingsPodcastInbox": "New episode alerts",
-  "@settingsPodcastInbox": {
-    "description": "Settings toggle for podcast inbox notifications"
   },
   "settingsStreamingQuality": "Streaming quality",
   "@settingsStreamingQuality": {
@@ -948,10 +888,6 @@
   "@topArtists": {
     "description": "Section title for top creators on Explore"
   },
-  "topSongs": "Top Stations",
-  "@topSongs": {
-    "description": "Section title for trending dramas on Explore"
-  },
   "newReleases": "New Episodes",
   "@newReleases": {
     "description": "Section title for newest public dramas on Explore"
@@ -965,18 +901,6 @@
       }
     }
   },
-  "placeholderSongDescription": "Search jazz, news, rock, or talk radio...",
-  "@placeholderSongDescription": {
-    "description": "Placeholder text for drama description input"
-  },
-  "placeholderLyrics": "Search podcasts or episodes...",
-  "@placeholderLyrics": {
-    "description": "Placeholder text for lyrics input"
-  },
-  "placeholderImageToSong": "Describe the station or show mood...",
-  "@placeholderImageToSong": {
-    "description": "Placeholder text for image to drama input"
-  },
   "readyToStartHeadline": "Live radio & podcasts worldwide",
   "@readyToStartHeadline": {
     "description": "Ready to Start screen headline"
@@ -989,22 +913,6 @@
         "type": "String"
       }
     }
-  },
-  "songIdeasHeading": "Station ideas",
-  "@songIdeasHeading": {
-    "description": "Section title above default drama prompt chips"
-  },
-  "musicVideoIdeasHeading": "Podcast ideas",
-  "@musicVideoIdeasHeading": {
-    "description": "Section title above music video prompt chips"
-  },
-  "songIdeasCategoryAllGenres": "All genres / trending stations",
-  "@songIdeasCategoryAllGenres": {
-    "description": "Subtitle chip category for generic drama prompts"
-  },
-  "songIdeasCategoryTrending": "Trending shows",
-  "@songIdeasCategoryTrending": {
-    "description": "Subtitle chip category for music video prompts"
   },
   "communityCollections": "Community Collections",
   "@communityCollections": {
@@ -1080,14 +988,6 @@
   "@paywallHelpGotIt": {
     "description": "Dismiss button for Pro help dialog"
   },
-  "paywallSongsExplainerBody": "Pro unlocks ad-free watching, offline episode downloads, VIP-only series, and high-quality streams.",
-  "@paywallSongsExplainerBody": {
-    "description": "Short bullet explainer for free vs Pro drama limits and ads on paywall"
-  },
-  "paywallSongsExplainerThanks": "Thanks 😊",
-  "@paywallSongsExplainerThanks": {
-    "description": "Dismiss button for What are dramas? dialog on paywall"
-  },
   "paywallPlanYearly": "Yearly",
   "paywallPlanMonthly": "Monthly",
   "paywallPlanWeekly": "Weekly",
@@ -1150,24 +1050,15 @@
     "description": "Top-up paywall primary purchase button"
   },
   "paywallRetry": "Retry",
-  "addCoverTitle": "Add a station preset",
-  "addCoverDescription": "Save a station with a custom name for quick access.",
   "addCoverNameLabel": "Preset name",
   "addCoverNameHint": "My morning news",
-  "addCoverAudioLabel": "Station stream",
   "addCoverUploadAudio": "Paste stream URL",
-  "addCoverImageLabel": "Station logo (optional)",
   "addCoverUploadImage": "Upload logo",
   "addCoverSave": "Save preset",
-  "addCoverTermsPrefix": "I confirm I have rights to use this station stream and agree to the ",
   "addCoverTermsLink": "Terms of Use",
   "cancel": "Cancel",
-  "createYourFirstSong": "Find Your First Station",
-  "noGeneratedSongs": "Your saved stations will appear here",
-  "tabMySongs": "My Stations",
   "tabMyVideos": "My Episodes",
   "tabMyVoices": "My Presets",
-  "createYourFirstVideo": "Subscribe to a Podcast",
   "noGeneratedVideos": "Your downloaded episodes will appear here",
   "createYourOwnVoice": "Create Your Preset",
   "noSavedVoices": "Your saved presets will appear here",
@@ -1236,68 +1127,14 @@
   },
   "splashInitErrorTitle": "Initialization Error",
   "splashInitErrorMessage": "Failed to initialize the app. Please check your permissions and try again.",
-  "tabAiCovers": "Discover",
-  "@tabAiCovers": {
-    "description": "Main bottom nav tab for AI cover voices"
-  },
-  "tabMusicVideo": "Offline",
-  "@tabMusicVideo": {
-    "description": "Create tab label for music video mode"
-  },
-  "placeholderMusicVideo": "Search podcasts to download...",
-  "@placeholderMusicVideo": {
-    "description": "Prompt placeholder on music video create tab"
-  },
-  "aiCoversPill": "Premium",
-  "aiCoversPillCount": "+{count} premium",
-  "@aiCoversPillCount": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "aiCoverVoicesSheetTitle": "Premium Stations",
   "searchVoicesHint": "Search presets…",
   "yourVoices": "Your presets",
   "noVoicesYet": "No presets yet",
   "categoryOther": "Other",
-  "aiCoversClear": "Clear",
-  "selectMusicModel": "Stream quality",
   "signInToAddCoverVoice": "Please sign in to save a preset",
-  "musicVideoPromoTitle": "Offline listening",
-  "musicVideoPromoSubtitle": "Download episodes\nfor offline play",
-  "musicVideoPromoCreate": "Browse",
-  "musicGeneratedSuccess": "Now playing!",
-  "musicVideoGeneratedSuccess": "Download started!",
-  "describeMusicVideoConcept": "Choose a podcast episode to download",
   "noVideoCreditsRemaining": "No download credits remaining. Upgrade to Pro to continue.",
-  "musicVideoGeneratingHeadline": "Preparing your download...",
-  "musicVideoReadyHeadline": "Episode ready offline!",
-  "musicVideoReadyToast": "Episode downloaded! Open your library to listen offline.",
-  "musicVideoGenerateFailed": "Failed to download episode: {error}",
-  "@musicVideoGenerateFailed": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
-  "musicReadyToast": "Station ready! Tap play to listen live.",
   "notAuthenticated": "Not authenticated",
-  "songDeleted": "Removed from library",
-  "errorDeletingSong": "Error removing item: {error}",
-  "@errorDeletingSong": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
   "noPreviewForVoice": "No preview available for this preset",
-  "maleVoice": "Talk radio",
-  "femaleVoice": "Music station",
-  "aiCoverVoiceLabel": "Station preset",
   "genderMale": "Male",
   "genderFemale": "Female",
   "videoStatusCompleted": "Completed",
@@ -1340,28 +1177,6 @@
   "@addYourOwnVoice": {
     "description": "Label on dashed card to create a custom AI cover voice (sheet and AI Covers tab)"
   },
-  "aiCoverPageTitle": "Discover",
-  "@aiCoverPageTitle": {
-    "description": "Title on the AI Cover tab page"
-  },
-  "aiCoverPickSongSection": "1. Pick a station",
-  "aiCoverChooseSongHint": "Choose a station to save.",
-  "aiCoverChooseVoiceSection": "2. Choose a preset",
-  "aiCoverSearchHint": "Search",
-  "aiCoverFilterHot": "Hot 🔥",
-  "aiCoverFilterMyVoices": "My Presets",
-  "aiCoverFilterNew": "New ✨",
-  "aiCoverFilterSimilar": "Similar",
-  "aiCoverCreateVoice": "Create Preset",
-  "aiCoverCreateButton": "Save station",
-  "aiCoverSelectSong": "Please choose a station",
-  "aiCoverSelectVoice": "Please choose a preset",
-  "aiCoverPickFromLibrary": "From my library",
-  "aiCoverUploadAudio": "Upload audio file",
-  "aiCoverPickSongTitle": "Pick a station",
-  "aiCoverGenderFilter": "Genre filter",
-  "aiCoverGenderAll": "All",
-  "recordedAudio": "Recorded audio",
   "maxFileSizeHint": "Max {size}MB",
   "@maxFileSizeHint": {
     "placeholders": {

@@ -128,6 +128,14 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
   Timer? _autoNextTimer;
   bool _endHandled = false;
 
+  // Tick-rebuild gate (round 2, S1): the last values the per-tick setState
+  // actually feeds. The progress bars listen to the controller themselves,
+  // so a rebuild is only needed when one of these changes.
+  int _tickSecond = -1;
+  bool? _tickPlaying;
+  bool? _tickBuffering;
+  String? _tickCaption;
+
   // Sleep timer
   DateTime? _sleepDeadline;
   int? _sleepSelectedMinutes;
@@ -243,6 +251,20 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
           _resumeByEpisodeId[epId] = e.positionSeconds;
         }
       }
+      // S5 (round 2): the history above carries only the LATEST episode per
+      // series, so checkmarks/resume could only ever cover one episode.
+      // Merge the per-episode progress for this series on top of it.
+      final progress = await DramaService.instance
+          .fetchSeriesEpisodeProgress(widget.series.id);
+      if (!mounted) return;
+      for (final p in progress) {
+        if (p.completed) {
+          _completedEpisodeIds.add(p.episodeId);
+          _resumeByEpisodeId.remove(p.episodeId);
+        } else if (p.positionSeconds > 0) {
+          _resumeByEpisodeId[p.episodeId] = p.positionSeconds;
+        }
+      }
       if (mounted) setState(() {});
     } catch (_) {}
   }
@@ -265,6 +287,10 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     final gen = ++_loadGen;
     _cancelAutoNext();
     _endHandled = false;
+    _tickSecond = -1;
+    _tickPlaying = null;
+    _tickBuffering = null;
+    _tickCaption = null;
     _showResumeBanner = false;
     _resumeBannerSeconds = null;
     _disposeController();
@@ -441,7 +467,25 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       _record(completed: true);
       _handleEpisodeEnd();
     }
-    if (mounted) setState(() {}); // update scrubber / captions / chips
+    if (!mounted) return;
+    // S1 (round 2): this used to setState on EVERY controller notification,
+    // rebuilding the whole player subtree several times a second. The
+    // scrubber (ChapterProgressBar / VideoProgressIndicator) listens to the
+    // controller directly, so the rebuild only feeds second-granularity UI
+    // (time label, skip-intro window), the play/buffering affordances, and
+    // the caption line. Skip it when none of those changed since last tick.
+    final caption = _activeCaption;
+    if (pos == _tickSecond &&
+        c.value.isPlaying == _tickPlaying &&
+        c.value.isBuffering == _tickBuffering &&
+        caption == _tickCaption) {
+      return;
+    }
+    _tickSecond = pos;
+    _tickPlaying = c.value.isPlaying;
+    _tickBuffering = c.value.isBuffering;
+    _tickCaption = caption;
+    setState(() {}); // update scrubber / captions / chips
   }
 
   void _handleEpisodeEnd() {
@@ -551,18 +595,35 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       _sleepSelectedMinutes = null;
     });
     final c = _controller;
-    if (c != null && c.value.isInitialized) {
-      try {
+    // S6 (round 2): the fade takes ~2.2s. If the user switches episode
+    // mid-fade, the captured controller is disposed and the fade must stop
+    // — the NEW episode is not ours to pause or re-volume. And the restore
+    // target is the user's edge-HUD volume (_volumeLevel), not a hard-coded
+    // 1.0 that silently undid their volume setting.
+    final gen = _loadGen;
+    bool stale() => gen != _loadGen || !identical(_controller, c);
+    var paused = false;
+    try {
+      if (c != null && c.value.isInitialized) {
         for (var i = 10; i >= 0; i--) {
+          if (stale()) return;
           await c.setVolume(i / 10);
           await Future<void>.delayed(const Duration(milliseconds: 200));
         }
+        if (stale()) return;
         await c.pause();
-        await c.setVolume(1.0);
-      } catch (_) {}
+        paused = true;
+        await c.setVolume(_volumeLevel);
+      }
+    } catch (_) {
+      // A disposed controller throws mid-fade; that path is the stale case
+      // above and needs no recovery.
+    } finally {
+      _sleepFading = false;
     }
-    _sleepFading = false;
-    if (mounted) showTopToastInfo(context, 'Sleep timer: playback paused');
+    if (paused && mounted) {
+      showTopToastInfo(context, 'Sleep timer: playback paused');
+    }
   }
 
   Future<void> _record({bool completed = false}) async {

@@ -220,7 +220,7 @@ function taskProgress(userId, t) {
   return done ? t.target : 0;
 }
 /** Every per-user table that holds account state (used by relink + deletion). */
-const USER_TABLES = ['refresh_tokens', 'user_devices', 'user_series', 'watch_history', 'episode_unlocks', 'coin_transactions', 'checkins', 'user_reward_tasks', 'ad_rewards', 'notifications', 'wheel_spins', 'chest_claims', 'watch_time_daily', 'watch_events', 'watch_progress', 'share_events', 'user_daily_events', 'mission_claims'];
+const USER_TABLES = ['refresh_tokens', 'user_devices', 'user_series', 'watch_history', 'episode_progress', 'episode_unlocks', 'coin_transactions', 'checkins', 'user_reward_tasks', 'ad_rewards', 'notifications', 'wheel_spins', 'chest_claims', 'watch_time_daily', 'watch_events', 'watch_progress', 'share_events', 'user_daily_events', 'mission_claims'];
 function deleteUserRows(userId) { for (const t of USER_TABLES) run(`DELETE FROM ${t} WHERE userId=?`, userId); }
 
 function rewardsState(user) {
@@ -277,7 +277,13 @@ function rewardsState(user) {
     chests, watchTime: { enabled: !!settings.getSetting('watch_time_enabled'), minutesToday: wt.minutesToday, coinsPerBlock: wt.perBlock, blockMinutes: wt.blockMinutes, claimableCoins: wt.claimableCoins, claimedCoinsToday: wt.alreadyPaid, dailyCapCoins: wt.cap },
     missions, currentStreak: currentStreak(user.id), xp, level, nextLevelXp: 100 * level * level,
     activeEvent: ev ? { name: ev.name, multiplier: ev.multiplier, endsAt: ev.endsAt } : null,
-    referralCode: fresh.referralCode || referralCodeFor(user.id) };
+    referralCode: fresh.referralCode || referralCodeFor(user.id),
+    // Round 2: the 24h apply-window used to be invisible until POST
+    // /auth/referral failed with REFERRAL_WINDOW_CLOSED. Surface the
+    // deadline (account creation + 24h) so the app can show it up front.
+    referralApplyBy: fresh.createdAt && Number.isFinite(Date.parse(fresh.createdAt))
+      ? new Date(Date.parse(fresh.createdAt) + 24 * 3600e3).toISOString() : null,
+    hasReferred: !!fresh.referredBy };
 }
 
 async function handle(req, res, url, body) {
@@ -389,6 +395,7 @@ async function handle(req, res, url, body) {
       // Conflict-safe moves: rows that would collide with the primary
       // account's own rows are dropped with the guest (primary wins).
       run('UPDATE watch_history SET userId=? WHERE userId=? AND seriesId NOT IN (SELECT seriesId FROM watch_history WHERE userId=?)', user.id, guestId, user.id);
+      run('UPDATE episode_progress SET userId=? WHERE userId=? AND episodeId NOT IN (SELECT episodeId FROM episode_progress WHERE userId=?)', user.id, guestId, user.id);
       run('UPDATE user_series SET userId=? WHERE userId=? AND seriesId NOT IN (SELECT seriesId FROM user_series WHERE userId=?)', user.id, guestId, user.id);
       run('UPDATE episode_unlocks SET userId=? WHERE userId=? AND episodeId NOT IN (SELECT episodeId FROM episode_unlocks WHERE userId=?)', user.id, guestId, user.id);
       // Keyed tables: re-key guest rows whose remaining PK columns do not
@@ -507,7 +514,7 @@ async function handle(req, res, url, body) {
     const related = all('SELECT * FROM series WHERE genreId=? AND id!=? ORDER BY rankScore DESC LIMIT 6', s.genreId, s.id).map(seriesJson);
     const us = user ? get('SELECT * FROM user_series WHERE userId=? AND seriesId=?', user.id, s.id) : null;
     const hist = user ? get('SELECT * FROM watch_history WHERE userId=? AND seriesId=?', user.id, s.id) : null;
-    return ok(res, { series: seriesJson(s), cast, related, isFavorite: !!(us && us.favorite), isFollowing: !!(us && us.following), isLiked: !!(us && us.liked), resumeEpisodeNumber: hist ? hist.episodeNumber : null });
+    return ok(res, { series: seriesJson(s), cast, related, isFavorite: !!(us && us.favorite), isFollowing: !!(us && us.following), isLiked: !!(us && us.liked), resumeEpisodeNumber: hist ? hist.episodeNumber : null, resumeEpisodeId: hist ? hist.episodeId : null });
   }
   if (req.method === 'GET' && (m = /^\/series\/([^/]+)\/episodes$/.exec(p))) {
     const s = get('SELECT * FROM series WHERE id=? OR slug=?', decodeURIComponent(m[1]), decodeURIComponent(m[1]));
@@ -620,6 +627,14 @@ async function handle(req, res, url, body) {
     return ok(res, { history: all('SELECT * FROM watch_history WHERE userId=? ORDER BY watchedAt DESC LIMIT ?', user.id, limit).map(histJson).filter(Boolean) });
   if (req.method === 'GET' && p === '/me/library/continue')
     return ok(res, { history: all('SELECT * FROM watch_history WHERE userId=? AND completed=0 ORDER BY watchedAt DESC LIMIT ?', user.id, limit).map(histJson).filter(Boolean) });
+  // Round 2 (S5): per-episode progress for ONE series — watched checkmarks +
+  // per-episode resume positions in the player. Additive: watch_history
+  // above keeps its one-row-per-series shape for Continue Watching.
+  if (req.method === 'GET' && (m = /^\/me\/library\/history\/series\/([^/]+)$/.exec(p))) {
+    const sid = decodeURIComponent(m[1]);
+    const rows = all('SELECT episodeId, episodeNumber, positionSeconds, durationSeconds, completed FROM episode_progress WHERE userId=? AND seriesId=? ORDER BY episodeNumber', user.id, sid);
+    return ok(res, { episodes: rows.map((r) => ({ episodeId: r.episodeId, episodeNumber: r.episodeNumber, positionSeconds: r.positionSeconds, durationSeconds: r.durationSeconds, completed: !!r.completed })) });
+  }
   if (req.method === 'POST' && p === '/me/watch-history') {
     if (!body.seriesId) return err(res, 400, 'VALIDATION', 'seriesId is required');
     // Watch accrual is SERVER-VERIFIED: the series/episode must exist and
@@ -657,6 +672,16 @@ async function handle(req, res, url, body) {
     run(`INSERT INTO watch_history(userId,seriesId,episodeId,episodeNumber,positionSeconds,durationSeconds,completed,watchedAt) VALUES(?,?,?,?,?,?,?,?)
       ON CONFLICT(userId,seriesId) DO UPDATE SET episodeId=excluded.episodeId, episodeNumber=excluded.episodeNumber, positionSeconds=excluded.positionSeconds, durationSeconds=excluded.durationSeconds, completed=excluded.completed, watchedAt=excluded.watchedAt`,
       user.id, body.seriesId, body.episodeId || null, body.episodeNumber || 1, reported, epDur || body.durationSeconds || 0, body.completed ? 1 : 0, now());
+    if (ep) {
+      // Round 2 (S5): per-episode progress alongside the per-series row.
+      // Position follows the latest (clamped) report, like watch_history;
+      // `completed` is STICKY (MAX) — a finished episode keeps its watched
+      // checkmark even if a later progress post for it arrives without the
+      // flag (the client ORs it, this is the server-side backstop).
+      run(`INSERT INTO episode_progress(userId,episodeId,seriesId,episodeNumber,positionSeconds,durationSeconds,completed,updatedAt) VALUES(?,?,?,?,?,?,?,?)
+        ON CONFLICT(userId,episodeId) DO UPDATE SET seriesId=excluded.seriesId, episodeNumber=excluded.episodeNumber, positionSeconds=excluded.positionSeconds, durationSeconds=excluded.durationSeconds, completed=MAX(completed, excluded.completed), updatedAt=excluded.updatedAt`,
+        user.id, ep.id, body.seriesId, body.episodeNumber || ep.episodeNumber || 1, reported, epDur || body.durationSeconds || 0, body.completed ? 1 : 0, now());
+    }
     return ok(res, { success: true });
   }
   if (req.method === 'POST' && p === '/content/share') {

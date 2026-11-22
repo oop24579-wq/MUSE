@@ -12,6 +12,7 @@ import '../../services/marketing/marketing_event_names.dart' show PaywallTrigger
 import '../../services/marketing/marketing_funnel_events.dart';
 import '../../services/firebase/remote_config_service.dart';
 import '../../services/onboarding_service.dart';
+import '../../services/paywall_frequency.dart';
 import '../../services/paywall_preload_service.dart';
 import '../../services/user_provider.dart';
 import '../../services/drama/drama_service.dart';
@@ -229,11 +230,22 @@ class _SplashScreenState extends State<SplashScreen>
         final isPro = userProvider.isPro;
 
         if (!isPro) {
-          // Not pro - show paywall (offerings already preloaded during splash)
-          await MarketingFunnelEvents.trackViewPaywall(
-            trigger: PaywallTrigger.splashReturning,
-          );
-          Navigator.pushReplacementNamed(context, '/pricing');
+          // Not pro - show paywall (offerings already preloaded during splash),
+          // subject to the launch frequency cap (round 2 wiring): round 1
+          // implemented the cap inside a PaywallGate widget that is mounted
+          // NOWHERE, so the real launch path never consulted it. With the
+          // server flag paywall_daily_cap ON (default), the paywall shows at
+          // most once per 24h; capped launches go straight home.
+          if (await PaywallFrequency.shouldShowLaunchPaywall()) {
+            await PaywallFrequency.markShown();
+            await MarketingFunnelEvents.trackViewPaywall(
+              trigger: PaywallTrigger.splashReturning,
+            );
+            if (!mounted) return;
+            Navigator.pushReplacementNamed(context, '/pricing');
+          } else {
+            Navigator.pushReplacementNamed(context, '/home');
+          }
         } else {
           // Pro user - go to home
           Navigator.pushReplacementNamed(context, '/home');

@@ -31,13 +31,6 @@ class AppLocalizationsIt extends AppLocalizations {
   }
 
   @override
-  String get pickToEdit => 'Browse Stations';
-
-  @override
-  String get selectPhotoFromGallery =>
-      'Find stations by genre, country, or language';
-
-  @override
   String get selectFromGallery => 'Select from gallery';
 
   @override
@@ -50,9 +43,6 @@ class AppLocalizationsIt extends AppLocalizations {
   String get featured => 'Featured Stations';
 
   @override
-  String get exploreFeaturedEdits => 'Explore curated radio picks';
-
-  @override
   String get pro => 'Pro';
 
   @override
@@ -60,9 +50,6 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get lightMode => 'Light mode';
-
-  @override
-  String get getFreeSongs => 'Get Pro perks';
 
   @override
   String get rewardDailyCheckIn => 'Daily Check-in';
@@ -165,13 +152,6 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get settingsProfileInvite => 'Invite';
-
-  @override
-  String get settingsProfileSongBalanceHint =>
-      'I vantaggi Pro per i drama sono disponibili sul tuo account.';
-
-  @override
-  String get settingsGetFreeSongsRow => 'Get Pro perks';
 
   @override
   String get weeklyStreakSectionTitle => 'Weekly streak';
@@ -559,9 +539,6 @@ class AppLocalizationsIt extends AppLocalizations {
       'Failed to send password reset email. Please try again.';
 
   @override
-  String get takeYourPhotosToNewHeights => 'Live radio & podcasts\nworldwide';
-
-  @override
   String get getStarted => 'Get Started';
 
   @override
@@ -624,15 +601,6 @@ class AppLocalizationsIt extends AppLocalizations {
   String get signOut => 'Sign Out';
 
   @override
-  String get songDescription => 'Station search';
-
-  @override
-  String get lyrics => 'Podcasts';
-
-  @override
-  String get imageToSong => 'By mood';
-
-  @override
   String get selectGenre => 'Select Genre';
 
   @override
@@ -681,23 +649,7 @@ class AppLocalizationsIt extends AppLocalizations {
   String get tabSearch => 'Search';
 
   @override
-  String get tabRadio => 'Radio';
-
-  @override
-  String get tabPodcasts => 'Podcasts';
-
-  @override
   String get tabPlaylist => 'Playlist';
-
-  @override
-  String get settingsPodcastAutoDownload => 'Auto-download new episodes';
-
-  @override
-  String get settingsPodcastAutoDownloadHint =>
-      'Pro feature — download new episodes on Wi‑Fi';
-
-  @override
-  String get settingsPodcastInbox => 'New episode alerts';
 
   @override
   String get settingsStreamingQuality => 'Streaming quality';
@@ -733,9 +685,6 @@ class AppLocalizationsIt extends AppLocalizations {
   String get topArtists => 'Top Podcasters';
 
   @override
-  String get topSongs => 'Top Stations';
-
-  @override
   String get newReleases => 'New Episodes';
 
   @override
@@ -744,34 +693,12 @@ class AppLocalizationsIt extends AppLocalizations {
   }
 
   @override
-  String get placeholderSongDescription =>
-      'Search jazz, news, rock, or talk radio...';
-
-  @override
-  String get placeholderLyrics => 'Search podcasts or episodes...';
-
-  @override
-  String get placeholderImageToSong => 'Describe the station or show mood...';
-
-  @override
   String get readyToStartHeadline => 'Live radio & podcasts worldwide';
 
   @override
   String readyToStartLegalText(String appName) {
     return 'By tapping next, you are agreeing to $appName Terms of Use & Privacy Policy.';
   }
-
-  @override
-  String get songIdeasHeading => 'Station ideas';
-
-  @override
-  String get musicVideoIdeasHeading => 'Podcast ideas';
-
-  @override
-  String get songIdeasCategoryAllGenres => 'All genres / trending stations';
-
-  @override
-  String get songIdeasCategoryTrending => 'Trending shows';
 
   @override
   String get communityCollections => 'Community Collections';
@@ -842,13 +769,6 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get paywallHelpGotIt => 'Got it';
-
-  @override
-  String get paywallSongsExplainerBody =>
-      'Pro sblocca la visione senza pubblicità, il download degli episodi offline, le serie esclusive VIP e lo streaming in alta qualità.';
-
-  @override
-  String get paywallSongsExplainerThanks => 'Thanks 😊';
 
   @override
   String get paywallPlanYearly => 'Yearly';
@@ -927,26 +847,13 @@ class AppLocalizationsIt extends AppLocalizations {
   String get paywallRetry => 'Retry';
 
   @override
-  String get addCoverTitle => 'Add a station preset';
-
-  @override
-  String get addCoverDescription =>
-      'Save a station with a custom name for quick access.';
-
-  @override
   String get addCoverNameLabel => 'Preset name';
 
   @override
   String get addCoverNameHint => 'My morning news';
 
   @override
-  String get addCoverAudioLabel => 'Station stream';
-
-  @override
   String get addCoverUploadAudio => 'Paste stream URL';
-
-  @override
-  String get addCoverImageLabel => 'Station logo (optional)';
 
   @override
   String get addCoverUploadImage => 'Upload logo';
@@ -955,32 +862,16 @@ class AppLocalizationsIt extends AppLocalizations {
   String get addCoverSave => 'Save preset';
 
   @override
-  String get addCoverTermsPrefix =>
-      'I confirm I have rights to use this station stream and agree to the ';
-
-  @override
   String get addCoverTermsLink => 'Terms of Use';
 
   @override
   String get cancel => 'Cancel';
 
   @override
-  String get createYourFirstSong => 'Find Your First Station';
-
-  @override
-  String get noGeneratedSongs => 'Your saved stations will appear here';
-
-  @override
-  String get tabMySongs => 'My Stations';
-
-  @override
   String get tabMyVideos => 'My Episodes';
 
   @override
   String get tabMyVoices => 'My Presets';
-
-  @override
-  String get createYourFirstVideo => 'Subscribe to a Podcast';
 
   @override
   String get noGeneratedVideos => 'Your downloaded episodes will appear here';
@@ -1114,26 +1005,6 @@ class AppLocalizationsIt extends AppLocalizations {
       'Failed to initialize the app. Please check your permissions and try again.';
 
   @override
-  String get tabAiCovers => 'Discover';
-
-  @override
-  String get tabMusicVideo => 'Offline';
-
-  @override
-  String get placeholderMusicVideo => 'Search podcasts to download...';
-
-  @override
-  String get aiCoversPill => 'Premium';
-
-  @override
-  String aiCoversPillCount(int count) {
-    return '+$count premium';
-  }
-
-  @override
-  String get aiCoverVoicesSheetTitle => 'Premium Stations';
-
-  @override
   String get searchVoicesHint => 'Search presets…';
 
   @override
@@ -1146,77 +1017,17 @@ class AppLocalizationsIt extends AppLocalizations {
   String get categoryOther => 'Other';
 
   @override
-  String get aiCoversClear => 'Clear';
-
-  @override
-  String get selectMusicModel => 'Stream quality';
-
-  @override
   String get signInToAddCoverVoice => 'Please sign in to save a preset';
-
-  @override
-  String get musicVideoPromoTitle => 'Offline listening';
-
-  @override
-  String get musicVideoPromoSubtitle => 'Download episodes\nfor offline play';
-
-  @override
-  String get musicVideoPromoCreate => 'Browse';
-
-  @override
-  String get musicGeneratedSuccess => 'Now playing!';
-
-  @override
-  String get musicVideoGeneratedSuccess => 'Download started!';
-
-  @override
-  String get describeMusicVideoConcept =>
-      'Choose a podcast episode to download';
 
   @override
   String get noVideoCreditsRemaining =>
       'No download credits remaining. Upgrade to Pro to continue.';
 
   @override
-  String get musicVideoGeneratingHeadline => 'Preparing your download...';
-
-  @override
-  String get musicVideoReadyHeadline => 'Episode ready offline!';
-
-  @override
-  String get musicVideoReadyToast =>
-      'Episode downloaded! Open your library to listen offline.';
-
-  @override
-  String musicVideoGenerateFailed(String error) {
-    return 'Failed to download episode: $error';
-  }
-
-  @override
-  String get musicReadyToast => 'Station ready! Tap play to listen live.';
-
-  @override
   String get notAuthenticated => 'Not authenticated';
 
   @override
-  String get songDeleted => 'Removed from library';
-
-  @override
-  String errorDeletingSong(String error) {
-    return 'Error removing item: $error';
-  }
-
-  @override
   String get noPreviewForVoice => 'No preview available for this preset';
-
-  @override
-  String get maleVoice => 'Talk radio';
-
-  @override
-  String get femaleVoice => 'Music station';
-
-  @override
-  String get aiCoverVoiceLabel => 'Station preset';
 
   @override
   String get genderMale => 'Male';
@@ -1297,63 +1108,6 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get addYourOwnVoice => 'Add your\nown preset';
-
-  @override
-  String get aiCoverPageTitle => 'Discover';
-
-  @override
-  String get aiCoverPickSongSection => '1. Pick a station';
-
-  @override
-  String get aiCoverChooseSongHint => 'Choose a station to save.';
-
-  @override
-  String get aiCoverChooseVoiceSection => '2. Choose a preset';
-
-  @override
-  String get aiCoverSearchHint => 'Search';
-
-  @override
-  String get aiCoverFilterHot => 'Hot 🔥';
-
-  @override
-  String get aiCoverFilterMyVoices => 'My Presets';
-
-  @override
-  String get aiCoverFilterNew => 'New ✨';
-
-  @override
-  String get aiCoverFilterSimilar => 'Similar';
-
-  @override
-  String get aiCoverCreateVoice => 'Create Preset';
-
-  @override
-  String get aiCoverCreateButton => 'Save station';
-
-  @override
-  String get aiCoverSelectSong => 'Please choose a station';
-
-  @override
-  String get aiCoverSelectVoice => 'Please choose a preset';
-
-  @override
-  String get aiCoverPickFromLibrary => 'From my library';
-
-  @override
-  String get aiCoverUploadAudio => 'Upload audio file';
-
-  @override
-  String get aiCoverPickSongTitle => 'Pick a station';
-
-  @override
-  String get aiCoverGenderFilter => 'Genre filter';
-
-  @override
-  String get aiCoverGenderAll => 'All';
-
-  @override
-  String get recordedAudio => 'Recorded audio';
 
   @override
   String maxFileSizeHint(int size) {

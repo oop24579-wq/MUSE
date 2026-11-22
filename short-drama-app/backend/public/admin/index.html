@@ -302,6 +302,11 @@ main h2{margin:0 0 16px;font-size:22px}
           <div><label>Daily Check-in Amounts (7 days)</label>
             <div class="row" id="ecoCheckin"></div>
           </div>
+          <div class="form-grid">
+            <div><label>Check-in Level Bonus (per level)</label><input id="eco_checkin_level" type="number" min="0"></div>
+            <div><label>Check-in Streak Bonus (per streak day)</label><input id="eco_checkin_streak" type="number" min="0"></div>
+            <div><label>Check-in Streak Bonus Cap</label><input id="eco_checkin_streakcap" type="number" min="0"></div>
+          </div>
           <div><button class="btn" type="submit">Save Economy Settings</button></div>
         </form>
       </div>
@@ -385,6 +390,7 @@ main h2{margin:0 0 16px;font-size:22px}
           <div class="form-grid">
             <div><label>Referrer Bonus (coins)</label><input id="lab_ref_referrer" type="number" min="0"></div>
             <div><label>Referee Bonus (coins)</label><input id="lab_ref_referee" type="number" min="0"></div>
+            <div><label>Daily Reward Cap / Referrer (anti-Sybil)</label><input id="lab_ref_cap" type="number" min="0"></div>
           </div>
           <div><button class="btn" type="submit">Save Referrals</button></div>
         </form>
@@ -795,6 +801,7 @@ async function loadSettingsInto(forms) {
     $('eco_welcome').value = s.welcome_coin_bonus; $('eco_unlock').value = s.episode_unlock_coin_cost;
     $('eco_adAmount').value = s.ad_reward_amount; $('eco_adCap').value = s.ad_daily_cap;
     $('ecoCheckin').innerHTML = (s.checkin_amounts || []).map((v, i) => `<div style="width:86px"><label>Day ${i + 1}</label><input type="number" min="0" value="${esc(v)}" data-checkin="${i}"></div>`).join('');
+    $('eco_checkin_level').value = s.checkin_level_bonus ?? ''; $('eco_checkin_streak').value = s.checkin_streak_bonus ?? ''; $('eco_checkin_streakcap').value = s.checkin_streak_cap ?? '';
   }
   if (forms.includes('app')) { $('set_maintenance').checked = !!s.maintenance_mode; $('set_ads').checked = !!s.ads_enabled; $('set_premium').value = s.premium_playback_mode; }
   return s;
@@ -803,7 +810,7 @@ async function loadRewards() { await loadSettingsInto(['eco']); await loadTasks(
 $('ecoForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const checkin = [...$('ecoCheckin').querySelectorAll('[data-checkin]')].sort((a, b) => a.dataset.checkin - b.dataset.checkin).map((i) => parseInt(i.value, 10) || 0);
-  try { await patch('/settings', { welcome_coin_bonus: num('eco_welcome'), episode_unlock_coin_cost: num('eco_unlock'), ad_reward_amount: num('eco_adAmount'), ad_daily_cap: num('eco_adCap'), checkin_amounts: checkin }); toast('Economy settings saved'); }
+  try { await patch('/settings', { welcome_coin_bonus: num('eco_welcome'), episode_unlock_coin_cost: num('eco_unlock'), ad_reward_amount: num('eco_adAmount'), ad_daily_cap: num('eco_adCap'), checkin_amounts: checkin, checkin_level_bonus: num('eco_checkin_level'), checkin_streak_bonus: num('eco_checkin_streak'), checkin_streak_cap: num('eco_checkin_streakcap') }); toast('Economy settings saved'); }
   catch (err) { toast(err.message, true); }
 });
 async function loadTasks() {
@@ -882,7 +889,7 @@ async function loadEngagement() {
   $('lab_watch_enabled').checked = !!s.watch_time_enabled;
   $('lab_watch_coins').value = s.watch_time_coins_per_block ?? ''; $('lab_watch_minutes').value = s.watch_time_block_minutes ?? ''; $('lab_watch_cap').value = s.watch_time_daily_cap_coins ?? '';
   $('lab_ref_enabled').checked = !!s.referrals_enabled;
-  $('lab_ref_referrer').value = s.referral_bonus_referrer ?? ''; $('lab_ref_referee').value = s.referral_bonus_referee ?? '';
+  $('lab_ref_referrer').value = s.referral_bonus_referrer ?? ''; $('lab_ref_referee').value = s.referral_bonus_referee ?? ''; $('lab_ref_cap').value = s.referral_daily_reward_cap ?? '';
   $('lab_missions_enabled').checked = !!s.missions_enabled;
   await Promise.all([loadMissions(), loadEvents()]);
 }
@@ -898,7 +905,7 @@ $('watchForm').addEventListener('submit', async (e) => { e.preventDefault();
   Object.keys(body).forEach((k) => body[k] === undefined && delete body[k]);
   try { await patchSettings(body, 'Watch-time settings saved'); } catch (err) { toast(err.message, true); } });
 $('refForm').addEventListener('submit', async (e) => { e.preventDefault();
-  const body = { referrals_enabled: $('lab_ref_enabled').checked, referral_bonus_referrer: num('lab_ref_referrer'), referral_bonus_referee: num('lab_ref_referee') };
+  const body = { referrals_enabled: $('lab_ref_enabled').checked, referral_bonus_referrer: num('lab_ref_referrer'), referral_bonus_referee: num('lab_ref_referee'), referral_daily_reward_cap: num('lab_ref_cap') };
   Object.keys(body).forEach((k) => body[k] === undefined && delete body[k]);
   try { await patchSettings(body, 'Referral settings saved'); } catch (err) { toast(err.message, true); } });
 $('lab_missions_enabled').addEventListener('change', async (e) => { try { await patchSettings({ missions_enabled: e.target.checked }, 'Missions ' + (e.target.checked ? 'enabled' : 'disabled')); } catch (err) { e.target.checked = !e.target.checked; toast(err.message, true); } });
@@ -956,7 +963,8 @@ const PLAYER_FLAGS = [
   ['player_skip_intro','Skip intro button'], ['player_lock_controls','Lock controls'], ['player_sleep_timer','Sleep timer'], ['player_share_moment','Share moment']];
 const ECO_FLAGS = [
   ['wheel_enabled','Lucky wheel'], ['chests_enabled','Treasure chests'], ['missions_enabled','Missions'],
-  ['referrals_enabled','Referrals'], ['watch_time_enabled','Watch-time rewards'], ['captions_enabled','Captions']];
+  ['referrals_enabled','Referrals'], ['watch_time_enabled','Watch-time rewards'], ['captions_enabled','Captions'],
+  ['paywall_daily_cap','Launch paywall: max once per 24h']];
 function flagRow([key, label]) { return `<div class="flag-row"><span>${esc(label)}</span><span class="spacer"></span><span class="muted small"><code>${esc(key)}</code></span><label class="switch"><input type="checkbox" data-flag="${esc(key)}"><span class="track"></span></label></div>`; }
 $('flagsPlayer').innerHTML = PLAYER_FLAGS.map(flagRow).join('');
 $('flagsEconomy').innerHTML = ECO_FLAGS.map(flagRow).join('');

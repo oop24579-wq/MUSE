@@ -108,6 +108,14 @@ class _RewardsContentState extends ConsumerState<RewardsContent> {
                 SizedBox(height: 1.4.h),
                 _EventBanner(event: event),
               ],
+              // Round 2 wiring: the backend's streak-grace fields (round 1
+              // item 5) were never parsed by the app, so this warning could
+              // never show. streakAtRisk = the streak dies without a
+              // check-in today.
+              if (state.streakAtRisk && !state.claimedToday) ...[
+                SizedBox(height: 1.4.h),
+                const _StreakRiskBanner(),
+              ],
               SizedBox(height: 2.h),
               DailyCheckinStrip(
                 days: state.days,
@@ -297,6 +305,8 @@ class _RewardsContentState extends ConsumerState<RewardsContent> {
                   referralCode: state.referralCode,
                   controller: _referralController,
                   busy: _referralBusy,
+                  applyBy: state.referralApplyBy,
+                  hasReferred: state.hasReferred,
                   onApply: () async {
                     final code = _referralController.text.trim();
                     if (code.isEmpty || _referralBusy) return;
@@ -330,6 +340,48 @@ class _RewardsContentState extends ConsumerState<RewardsContent> {
 }
 
 /// "Event name — rewards ×N!" banner chip shown while an event is active.
+/// Warning shown when the backend reports the streak will die without a
+/// check-in today (round 2 wiring of the round-1 grace fields).
+class _StreakRiskBanner extends StatelessWidget {
+  const _StreakRiskBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 4.w),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 3.5.w, vertical: 1.1.h),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF6D00).withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFFF6D00).withValues(alpha: 0.45),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.local_fire_department,
+                color: Color(0xFFFF6D00), size: 18),
+            SizedBox(width: 2.w),
+            Expanded(
+              child: Text(
+                'Your streak ends today — check in below to keep it alive!',
+                style: TextStyle(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : Colors.black87,
+                  fontSize: 10.5.sp,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _EventBanner extends StatelessWidget {
   const _EventBanner({required this.event});
 
@@ -491,12 +543,19 @@ class _ReferralCard extends StatelessWidget {
     required this.controller,
     required this.busy,
     required this.onApply,
+    this.applyBy,
+    this.hasReferred = false,
   });
 
   final String referralCode;
   final TextEditingController controller;
   final bool busy;
   final Future<void> Function() onApply;
+
+  /// Round 2: the 24h apply-window deadline from the backend. It used to be
+  /// invisible until applying failed with REFERRAL_WINDOW_CLOSED.
+  final DateTime? applyBy;
+  final bool hasReferred;
 
   @override
   Widget build(BuildContext context) {
@@ -611,8 +670,27 @@ class _ReferralCard extends StatelessWidget {
               ),
             ],
           ),
+          // Round 2: surface the 24h apply window instead of letting the
+          // apply fail silently after it closes.
+          if (!hasReferred && applyBy != null) ...[
+            SizedBox(height: 1.h),
+            Text(
+              applyBy!.isAfter(DateTime.now())
+                  ? 'Codes can be applied within 24 hours of sign-up — '
+                      'until ${_fmtDeadline(applyBy!)}.'
+                  : 'The 24-hour window to apply a code has closed.',
+              style: TextStyle(color: subColor, fontSize: 9.sp),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  static String _fmtDeadline(DateTime d) {
+    final local = d.toLocal();
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '${local.day}/${local.month} $hh:$mm';
   }
 }

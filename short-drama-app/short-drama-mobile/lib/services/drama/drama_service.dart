@@ -25,6 +25,11 @@ class SeriesDetailData {
   final bool isLiked;
   final int? resumeEpisodeNumber;
 
+  /// The exact episode to resume (round 2, S3). Episode numbers repeat
+  /// across seasons, so the number alone cannot identify the resume target
+  /// in a multi-season series; the id can.
+  final String? resumeEpisodeId;
+
   const SeriesDetailData({
     required this.series,
     this.seasons = const [],
@@ -35,7 +40,35 @@ class SeriesDetailData {
     this.isFollowing = false,
     this.isLiked = false,
     this.resumeEpisodeNumber,
+    this.resumeEpisodeId,
   });
+}
+
+/// Where the player should start for a series (round 2, S3): the resume
+/// episode when it can be identified unambiguously, else the first episode.
+/// The id match is exact; the number match is used only when exactly one
+/// episode carries that number (multi-season series repeat numbers).
+int resolvePlayerStartIndex(
+  List<EpisodeModel> episodes, {
+  String? resumeEpisodeId,
+  int? resumeEpisodeNumber,
+}) {
+  if (episodes.isEmpty) return 0;
+  if (resumeEpisodeId != null) {
+    final byId = episodes.indexWhere((e) => e.id == resumeEpisodeId);
+    if (byId >= 0) return byId;
+  }
+  if (resumeEpisodeNumber != null) {
+    var found = -1;
+    for (var i = 0; i < episodes.length; i++) {
+      if (episodes[i].episodeNumber == resumeEpisodeNumber) {
+        if (found >= 0) return 0; // ambiguous — do not guess
+        found = i;
+      }
+    }
+    if (found >= 0) return found;
+  }
+  return 0;
 }
 
 /// Central data layer for DramaNow content (web `/api/v1`).
@@ -318,6 +351,7 @@ class DramaService {
         isLiked: (detail['isLiked'] as bool?) ?? false,
         resumeEpisodeNumber:
             (detail['resumeEpisodeNumber'] as num?)?.toInt(),
+        resumeEpisodeId: detail['resumeEpisodeId'] as String?,
       );
     } catch (_) {
       return null;
@@ -413,6 +447,25 @@ class DramaService {
         if (entry != null) entries.add(entry);
       }
       return entries;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Per-episode progress for one series (round 2, S5): watched checkmarks
+  /// and per-episode resume positions. Empty on any failure — callers fall
+  /// back to the one-row-per-series history.
+  Future<List<EpisodeProgress>> fetchSeriesEpisodeProgress(
+      String seriesId) async {
+    try {
+      final data = await _api.get('/me/library/history/series/$seriesId');
+      final rows = data['episodes'];
+      if (rows is! List) return [];
+      return rows
+          .whereType<Map>()
+          .map((r) => EpisodeProgress.fromJson(Map<String, dynamic>.from(r)))
+          .where((p) => p.episodeId.isNotEmpty)
+          .toList();
     } catch (_) {
       return [];
     }
@@ -545,6 +598,13 @@ class DramaService {
         nextLevelXp: (data['nextLevelXp'] as num?)?.toInt() ?? 100,
         activeEvent: activeEvent,
         referralCode: (data['referralCode'] as String?) ?? '',
+        graceAvailable: (data['graceAvailable'] as bool?) ?? false,
+        streakAtRisk: (data['streakAtRisk'] as bool?) ?? false,
+        daysSinceLastClaim: (data['daysSinceLastClaim'] as num?)?.toInt(),
+        referralApplyBy: data['referralApplyBy'] != null
+            ? DateTime.tryParse(data['referralApplyBy'].toString())
+            : null,
+        hasReferred: (data['hasReferred'] as bool?) ?? false,
       );
     } catch (_) {
       return const RewardsState();

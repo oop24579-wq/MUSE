@@ -1,0 +1,14 @@
+Server booted on http://127.0.0.1:40617 with temp DB /tmp/dramanow-test4-fhpRpq/app.db
+PASS 301. S5: per-episode progress returns EVERY watched episode; library/history stays one row per series
+PASS 302. S5: completed is sticky in episode_progress; position follows the latest report
+PASS 303. S5: episode_progress position is clamped to the real episode duration
+PASS 304. S3: series detail returns resumeEpisodeId of the latest watched episode (null when anonymous)
+PASS 305. rewards: referralApplyBy = createdAt + 24h; hasReferred flips after applying a code
+PASS 306. S5: relink merge moves episode_progress to the primary account (primary wins conflicts)
+PASS 307. S5: episode progress is per-user (another user sees none of it)
+PASS 308. S5: watch post with an episode from another series is rejected and records no progress
+
+===== ROUND 2 SUITE 4 SUMMARY =====
+TOTAL: 8  PASSED: 8  FAILED: 0
+ALL PASS
+

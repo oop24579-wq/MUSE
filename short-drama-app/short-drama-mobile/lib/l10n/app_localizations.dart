@@ -154,18 +154,6 @@ abstract class AppLocalizations {
   /// **'Failed to change language: {error}'**
   String failedToChangeLanguage(String error);
 
-  /// Browse stations category title
-  ///
-  /// In en, this message translates to:
-  /// **'Browse Stations'**
-  String get pickToEdit;
-
-  /// Browse stations category subtitle
-  ///
-  /// In en, this message translates to:
-  /// **'Find stations by genre, country, or language'**
-  String get selectPhotoFromGallery;
-
   /// Gallery selection label
   ///
   /// In en, this message translates to:
@@ -190,12 +178,6 @@ abstract class AppLocalizations {
   /// **'Featured Stations'**
   String get featured;
 
-  /// Featured stations category subtitle
-  ///
-  /// In en, this message translates to:
-  /// **'Explore curated radio picks'**
-  String get exploreFeaturedEdits;
-
   /// Pro subscription label
   ///
   /// In en, this message translates to:
@@ -213,12 +195,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Light mode'**
   String get lightMode;
-
-  /// Settings row and sheet title for earning Pro perks
-  ///
-  /// In en, this message translates to:
-  /// **'Get Pro perks'**
-  String get getFreeSongs;
 
   /// Reward task title: daily check-in
   ///
@@ -387,18 +363,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Invite'**
   String get settingsProfileInvite;
-
-  /// Semantics label for balance info icon
-  ///
-  /// In en, this message translates to:
-  /// **'Pro drama perks are available on your account.'**
-  String get settingsProfileSongBalanceHint;
-
-  /// Tappable row opening rewards sheet
-  ///
-  /// In en, this message translates to:
-  /// **'Get Pro perks'**
-  String get settingsGetFreeSongsRow;
 
   /// Label above weekly visit dots
   ///
@@ -1060,12 +1024,6 @@ abstract class AppLocalizations {
   /// **'Failed to send password reset email. Please try again.'**
   String get failedToSendPasswordResetEmail;
 
-  /// Getting started screen headline
-  ///
-  /// In en, this message translates to:
-  /// **'Live radio & podcasts\nworldwide'**
-  String get takeYourPhotosToNewHeights;
-
   /// Get started button text
   ///
   /// In en, this message translates to:
@@ -1180,24 +1138,6 @@ abstract class AppLocalizations {
   /// **'Sign Out'**
   String get signOut;
 
-  /// Tab label for drama description input
-  ///
-  /// In en, this message translates to:
-  /// **'Station search'**
-  String get songDescription;
-
-  /// Tab label for lyrics input
-  ///
-  /// In en, this message translates to:
-  /// **'Podcasts'**
-  String get lyrics;
-
-  /// Tab label for image to drama conversion
-  ///
-  /// In en, this message translates to:
-  /// **'By mood'**
-  String get imageToSong;
-
   /// Label for genre selection section
   ///
   /// In en, this message translates to:
@@ -1294,41 +1234,11 @@ abstract class AppLocalizations {
   /// **'Search'**
   String get tabSearch;
 
-  /// Radio tab label
-  ///
-  /// In en, this message translates to:
-  /// **'Radio'**
-  String get tabRadio;
-
-  /// Podcasts tab label
-  ///
-  /// In en, this message translates to:
-  /// **'Podcasts'**
-  String get tabPodcasts;
-
   /// Playlist tab label
   ///
   /// In en, this message translates to:
   /// **'Playlist'**
   String get tabPlaylist;
-
-  /// Settings toggle for automatic podcast downloads
-  ///
-  /// In en, this message translates to:
-  /// **'Auto-download new episodes'**
-  String get settingsPodcastAutoDownload;
-
-  /// Subtitle for auto-download toggle
-  ///
-  /// In en, this message translates to:
-  /// **'Pro feature — download new episodes on Wi‑Fi'**
-  String get settingsPodcastAutoDownloadHint;
-
-  /// Settings toggle for podcast inbox notifications
-  ///
-  /// In en, this message translates to:
-  /// **'New episode alerts'**
-  String get settingsPodcastInbox;
 
   /// Settings row for audio stream quality
   ///
@@ -1396,12 +1306,6 @@ abstract class AppLocalizations {
   /// **'Top Podcasters'**
   String get topArtists;
 
-  /// Section title for trending dramas on Explore
-  ///
-  /// In en, this message translates to:
-  /// **'Top Stations'**
-  String get topSongs;
-
   /// Section title for newest public dramas on Explore
   ///
   /// In en, this message translates to:
@@ -1414,24 +1318,6 @@ abstract class AppLocalizations {
   /// **'{count} plays'**
   String explorePlaysCount(int count);
 
-  /// Placeholder text for drama description input
-  ///
-  /// In en, this message translates to:
-  /// **'Search jazz, news, rock, or talk radio...'**
-  String get placeholderSongDescription;
-
-  /// Placeholder text for lyrics input
-  ///
-  /// In en, this message translates to:
-  /// **'Search podcasts or episodes...'**
-  String get placeholderLyrics;
-
-  /// Placeholder text for image to drama input
-  ///
-  /// In en, this message translates to:
-  /// **'Describe the station or show mood...'**
-  String get placeholderImageToSong;
-
   /// Ready to Start screen headline
   ///
   /// In en, this message translates to:
@@ -1443,30 +1329,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'By tapping next, you are agreeing to {appName} Terms of Use & Privacy Policy.'**
   String readyToStartLegalText(String appName);
-
-  /// Section title above default drama prompt chips
-  ///
-  /// In en, this message translates to:
-  /// **'Station ideas'**
-  String get songIdeasHeading;
-
-  /// Section title above music video prompt chips
-  ///
-  /// In en, this message translates to:
-  /// **'Podcast ideas'**
-  String get musicVideoIdeasHeading;
-
-  /// Subtitle chip category for generic drama prompts
-  ///
-  /// In en, this message translates to:
-  /// **'All genres / trending stations'**
-  String get songIdeasCategoryAllGenres;
-
-  /// Subtitle chip category for music video prompts
-  ///
-  /// In en, this message translates to:
-  /// **'Trending shows'**
-  String get songIdeasCategoryTrending;
 
   /// Section title for community playlist cards
   ///
@@ -1600,18 +1462,6 @@ abstract class AppLocalizations {
   /// **'Got it'**
   String get paywallHelpGotIt;
 
-  /// Short bullet explainer for free vs Pro drama limits and ads on paywall
-  ///
-  /// In en, this message translates to:
-  /// **'Pro unlocks ad-free watching, offline episode downloads, VIP-only series, and high-quality streams.'**
-  String get paywallSongsExplainerBody;
-
-  /// Dismiss button for What are dramas? dialog on paywall
-  ///
-  /// In en, this message translates to:
-  /// **'Thanks 😊'**
-  String get paywallSongsExplainerThanks;
-
   /// No description provided for @paywallPlanYearly.
   ///
   /// In en, this message translates to:
@@ -1744,18 +1594,6 @@ abstract class AppLocalizations {
   /// **'Retry'**
   String get paywallRetry;
 
-  /// No description provided for @addCoverTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Add a station preset'**
-  String get addCoverTitle;
-
-  /// No description provided for @addCoverDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Save a station with a custom name for quick access.'**
-  String get addCoverDescription;
-
   /// No description provided for @addCoverNameLabel.
   ///
   /// In en, this message translates to:
@@ -1768,23 +1606,11 @@ abstract class AppLocalizations {
   /// **'My morning news'**
   String get addCoverNameHint;
 
-  /// No description provided for @addCoverAudioLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Station stream'**
-  String get addCoverAudioLabel;
-
   /// No description provided for @addCoverUploadAudio.
   ///
   /// In en, this message translates to:
   /// **'Paste stream URL'**
   String get addCoverUploadAudio;
-
-  /// No description provided for @addCoverImageLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Station logo (optional)'**
-  String get addCoverImageLabel;
 
   /// No description provided for @addCoverUploadImage.
   ///
@@ -1798,12 +1624,6 @@ abstract class AppLocalizations {
   /// **'Save preset'**
   String get addCoverSave;
 
-  /// No description provided for @addCoverTermsPrefix.
-  ///
-  /// In en, this message translates to:
-  /// **'I confirm I have rights to use this station stream and agree to the '**
-  String get addCoverTermsPrefix;
-
   /// No description provided for @addCoverTermsLink.
   ///
   /// In en, this message translates to:
@@ -1816,24 +1636,6 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get cancel;
 
-  /// No description provided for @createYourFirstSong.
-  ///
-  /// In en, this message translates to:
-  /// **'Find Your First Station'**
-  String get createYourFirstSong;
-
-  /// No description provided for @noGeneratedSongs.
-  ///
-  /// In en, this message translates to:
-  /// **'Your saved stations will appear here'**
-  String get noGeneratedSongs;
-
-  /// No description provided for @tabMySongs.
-  ///
-  /// In en, this message translates to:
-  /// **'My Stations'**
-  String get tabMySongs;
-
   /// No description provided for @tabMyVideos.
   ///
   /// In en, this message translates to:
@@ -1845,12 +1647,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'My Presets'**
   String get tabMyVoices;
-
-  /// No description provided for @createYourFirstVideo.
-  ///
-  /// In en, this message translates to:
-  /// **'Subscribe to a Podcast'**
-  String get createYourFirstVideo;
 
   /// No description provided for @noGeneratedVideos.
   ///
@@ -2080,42 +1876,6 @@ abstract class AppLocalizations {
   /// **'Failed to initialize the app. Please check your permissions and try again.'**
   String get splashInitErrorMessage;
 
-  /// Main bottom nav tab for AI cover voices
-  ///
-  /// In en, this message translates to:
-  /// **'Discover'**
-  String get tabAiCovers;
-
-  /// Create tab label for music video mode
-  ///
-  /// In en, this message translates to:
-  /// **'Offline'**
-  String get tabMusicVideo;
-
-  /// Prompt placeholder on music video create tab
-  ///
-  /// In en, this message translates to:
-  /// **'Search podcasts to download...'**
-  String get placeholderMusicVideo;
-
-  /// No description provided for @aiCoversPill.
-  ///
-  /// In en, this message translates to:
-  /// **'Premium'**
-  String get aiCoversPill;
-
-  /// No description provided for @aiCoversPillCount.
-  ///
-  /// In en, this message translates to:
-  /// **'+{count} premium'**
-  String aiCoversPillCount(int count);
-
-  /// No description provided for @aiCoverVoicesSheetTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Premium Stations'**
-  String get aiCoverVoicesSheetTitle;
-
   /// No description provided for @searchVoicesHint.
   ///
   /// In en, this message translates to:
@@ -2140,59 +1900,11 @@ abstract class AppLocalizations {
   /// **'Other'**
   String get categoryOther;
 
-  /// No description provided for @aiCoversClear.
-  ///
-  /// In en, this message translates to:
-  /// **'Clear'**
-  String get aiCoversClear;
-
-  /// No description provided for @selectMusicModel.
-  ///
-  /// In en, this message translates to:
-  /// **'Stream quality'**
-  String get selectMusicModel;
-
   /// No description provided for @signInToAddCoverVoice.
   ///
   /// In en, this message translates to:
   /// **'Please sign in to save a preset'**
   String get signInToAddCoverVoice;
-
-  /// No description provided for @musicVideoPromoTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Offline listening'**
-  String get musicVideoPromoTitle;
-
-  /// No description provided for @musicVideoPromoSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Download episodes\nfor offline play'**
-  String get musicVideoPromoSubtitle;
-
-  /// No description provided for @musicVideoPromoCreate.
-  ///
-  /// In en, this message translates to:
-  /// **'Browse'**
-  String get musicVideoPromoCreate;
-
-  /// No description provided for @musicGeneratedSuccess.
-  ///
-  /// In en, this message translates to:
-  /// **'Now playing!'**
-  String get musicGeneratedSuccess;
-
-  /// No description provided for @musicVideoGeneratedSuccess.
-  ///
-  /// In en, this message translates to:
-  /// **'Download started!'**
-  String get musicVideoGeneratedSuccess;
-
-  /// No description provided for @describeMusicVideoConcept.
-  ///
-  /// In en, this message translates to:
-  /// **'Choose a podcast episode to download'**
-  String get describeMusicVideoConcept;
 
   /// No description provided for @noVideoCreditsRemaining.
   ///
@@ -2200,77 +1912,17 @@ abstract class AppLocalizations {
   /// **'No download credits remaining. Upgrade to Pro to continue.'**
   String get noVideoCreditsRemaining;
 
-  /// No description provided for @musicVideoGeneratingHeadline.
-  ///
-  /// In en, this message translates to:
-  /// **'Preparing your download...'**
-  String get musicVideoGeneratingHeadline;
-
-  /// No description provided for @musicVideoReadyHeadline.
-  ///
-  /// In en, this message translates to:
-  /// **'Episode ready offline!'**
-  String get musicVideoReadyHeadline;
-
-  /// No description provided for @musicVideoReadyToast.
-  ///
-  /// In en, this message translates to:
-  /// **'Episode downloaded! Open your library to listen offline.'**
-  String get musicVideoReadyToast;
-
-  /// No description provided for @musicVideoGenerateFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Failed to download episode: {error}'**
-  String musicVideoGenerateFailed(String error);
-
-  /// No description provided for @musicReadyToast.
-  ///
-  /// In en, this message translates to:
-  /// **'Station ready! Tap play to listen live.'**
-  String get musicReadyToast;
-
   /// No description provided for @notAuthenticated.
   ///
   /// In en, this message translates to:
   /// **'Not authenticated'**
   String get notAuthenticated;
 
-  /// No description provided for @songDeleted.
-  ///
-  /// In en, this message translates to:
-  /// **'Removed from library'**
-  String get songDeleted;
-
-  /// No description provided for @errorDeletingSong.
-  ///
-  /// In en, this message translates to:
-  /// **'Error removing item: {error}'**
-  String errorDeletingSong(String error);
-
   /// No description provided for @noPreviewForVoice.
   ///
   /// In en, this message translates to:
   /// **'No preview available for this preset'**
   String get noPreviewForVoice;
-
-  /// No description provided for @maleVoice.
-  ///
-  /// In en, this message translates to:
-  /// **'Talk radio'**
-  String get maleVoice;
-
-  /// No description provided for @femaleVoice.
-  ///
-  /// In en, this message translates to:
-  /// **'Music station'**
-  String get femaleVoice;
-
-  /// No description provided for @aiCoverVoiceLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Station preset'**
-  String get aiCoverVoiceLabel;
 
   /// No description provided for @genderMale.
   ///
@@ -2421,120 +2073,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add your\nown preset'**
   String get addYourOwnVoice;
-
-  /// Title on the AI Cover tab page
-  ///
-  /// In en, this message translates to:
-  /// **'Discover'**
-  String get aiCoverPageTitle;
-
-  /// No description provided for @aiCoverPickSongSection.
-  ///
-  /// In en, this message translates to:
-  /// **'1. Pick a station'**
-  String get aiCoverPickSongSection;
-
-  /// No description provided for @aiCoverChooseSongHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Choose a station to save.'**
-  String get aiCoverChooseSongHint;
-
-  /// No description provided for @aiCoverChooseVoiceSection.
-  ///
-  /// In en, this message translates to:
-  /// **'2. Choose a preset'**
-  String get aiCoverChooseVoiceSection;
-
-  /// No description provided for @aiCoverSearchHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Search'**
-  String get aiCoverSearchHint;
-
-  /// No description provided for @aiCoverFilterHot.
-  ///
-  /// In en, this message translates to:
-  /// **'Hot 🔥'**
-  String get aiCoverFilterHot;
-
-  /// No description provided for @aiCoverFilterMyVoices.
-  ///
-  /// In en, this message translates to:
-  /// **'My Presets'**
-  String get aiCoverFilterMyVoices;
-
-  /// No description provided for @aiCoverFilterNew.
-  ///
-  /// In en, this message translates to:
-  /// **'New ✨'**
-  String get aiCoverFilterNew;
-
-  /// No description provided for @aiCoverFilterSimilar.
-  ///
-  /// In en, this message translates to:
-  /// **'Similar'**
-  String get aiCoverFilterSimilar;
-
-  /// No description provided for @aiCoverCreateVoice.
-  ///
-  /// In en, this message translates to:
-  /// **'Create Preset'**
-  String get aiCoverCreateVoice;
-
-  /// No description provided for @aiCoverCreateButton.
-  ///
-  /// In en, this message translates to:
-  /// **'Save station'**
-  String get aiCoverCreateButton;
-
-  /// No description provided for @aiCoverSelectSong.
-  ///
-  /// In en, this message translates to:
-  /// **'Please choose a station'**
-  String get aiCoverSelectSong;
-
-  /// No description provided for @aiCoverSelectVoice.
-  ///
-  /// In en, this message translates to:
-  /// **'Please choose a preset'**
-  String get aiCoverSelectVoice;
-
-  /// No description provided for @aiCoverPickFromLibrary.
-  ///
-  /// In en, this message translates to:
-  /// **'From my library'**
-  String get aiCoverPickFromLibrary;
-
-  /// No description provided for @aiCoverUploadAudio.
-  ///
-  /// In en, this message translates to:
-  /// **'Upload audio file'**
-  String get aiCoverUploadAudio;
-
-  /// No description provided for @aiCoverPickSongTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Pick a station'**
-  String get aiCoverPickSongTitle;
-
-  /// No description provided for @aiCoverGenderFilter.
-  ///
-  /// In en, this message translates to:
-  /// **'Genre filter'**
-  String get aiCoverGenderFilter;
-
-  /// No description provided for @aiCoverGenderAll.
-  ///
-  /// In en, this message translates to:
-  /// **'All'**
-  String get aiCoverGenderAll;
-
-  /// No description provided for @recordedAudio.
-  ///
-  /// In en, this message translates to:
-  /// **'Recorded audio'**
-  String get recordedAudio;
 
   /// No description provided for @maxFileSizeHint.
   ///

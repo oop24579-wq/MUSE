@@ -301,6 +301,18 @@ class RewardsState {
   final ActiveEventState? activeEvent;
   final String referralCode;
 
+  // Round 2 wiring: the backend has exposed the streak-grace fields since
+  // round 1 (item 5) but the app never parsed them, so the "streak at risk"
+  // warning could never render. Same for the referral apply deadline.
+  final bool graceAvailable;
+  final bool streakAtRisk;
+  final int? daysSinceLastClaim;
+
+  /// Deadline for applying a friend's referral code (sign-up + 24h);
+  /// null when the backend did not provide it.
+  final DateTime? referralApplyBy;
+  final bool hasReferred;
+
   const RewardsState({
     this.coinBalance = 0,
     this.claimedToday = false,
@@ -317,6 +329,11 @@ class RewardsState {
     this.nextLevelXp = 100,
     this.activeEvent,
     this.referralCode = '',
+    this.graceAvailable = false,
+    this.streakAtRisk = false,
+    this.daysSinceLastClaim,
+    this.referralApplyBy,
+    this.hasReferred = false,
   });
 
   /// 0..1 progress WITHIN the current level (for the level ring).

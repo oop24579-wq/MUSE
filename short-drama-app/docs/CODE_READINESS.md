@@ -200,6 +200,128 @@ users; the 3-episode milestone IS included via the chest line — see table).
   Real series titles/metadata must be supplied by the content owner before
   this seed is loaded into a production DB.
 
+## Round 2 (2026-11-22) — critic suspects, API shape, residue sweep, consistency audit
+
+Verdicts use FIXED / CLEARED (proven not a bug) / LEFT (with reason).
+Verification after this round: **backend 123/123** (57 + 36 + 22 + 8 new),
+**Flutter tests 58/58** (51 + 7 new), **`flutter analyze` 0 errors**.
+
+### R2-1. Critic-1 suspects S1–S6 (S7 was round 1 item 8)
+
+- **S1 — per-tick full-tree `setState` in the player: FIXED.**
+  `episode_player_screen.dart::_onTick` rebuilt the whole player subtree on
+  every controller notification. Both progress bars listen to the controller
+  themselves, so the rebuild only feeds the time label (1s granularity),
+  skip-intro visibility, play/buffering flags and the caption line. The tick
+  now rebuilds only when one of those changed (cached in `_tickSecond /
+  _tickPlaying / _tickBuffering / _tickCaption`, reset per episode load).
+- **S2 — LockOverlay long-press arena: CLEARED with a test.**
+  A widget test (long-press gesture on the lock button, held past the 500ms
+  deadline) proves `onUnlock` fires: the inner button's recognizer wins the
+  arena despite the outer detector's empty `onLongPressStart`. No code
+  change; the test stays as a regression guard
+  (`test/round2_test.dart`).
+- **S3 — hero Play button ignored the resume episode: FIXED.**
+  Root cause was API shape: the detail payload's `resumeEpisodeNumber`
+  cannot identify an episode in a multi-season series (numbers repeat).
+  Backend detail payload now also sends `resumeEpisodeId` (the watch-history
+  row already stored it). Client: `SeriesDetailData.resumeEpisodeId`, pure
+  helper `resolvePlayerStartIndex` (id → unique-number → 0; ambiguous number
+  never guesses), hero button opens the player at the resume episode and
+  reads "Continue · EP N" when resuming. Unit-tested (4 cases).
+- **S4 — season-filtered episode list handed to the player: FIXED.**
+  Episode tiles passed the season sublist, trapping swipe/auto-next inside
+  one season and shrinking the player's episode sheet. Tiles now pass the
+  full series list with the tapped episode's global index. Single-season
+  series (all current content) are unaffected.
+- **S5 — watched checkmarks limited to one episode per series: FIXED**
+  (API-shape fix, see R2-2).
+- **S6 — sleep-timer fade racing an episode switch: FIXED.**
+  `_expireSleepTimer` captured the controller and faded for ~2.2s with no
+  staleness guard, and restored volume to a hard-coded `1.0` instead of the
+  user's edge-HUD volume. It now captures the load generation, aborts if the
+  controller changed, restores `_volumeLevel`, and only toasts when it
+  actually paused the current episode.
+
+### R2-2. API shape: per-episode watch progress (S5 backend + client)
+
+- New table `episode_progress` (PK userId+episodeId) in `db.js`; the
+  watch-history POST upserts it (validated episode, server-clamped position,
+  sticky `completed`). New endpoint `GET /me/library/history/series/:seriesId`
+  returns every watched episode of the series. The relink merge carries the
+  rows to the primary account; account deletion covers the table.
+- Client: `EpisodeProgress` model + `DramaService.fetchSeriesEpisodeProgress`;
+  the player's `_loadHistory` merges it over the one-row-per-series history,
+  so checkmarks and per-episode resume now cover the whole series.
+- Tests: new backend suite `test/run-tests-4.mjs` (8 cases: completeness,
+  sticky completed, clamping, per-user isolation, mismatched episode/series
+  → 400, relink merge, `resumeEpisodeId`, referral window fields).
+
+### R2-3. Round-1 wiring gaps found and fixed
+
+- **Launch paywall cap was wired into dead code.** Round 1 item 7 put the
+  frequency check in `lib/widgets/paywall_gate.dart` (`PaywallGate`), which
+  is mounted NOWHERE; the real launch path (splash → `/pricing`) never
+  consulted it, so the "paywall on every cold start" complaint (user
+  evaluation #1) persisted. Splash's returning-user branch now checks
+  `PaywallFrequency.shouldShowLaunchPaywall()` / `markShown()` and goes
+  straight to `/home` when capped. The dead `PaywallGate` file is deleted.
+- **Streak-grace fields were never parsed by the app.** `RewardsState` now
+  carries `graceAvailable / streakAtRisk / daysSinceLastClaim`, and the
+  rewards screen shows a "Your streak ends today" warning banner when
+  `streakAtRisk && !claimedToday` (round 1 item 5 made visible at last).
+- **Referral 24h window was invisible until it failed.** `rewardsState` now
+  also returns `referralApplyBy` (sign-up + 24h) and `hasReferred`; the
+  referral card shows the deadline (or that the window has closed).
+
+### R2-4. Legacy residue sweep (round 1 item 6 follow-up)
+
+- Removed **77 music/radio-era l10n keys** (AI-cover, songs, radio,
+  podcasts, music-video template strings) from all 12 ARB files, with their
+  `@key` metadata; `flutter gen-l10n` re-run (en 434 → 357 keys). Deadness
+  was proven by whole-corpus word search over hand-written Dart (excluding
+  generated localizations); the two era-named keys that ARE referenced
+  (`paywallFeatureCreateMusic`, `welcomeToAiMusicMaker` — values already
+  rebranded in round 1) were kept.
+- **LEFT:** ~200 further dead keys with no era connection (generic template
+  skeleton) and the unreachable-legacy-screen question. Screen reachability
+  could not be proven safely (router/function-based navigation defeats the
+  available static checks), so no screens were deleted this round; the
+  remaining dead keys are inert data, not user-visible copy.
+
+### R2-5. Consistency audit (config ↔ app ↔ dashboard)
+
+- **/config:** every feature key the Flutter app reads exists in the backend
+  payload — 0 client orphans; all 22 `features` keys + `player` / `visual` /
+  `economy` blocks are consumed by `AppConfigService`. No changes needed.
+- **Backend settings:** every settings key is referenced in backend code —
+  0 orphans.
+- **Dashboard:** no dead controls (every control maps to a real setting).
+  Coverage gap FIXED: five real settings had no control — `paywall_daily_cap`
+  (round 1 claimed it was "admin-toggleable"; it was not) added to the
+  economy flags, `referral_daily_reward_cap` added to the Referrals form,
+  and `checkin_level_bonus / checkin_streak_bonus / checkin_streak_cap`
+  added to the Economy form (load + save wired).
+- **User-evaluation spot checks:** search already matches title OR synopsis
+  OR tags (the "titles only" note is outdated — CLEARED). LEFT as product
+  decisions, not code defects: watch-mission completion semantics, wheel
+  odds disclosure, onboarding genre picking, scheduled notifications, real
+  caption providers (needs keys — outside the zero-cost code-only scope).
+
+### Files changed in round 2
+
+- Backend: `src/db.js`, `src/routes.js`, `public/admin/index.html`,
+  `test/run-tests-4.mjs` (new), `test/LAST_RUN_4.txt` (new).
+- Flutter: `lib/presentation/drama/episode_player_screen.dart`,
+  `lib/presentation/drama/series_detail_screen.dart`,
+  `lib/presentation/drama/rewards_content.dart`,
+  `lib/presentation/splash_screen/splash_screen.dart`,
+  `lib/services/drama/drama_service.dart`,
+  `lib/models/drama/watch_history_model.dart`,
+  `lib/models/drama/reward_models.dart`,
+  `lib/l10n/app_*.arb` (×12) + regenerated `lib/l10n/app_localizations*.dart`,
+  `test/round2_test.dart` (new). Deleted: `lib/widgets/paywall_gate.dart`.
+
 ## What still needs a human with an account/key (nothing else)
 
 1. Create the Firebase project (free) → set `FIREBASE_PROJECT_ID` (+ refresh

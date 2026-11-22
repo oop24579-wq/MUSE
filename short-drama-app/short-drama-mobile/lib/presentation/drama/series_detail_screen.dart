@@ -65,6 +65,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
             _likeOverride ?? detail.isLiked,
             isDark,
             detail.resumeEpisodeNumber,
+            detail.resumeEpisodeId,
           );
         },
       ),
@@ -77,7 +78,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     return _content(s, const [], const [], const [], const [],
-        _favOverride ?? false, _likeOverride ?? false, isDark, null, true);
+        _favOverride ?? false, _likeOverride ?? false, isDark, null, null, true);
   }
 
   Widget _errorView(bool isDark) => SafeArea(
@@ -100,7 +101,8 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     bool isFav,
     bool isLiked,
     bool isDark,
-    int? resumeEp, [
+    int? resumeEp,
+    String? resumeId, [
     bool loading = false,
   ]) {
     final textColor =
@@ -113,7 +115,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              _hero(s, episodes, isDark),
+              _hero(s, episodes, isDark, resumeEp, resumeId),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: 4.w),
                 child: Column(
@@ -163,7 +165,8 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
         ),
       );
 
-  Widget _hero(SeriesModel s, List<EpisodeModel> episodes, bool isDark) {
+  Widget _hero(SeriesModel s, List<EpisodeModel> episodes, bool isDark,
+      int? resumeEp, String? resumeId) {
     return Stack(
       children: [
         SizedBox(
@@ -231,7 +234,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
                 ),
               ),
               SizedBox(height: 1.5.h),
-              _playButton(s, episodes),
+              _playButton(s, episodes, resumeEp, resumeId),
             ],
           ),
         ),
@@ -239,16 +242,35 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     );
   }
 
-  Widget _playButton(SeriesModel s, List<EpisodeModel> episodes) {
+  Widget _playButton(SeriesModel s, List<EpisodeModel> episodes,
+      int? resumeEp, String? resumeId) {
+    // S3 (round 2): the hero button used to always start at episode 1 even
+    // though the resume episode was fetched and highlighted in the grid.
+    // Resolve the resume target exactly (id) or by unique number; the
+    // backend now sends resumeEpisodeId, so multi-season ambiguity is gone.
+    final startIndex = resolvePlayerStartIndex(
+      episodes,
+      resumeEpisodeId: resumeId,
+      resumeEpisodeNumber: resumeEp,
+    );
+    final target = episodes.isEmpty ? null : episodes[startIndex];
+    final resuming = target != null &&
+        ((resumeId != null && target.id == resumeId) ||
+            (resumeId == null &&
+                resumeEp != null &&
+                target.episodeNumber == resumeEp));
     return SizedBox(
       width: double.infinity,
       child: FilledButton.icon(
         onPressed: episodes.isEmpty
             ? null
-            : () => DramaNav.openPlayer(context, series: s, episodes: episodes),
+            : () => DramaNav.openPlayer(context,
+                series: s, episodes: episodes, startIndex: startIndex),
         icon: const Icon(Icons.play_arrow_rounded, color: Colors.black),
         label: Text(
-          'Play  ·  ${episodes.length} EP',
+          resuming
+              ? 'Continue  ·  EP ${target.episodeNumber}'
+              : 'Play  ·  ${episodes.length} EP',
           style: const TextStyle(
               color: Colors.black, fontWeight: FontWeight.w800),
         ),
@@ -461,8 +483,16 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
               selected: resumeEp != null &&
                   shown[i].episodeNumber == resumeEp &&
                   (!multiSeason || shown[i].seasonNumber == selected),
-              onTap: () => DramaNav.openPlayer(
-                  context, series: s, episodes: shown, startIndex: i),
+              // S4 (round 2): open with the FULL episode list (global index),
+              // not the season-filtered sublist — otherwise swipe/auto-next
+              // were trapped inside one season and the player's sheet
+              // counted only that season. Single-season series (the norm)
+              // are unaffected: shown == episodes there.
+              onTap: () => DramaNav.openPlayer(context,
+                  series: s,
+                  episodes: episodes,
+                  startIndex:
+                      episodes.indexWhere((e) => e.id == shown[i].id)),
             ),
           ),
         ),
