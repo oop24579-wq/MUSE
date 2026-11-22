@@ -167,7 +167,7 @@ try {
     const primary = await mkUser(emailToken('r2-primary-sub', 'r2.primary@example.com', 'Primary'));
     // Primary already has its own (partial) row for ep1: it must win the merge.
     await postWatch(primary.tokens.accessToken, eps[0], 7);
-    const r = await req('POST', '/auth/relink', { token: primary.tokens.accessToken, body: { guestUserId: guest.user.id } });
+    const r = await req('POST', '/auth/relink', { token: primary.tokens.accessToken, body: { guestUserId: guest.user.id, guestAccessToken: guest.tokens.accessToken } });
     assertEq(r.status, 200, `relink status (body ${r.text})`);
     const prog = await seriesProgress(primary.tokens.accessToken);
     assertEq(prog.length, 2, 'primary sees both episodes after merge');

@@ -1,4 +1,4 @@
-Server booted on http://127.0.0.1:41485 with temp DB /tmp/dramanow-test7-Mo7Hg1/app.db
+Server booted on http://127.0.0.1:46205 with temp DB /tmp/dramanow-test7-BVJXwK/app.db
 PASS 601. SIM-A F1: unlock on a FREE + VIP-only episode as non-VIP -> 403 VIP_REQUIRED (consistent with playback); VIP user -> 200 coins 0
 PASS 602. SIM-B F1: webhook coins_300 WITH entitlement_ids:["coins"] -> kind coins, +300 coins, no VIP
 PASS 603. SIM-B F4: EXPIRATION and CANCELLATION for a coin product create NO order row and apply nothing

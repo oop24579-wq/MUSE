@@ -235,8 +235,8 @@ try {
     const huge = await req('POST', '/auth/firebase', { body: { idToken: 'a'.repeat(4_000_000) } });
     const health = await req('GET', `${BASE}/health`);
     const dup = await req('POST', '/auth/firebase', { body: { idToken: 'probe-devgame-plain' } });
-    sameUser && emptySub.status === 200 && numToken.status === 200 && emptyTok.status === 400 && huge.status === 200 && health.status === 200 && dup.json.data.user.id === a1.json.data.user.id
-      ? BLOCKED('A8', 'dev-auth token games', 'same token=same user; empty-sub/number/huge handled; empty rejected 400; server alive')
+    sameUser && emptySub.status === 200 && numToken.status === 401 && emptyTok.status === 400 && huge.status === 200 && health.status === 200 && dup.json.data.user.id === a1.json.data.user.id
+      ? BLOCKED('A8', 'dev-auth token games', 'same token=same user; empty-sub/huge handled; numeric token rejected 401; empty rejected 400; server alive')
       : CONFIRMED('A8', 'dev-auth token games', `sameUser=${sameUser} emptySub=${emptySub.status} num=${numToken.status} empty=${emptyTok.status} huge=${huge.status} health=${health.status}`);
   }
   // A9 production mode refuses default secrets
@@ -449,33 +449,49 @@ try {
       ? BLOCKED('R1', 'relink merge of non-guest victim', '403 + victim intact')
       : CONFIRMED('R1', 'relink merge of non-guest victim', `relink=${r.status} victim-me=${stillThere.status}`);
   }
-  // R2 guest merge transfers coins, deletes guest
+  // R2 guest merge transfers coins, deletes guest — only WITH guest-ownership proof (V5)
   {
     const primary = await freshUser('relink-p2');
     const guest = await freshUser('relink-g2');
     await req('POST', '/rewards/checkin', { token: guest.tokens.accessToken, body: {} });
     const gBal = await balanceOf(guest.tokens.accessToken);
     const pBal0 = await balanceOf(primary.tokens.accessToken);
-    const r = await req('POST', '/auth/relink', { token: primary.tokens.accessToken, body: { guestUserId: guest.user.id } });
+    // (a) Without proof: 403 GUEST_OWNERSHIP_REQUIRED, guest survives, no transfer.
+    const noProof = await req('POST', '/auth/relink', { token: primary.tokens.accessToken, body: { guestUserId: guest.user.id } });
+    const guestAlive = await req('GET', '/auth/me', { token: guest.tokens.accessToken });
+    const pBalNoProof = await balanceOf(primary.tokens.accessToken);
+    const noProofOk = noProof.status === 403 && noProof.json && noProof.json.error && noProof.json.error.code === 'GUEST_OWNERSHIP_REQUIRED' && guestAlive.status === 200 && pBalNoProof === pBal0;
+    // (b) With a valid guestAccessToken proof: original merge semantics.
+    const r = await req('POST', '/auth/relink', { token: primary.tokens.accessToken, body: { guestUserId: guest.user.id, guestAccessToken: guest.tokens.accessToken } });
     const pBal1 = await balanceOf(primary.tokens.accessToken);
     const guestGone = await req('GET', '/auth/me', { token: guest.tokens.accessToken });
-    r.status === 200 && pBal1 === pBal0 + gBal && guestGone.status === 401
-      ? BLOCKED('R2', 'guest merge transfers coins + deletes guest', `primary ${pBal0}+${gBal}=${pBal1}; guest token 401`)
-      : CONFIRMED('R2', 'guest merge transfers coins + deletes guest', `relink=${r.status} pBal ${pBal0}->${pBal1} (guest had ${gBal}) guest-me=${guestGone.status}`);
+    noProofOk && r.status === 200 && pBal1 === pBal0 + gBal && guestGone.status === 401
+      ? BLOCKED('R2', 'guest merge transfers coins + deletes guest', `no-proof 403 GUEST_OWNERSHIP_REQUIRED + guest intact + balance unchanged; with guestAccessToken proof primary ${pBal0}+${gBal}=${pBal1}; guest token 401`)
+      : CONFIRMED('R2', 'guest merge transfers coins + deletes guest', `noProof=${noProof.status} code=${noProof.json && noProof.json.error && noProof.json.error.code} guestAlive=${guestAlive.status} pBalNoProof=${pBalNoProof} relink=${r.status} pBal ${pBal0}->${pBal1} (guest had ${gBal}) guest-me=${guestGone.status}`);
   }
-  // R3 relink loop / idempotency
+  // R3 relink loop / idempotency — merge requires guest-ownership proof (V5)
   {
     const a = await freshUser('relink-loop-a');
     const b = await freshUser('relink-loop-b');
-    await req('POST', '/auth/relink', { token: a.tokens.accessToken, body: { guestUserId: b.user.id } });
+    const balA0 = await balanceOf(a.tokens.accessToken);
+    const balB = await balanceOf(b.tokens.accessToken);
+    // (a) Without proof: 403 GUEST_OWNERSHIP_REQUIRED, guest survives, no transfer.
+    const noProof = await req('POST', '/auth/relink', { token: a.tokens.accessToken, body: { guestUserId: b.user.id } });
+    const bAlive = await req('GET', '/auth/me', { token: b.tokens.accessToken });
+    const balAAfterNoProof = await balanceOf(a.tokens.accessToken);
+    const noProofOk = noProof.status === 403 && noProof.json && noProof.json.error && noProof.json.error.code === 'GUEST_OWNERSHIP_REQUIRED' && bAlive.status === 200 && balAAfterNoProof === balA0;
+    // (b) With a valid guestAccessToken proof: merge happens exactly once.
+    const merge = await req('POST', '/auth/relink', { token: a.tokens.accessToken, body: { guestUserId: b.user.id, guestAccessToken: b.tokens.accessToken } });
     const balA = await balanceOf(a.tokens.accessToken);
+    const bGone = await req('GET', '/auth/me', { token: b.tokens.accessToken });
+    const mergeOk = merge.status === 200 && balA === balA0 + balB && bGone.status === 401;
     const again = await req('POST', '/auth/relink', { token: a.tokens.accessToken, body: { guestUserId: b.user.id } });
     const selfRef = await req('POST', '/auth/relink', { token: a.tokens.accessToken, body: { guestUserId: a.user.id } });
     const ghost = await req('POST', '/auth/relink', { token: a.tokens.accessToken, body: { guestUserId: '00000000-0000-0000-0000-000000000000' } });
     const balA2 = await balanceOf(a.tokens.accessToken);
-    again.status === 200 && selfRef.status === 200 && ghost.status === 200 && balA2 === balA
-      ? BLOCKED('R3', 'relink loop/idempotency', 're-merge, self-merge, ghost-merge all no-ops, balance stable')
-      : CONFIRMED('R3', 'relink loop/idempotency', `again=${again.status} self=${selfRef.status} ghost=${ghost.status} bal ${balA}->${balA2}`);
+    noProofOk && mergeOk && again.status === 200 && selfRef.status === 200 && ghost.status === 200 && balA2 === balA
+      ? BLOCKED('R3', 'relink loop/idempotency', 'no-proof 403 + guest intact; proof merge transfers exactly once + guest deleted; re-merge, self-merge, ghost-merge all no-ops, balance stable')
+      : CONFIRMED('R3', 'relink loop/idempotency', `noProof=${noProof.status} code=${noProof.json && noProof.json.error && noProof.json.error.code} bAlive=${bAlive.status} merge=${merge.status} bGone=${bGone.status} again=${again.status} self=${selfRef.status} ghost=${ghost.status} bal ${balA0}->${balA}->${balA2} (guest had ${balB})`);
   }
 
   // ================= ADMIN =================

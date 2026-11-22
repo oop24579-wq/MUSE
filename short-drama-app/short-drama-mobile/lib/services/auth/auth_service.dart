@@ -50,6 +50,15 @@ class AuthService {
     if (oldWebId == null || oldWebId.isEmpty) return;
     _pendingRelinkFromUserId = oldWebId;
     unawaited(TokenStore.instance.setPendingRelinkFromUserId(oldWebId));
+    // FIX-2 V5: capture the guest session's tokens NOW — they are still
+    // the live TokenStore tokens at this moment, and the upcoming token
+    // exchange will overwrite them with the signed-in account's tokens.
+    // The backend relink endpoint requires one of these as proof of
+    // ownership of the guest account.
+    unawaited(TokenStore.instance.setPendingRelinkGuestProof(
+      accessToken: TokenStore.instance.accessToken,
+      refreshToken: TokenStore.instance.refreshToken,
+    ));
   }
 
   User? get currentUser => _auth.currentUser;
@@ -150,6 +159,13 @@ class AuthService {
         },
       );
 
+      // FIX-2 V5: snapshot the pre-exchange session (the guest session,
+      // when a relink is pending) before save() overwrites it — used as
+      // a fallback proof source if no persisted proof was captured.
+      final preSaveWebUserId = TokenStore.instance.webUserId;
+      final preSaveAccessToken = TokenStore.instance.accessToken;
+      final preSaveRefreshToken = TokenStore.instance.refreshToken;
+
       final tokens = data['tokens'] as Map<String, dynamic>;
       final profileJson = data['user'] as Map<String, dynamic>;
       final webUserId = profileJson['id'] as String;
@@ -169,9 +185,31 @@ class AuthService {
           pending != webUserId &&
           !user.isAnonymous) {
         try {
+          // FIX-2 V5: present the guest account's own credential as
+          // ownership proof (persisted proof captured in
+          // _rememberGuestForRelink, falling back to the pre-exchange
+          // session snapshot when it belongs to the pending guest).
+          var guestAccess =
+              await TokenStore.instance.consumePendingRelinkGuestAccessToken();
+          var guestRefresh = await TokenStore.instance
+              .consumePendingRelinkGuestRefreshToken();
+          if ((guestAccess == null || guestAccess.isEmpty) &&
+              preSaveWebUserId == pending) {
+            guestAccess = preSaveAccessToken;
+          }
+          if ((guestRefresh == null || guestRefresh.isEmpty) &&
+              preSaveWebUserId == pending) {
+            guestRefresh = preSaveRefreshToken;
+          }
           await ApiClient.instance.post(
             '/auth/relink',
-            data: {'guestUserId': pending},
+            data: {
+              'guestUserId': pending,
+              if (guestAccess != null && guestAccess.isNotEmpty)
+                'guestAccessToken': guestAccess,
+              if (guestRefresh != null && guestRefresh.isNotEmpty)
+                'guestRefreshToken': guestRefresh,
+            },
           );
           debugPrint('✅ Relinked guest $pending → $webUserId');
           // Refresh profile after merge

@@ -219,10 +219,37 @@ function orderJson(o) {
  *           (e.g. 'coins_500'); a coin product without an amount grants 0
  *           and is only recorded.
  */
+/**
+ * FIX-2 V4: canonical product catalog — the ONLY product ids the app
+ * actually sells. Evidence: backend suites 6/7 and the admin manual-order
+ * flow use exactly coins_100 / coins_300 / coins_500 and vip_weekly /
+ * vip_monthly / vip_yearly; the Flutter client resolves subscription
+ * packages dynamically from RevenueCat offerings by period (weekly /
+ * monthly / yearly) and coin packs are sold through RevenueCat, not
+ * Remote Config (see remote_config_service.dart topUpProductIdList).
+ * A webhook product_id outside this catalog grants NOTHING.
+ */
+const PRODUCT_CATALOG = Object.freeze({
+  coins_100: { kind: 'coins', coins: 100 },
+  coins_300: { kind: 'coins', coins: 300 },
+  coins_500: { kind: 'coins', coins: 500 },
+  vip_weekly: { kind: 'vip', coins: 0 },
+  vip_monthly: { kind: 'vip', coins: 0 },
+  vip_yearly: { kind: 'vip', coins: 0 },
+});
+/** Sanitize a money amount: negative / non-finite / non-numeric -> 0, capped. */
+function sanitizeAmountCents(v) {
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(Math.round(n), 1e9);
+}
 function applyOrderEntitlement(order, { vipExpiresAt = null } = {}) {
   if (order.kind === 'coins') {
-    const mAmt = /(\d+)\s*$/.exec(String(order.productId || ''));
-    const coins = mAmt ? parseInt(mAmt[1], 10) : 0;
+    // FIX-2 V4: grant EXACTLY the catalog amount for a known coin product;
+    // an unknown coin product grants 0 (never parse arbitrary trailing
+    // digits — 'coins_999999999' previously minted 999,999,999 coins).
+    const entry = PRODUCT_CATALOG[String(order.productId || '')];
+    const coins = entry && entry.kind === 'coins' ? entry.coins : 0;
     if (coins > 0) grantCoins(order.userId, coins, 'purchase', order.id);
     return;
   }
@@ -238,7 +265,7 @@ function recordOrder({ userId, provider, productId, kind, amountCents = 0, curre
   const periodEnd = kind === 'vip'
     ? (vipExpiresAt || (status === 'paid' ? new Date(Date.now() + 30 * 86400e3).toISOString() : null))
     : null;
-  const order = { id: auth.uid(), userId, provider, productId, kind, amountCents, currency, status, revenueCatTransactionId, periodEnd, createdAt: now() };
+  const order = { id: auth.uid(), userId, provider, productId, kind, amountCents: sanitizeAmountCents(amountCents), currency, status, revenueCatTransactionId, periodEnd, createdAt: now() };
   tx(() => {
     run('INSERT INTO orders(id,userId,provider,productId,kind,amountCents,currency,status,revenueCatTransactionId,periodEnd,createdAt) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
       order.id, order.userId, order.provider, order.productId, order.kind, order.amountCents, order.currency, order.status, order.revenueCatTransactionId, order.periodEnd, order.createdAt);
@@ -436,6 +463,12 @@ async function handle(req, res, url, body) {
     const type = String(ev.type || 'INITIAL_PURCHASE').toUpperCase();
     const target = rcUserId ? get('SELECT * FROM users WHERE id=?', rcUserId) : null;
     if (!target || !productId) return ok(res, { received: true, applied: false, reason: !target ? 'unknown_user' : 'missing_product' });
+    // FIX-2 V4: unknown product_id -> NO entitlement and NO order row,
+    // mirroring the unknown_user / missing_product path above (200,
+    // applied:false). This stops a valid-secret delivery for e.g.
+    // 'coins_999999999' from minting arbitrary coins.
+    const catalogEntry = PRODUCT_CATALOG[String(productId)];
+    if (!catalogEntry) return ok(res, { received: true, applied: false, reason: 'unknown_product' });
     // Idempotency: RevenueCat retries deliveries; a transaction id may be
     // recorded exactly once, so a retry can never re-grant coins/VIP time.
     if (txId && get('SELECT 1 x FROM orders WHERE revenueCatTransactionId=?', txId))
@@ -443,9 +476,14 @@ async function handle(req, res, url, body) {
     // SIM-B F1: classification is by PRODUCT, not by what the delivery
     // happens to carry — a coin product (coins_<n>) delivered WITH
     // entitlement_ids is still a coin purchase, never a VIP grant.
-    const kind = /coin/i.test(productId) ? 'coins' : 'vip';
-    let amountCents = Number.isFinite(ev.price_in_pence) ? Math.round(ev.price_in_pence)
-      : (Number.isFinite(ev.price) ? Math.round(ev.price * 100) : 0);
+    const kind = catalogEntry.kind;
+    // FIX-2 V4: sanitize the amount — a negative, non-finite or
+    // non-numeric price must never persist as amountCents (previously
+    // price:-99999 persisted amountCents:-9999900). Malformed amounts
+    // clamp to 0; the entitlement for a legitimate catalog event is
+    // unchanged.
+    let amountCents = (typeof ev.price_in_pence === 'number' && Number.isFinite(ev.price_in_pence)) ? sanitizeAmountCents(ev.price_in_pence)
+      : ((typeof ev.price === 'number' && Number.isFinite(ev.price)) ? sanitizeAmountCents(ev.price * 100) : 0);
     let currency = typeof ev.currency === 'string' && ev.currency ? ev.currency : 'USD';
     const expiresAt = Number.isFinite(ev.expiration_at_ms) ? new Date(ev.expiration_at_ms).toISOString() : null;
     // SIM-B F4: consumables have no lifecycle — an EXPIRATION/CANCELLATION
@@ -501,6 +539,8 @@ async function handle(req, res, url, body) {
     const authMode = auth.firebaseAuthMode();
     if (authMode === 'none') return err(res, 501, 'AUTH_NOT_CONFIGURED', 'Firebase verification not configured (set FIREBASE_PROJECT_ID, or AUTH_DEV_MODE=1 for local dev)');
     if (!body.idToken) return err(res, 400, 'VALIDATION', 'idToken is required');
+    // FIX-1 V2: a non-string idToken is an invalid token, never a 500.
+    if (typeof body.idToken !== 'string') return err(res, 401, 'INVALID_TOKEN', 'Firebase ID token could not be verified');
     let claims;
     if (authMode === 'dev') {
       claims = auth.devDecodeFirebaseToken(body.idToken);
@@ -555,6 +595,30 @@ async function handle(req, res, url, body) {
     // Only ANONYMOUS guest accounts may be merged away. Previously ANY account
     // id could be merged+deleted by any logged-in user (account takeover).
     if (!guest.isGuest) return err(res, 403, 'INVALID_GUEST', 'Only a guest account can be merged into your account');
+    // FIX-2 V5: ownership proof — the caller must present a valid
+    // credential belonging to the GUEST account (its access token in
+    // guestAccessToken, or its refresh token in guestRefreshToken).
+    // Previously knowing/guessing a guest UUID alone was enough to merge
+    // and DELETE that account. The Flutter client still holds the guest
+    // session's tokens in TokenStore when relink is called (captured in
+    // AuthService._rememberGuestForRelink before the token exchange
+    // overwrites them), so the legitimate flow can always supply this.
+    {
+      let proved = false;
+      const at = typeof body.guestAccessToken === 'string' ? body.guestAccessToken : null;
+      if (at) { const pl = auth.verify(at); if (pl && pl.type === 'access' && pl.sub === guestId) proved = true; }
+      if (!proved) {
+        const rt = typeof body.guestRefreshToken === 'string' ? body.guestRefreshToken : null;
+        if (rt) {
+          const pl = auth.verify(rt);
+          if (pl && pl.type === 'refresh' && pl.sub === guestId) {
+            const row = get('SELECT revoked, expiresAt FROM refresh_tokens WHERE tokenHash=?', auth.hash(rt));
+            if (row && !row.revoked && row.expiresAt > now()) proved = true;
+          }
+        }
+      }
+      if (!proved) return err(res, 403, 'GUEST_OWNERSHIP_REQUIRED', 'Relink requires a valid credential belonging to the guest account');
+    }
     // The whole merge is ONE transaction: previously the coin grant ran before
     // an unguarded watch_history UPDATE that could throw on a PK conflict,
     // leaving the guest alive — and every client retry granted the coins again.
@@ -787,7 +851,13 @@ async function handle(req, res, url, body) {
     if (!settings.getSetting('shorts_enabled')) return ok(res, { items: [], nextCursor: null });
     let offset = 0;
     const cur = q.get('cursor');
-    if (cur) { const n = parseInt(Buffer.from(cur, 'base64url').toString('utf8'), 10); if (Number.isFinite(n) && n > 0) offset = n; }
+    if (cur) { const n = parseInt(Buffer.from(cur, 'base64url').toString('utf8'), 10); if (Number.isFinite(n) && n > 0) offset = Math.min(n, Number.MAX_SAFE_INTEGER); }
+    // FIX-1 V3: the clamp above keeps a garbage-but-decodable huge cursor
+    // (e.g. base64url of a 20-digit number) inside the safe-integer / int64
+    // range SQLite can bind as OFFSET — it previously threw a datatype
+    // mismatch -> 500. A clamped offset is past the end of the feed, so the
+    // result is a clean 200 empty page. Legitimate cursors are small and
+    // pass through byte-identical.
     const rows = all(`SELECT e.*, sr.title sTitle, sr.coverImageUrl sCover, sr.likeCount sLikes, sr.isVipOnly sVip
       FROM episodes e JOIN series sr ON sr.id=e.seriesId
       ORDER BY sr.rankScore DESC, e.viewCount DESC, e.id ASC LIMIT ? OFFSET ?`, limit + 1, offset);
@@ -795,9 +865,15 @@ async function handle(req, res, url, body) {
     const page = hasMore ? rows.slice(0, limit) : rows;
     const items = page.map((e) => {
       const sRow = get('SELECT * FROM series WHERE id=?', e.seriesId);
-      return { ...episodeJson(e, user, sRow),
+      const ej = episodeJson(e, user, sRow);
+      // FIX-3: mirror episode-list hygiene — episodeJson never exposes a
+      // stream URL, so a locked item (isUnlocked:false, playback 403) must
+      // not carry one here either; otherwise any non-stock client could
+      // bypass the entitlement by reading videoUrl directly. Unlocked
+      // items keep their videoUrl byte-identical.
+      return { ...ej,
         seriesTitle: e.sTitle, posterUrl: e.sCover, likeCount: e.sLikes,
-        videoUrl: e.videoUrl || null };
+        videoUrl: ej.isUnlocked ? (e.videoUrl || null) : null };
     });
     const nextCursor = hasMore ? Buffer.from(String(offset + page.length), 'utf8').toString('base64url') : null;
     return ok(res, { items, nextCursor });
@@ -908,6 +984,16 @@ async function handle(req, res, url, body) {
     const unlockMode = settings.getSetting('premium_playback_mode');
     const unlockVipGate = unlockMode === 'all_playback' || (unlockMode !== 'disabled' && (e.isVipOnly || (unlockSeries && unlockSeries.isVipOnly)));
     if (unlockVipGate && !isPro(user)) return err(res, 403, 'VIP_REQUIRED', 'This episode requires VIP — coins cannot unlock it');
+    // FIX-2 F7: a current VIP subscriber must never be charged for a
+    // VIP-gated episode — playback checks the VIP gate BEFORE any coin
+    // unlock row, so a paid row would grant zero value (and stays useless
+    // after VIP lapses). Respond as already-accessible via VIP, charged 0,
+    // and create NO unlock row. (True VIP gate only: premium mode not
+    // disabled AND episode/series isVipOnly — in all_playback-only or
+    // disabled modes a coin row still carries real value, so the normal
+    // charge path below is unchanged there.)
+    const trueVipGate = unlockMode !== 'disabled' && (e.isVipOnly || (unlockSeries && unlockSeries.isVipOnly));
+    if (trueVipGate && isPro(user)) return ok(res, { success: true, coins: 0, balance: user.coinBalance, accessVia: 'vip', alreadyAccessible: true });
     if (e.isFree || get('SELECT 1 x FROM episode_unlocks WHERE userId=? AND episodeId=?', user.id, e.id)) return ok(res, { success: true, coins: 0, balance: user.coinBalance });
     // Never sell an unlock playback will still refuse: VIP-gated content
     // requires VIP regardless of coin unlocks (mirrors the playback gate).
@@ -927,7 +1013,12 @@ async function handle(req, res, url, body) {
     if (req.method === 'POST' && (m = new RegExp(`^/series/([^/]+)/${action}$`).exec(p))) {
       const s = get('SELECT * FROM series WHERE id=? OR slug=?', decodeURIComponent(m[1]), decodeURIComponent(m[1]));
       if (!s) return err(res, 404, 'NOT_FOUND', 'Series not found');
-      const want = body[key] !== false;
+      // FIX-1 V6: strict boolean semantics — only a real JSON true/false
+      // is accepted (the Flutter client always sends Dart bools for like /
+      // add / follow). Previously `body[key] !== false` treated 0, null and
+      // "false" as a LIKE. Anything else is a clean 400, state unchanged.
+      if (body[key] !== true && body[key] !== false) return err(res, 400, 'VALIDATION', `${key} must be a boolean`);
+      const want = body[key];
       // Only an actual state TRANSITION moves counters/mission progress —
       // previously every repeat like:true POST inflated likeCount and the
       // daily 'likes' mission counter.
@@ -955,7 +1046,16 @@ async function handle(req, res, url, body) {
     return ok(res, { episodes: rows.map((r) => ({ episodeId: r.episodeId, episodeNumber: r.episodeNumber, positionSeconds: r.positionSeconds, durationSeconds: r.durationSeconds, completed: !!r.completed })) });
   }
   if (req.method === 'POST' && p === '/me/watch-history') {
-    if (!body.seriesId) return err(res, 400, 'VALIDATION', 'seriesId is required');
+    // FIX-1 V1: type-validate every body field BEFORE it is bound into a
+    // query — node:sqlite throws TypeError binding arrays/objects, which
+    // used to surface as a 500. Invalid types get a clean 400 VALIDATION.
+    if (typeof body.seriesId !== 'string' || !body.seriesId) return err(res, 400, 'VALIDATION', 'seriesId is required and must be a string');
+    if (body.episodeId !== undefined && body.episodeId !== null && (typeof body.episodeId !== 'string' || !body.episodeId))
+      return err(res, 400, 'VALIDATION', 'episodeId must be a non-empty string');
+    for (const f of ['episodeNumber', 'positionSeconds', 'durationSeconds']) {
+      if (body[f] !== undefined && body[f] !== null && (typeof body[f] !== 'number' || !Number.isFinite(body[f])))
+        return err(res, 400, 'VALIDATION', `${f} must be a number`);
+    }
     // Watch accrual is SERVER-VERIFIED: the series/episode must exist and
     // belong together, positions are clamped to the episode's real stored
     // duration, and accrual uses a per-episode daily HIGH-WATER MARK — so
@@ -1157,6 +1257,11 @@ async function handle(req, res, url, body) {
     return ok(res, { items, unread: items.filter((i) => !i.readAt).length });
   }
   if (req.method === 'POST' && p === '/notifications/read') {
+    // FIX-1 V1: ids, when present, must be an array of strings — a mixed
+    // array like [1, null, {}, []] used to throw TypeError on binding and
+    // 500. (Absent ids keeps the mark-all-read behaviour.)
+    if (body.ids !== undefined && (!Array.isArray(body.ids) || body.ids.some((id) => typeof id !== 'string')))
+      return err(res, 400, 'VALIDATION', 'ids must be an array of strings');
     if (Array.isArray(body.ids) && body.ids.length) body.ids.forEach((id) => run('UPDATE notifications SET readAt=? WHERE id=? AND userId=?', now(), id, user.id));
     else run('UPDATE notifications SET readAt=? WHERE userId=? AND readAt IS NULL', now(), user.id);
     return ok(res, { success: true });

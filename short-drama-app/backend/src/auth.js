@@ -12,7 +12,11 @@ function sign(payload, ttlSec) {
   return `${h}.${p}.${sig}`;
 }
 function verify(token) {
-  if (!token) return null;
+  // Type guard at the auth boundary (FIX-1 V2): a non-string token (number,
+  // array, object from a JSON body) used to throw TypeError on .split and
+  // surface as a 500. Treat every non-string as an invalid token instead,
+  // so all callers (refresh, requireAuth, rotateRefresh) get a clean null.
+  if (typeof token !== 'string' || !token) return null;
   const parts = token.split('.'); if (parts.length !== 3) return null;
   const expect = crypto.createHmac('sha256', SECRET).update(`${parts[0]}.${parts[1]}`).digest();
   let sig; try { sig = unb64(parts[2]); } catch { return null; }

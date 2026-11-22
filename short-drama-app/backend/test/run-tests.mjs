@@ -954,7 +954,7 @@ try {
     const pt = primary.json.data.tokens.accessToken;
     const guestBal = await balanceOf(guest.tokens.accessToken);
     const pBefore = await balanceOf(pt);
-    const r = await req('POST', '/auth/relink', { token: pt, body: { guestUserId: guest.user.id } });
+    const r = await req('POST', '/auth/relink', { token: pt, body: { guestUserId: guest.user.id, guestAccessToken: guest.tokens.accessToken } });
     assertEq(r.status, 200, `relink status (body ${r.text})`);
     assertEq(await balanceOf(pt), pBefore + guestBal, 'primary balance gained guest coins');
     const guestMe = await req('GET', '/auth/me', { token: guest.tokens.accessToken });

@@ -1,0 +1,22 @@
+Server booted on http://127.0.0.1:35365 with temp DB /tmp/dramanow-test8-2nkJGz/app.db
+PASS 701. V1: watch-history with array/object seriesId -> 400 VALIDATION (never 500); server alive and a subsequent valid post works
+PASS 702. V1 siblings: watch-history with array/object episodeId or non-number numeric fields -> 400 VALIDATION; valid post still works
+PASS 703. V1: notifications/read with mixed-type ids [1,null,{},[]] or non-array ids -> 400 VALIDATION; valid ids and mark-all still work
+PASS 704. V2: /auth/refresh with numeric/array/object refreshToken -> 401 (never 500); numeric idToken -> 401; a real refresh still rotates
+PASS 705. V3: GET /shorts with a huge decodable cursor (base64url of a 20-digit number) -> 200 empty page, never 500; normal cursor pagination unchanged
+PASS 706. V6: like/favorite with 0, "false", null or a missing key -> 400 VALIDATION and state unchanged; true/false still toggle
+PASS 707. V6 sibling: follow with a non-boolean -> 400 VALIDATION and state unchanged; follow true/false still toggle
+PASS 708. V4: webhook unknown product coins_999999999 -> 200 applied:false unknown_product, balance unchanged, no order
+PASS 709. V4: webhook catalog coin product coins_500 -> exact catalog grant +500
+PASS 710. V4: webhook negative / non-numeric price -> amountCents clamped to 0, catalog entitlement still applies
+PASS 711. V5: relink without proof -> 403 GUEST_OWNERSHIP_REQUIRED, guest intact, primary balance unchanged
+PASS 712. V5: relink with valid guest access-token proof -> merges exactly once (balance = sum); retry idempotent
+PASS 713. V5: relink with ANOTHER user token as proof -> 403 and guest intact; guest refresh-token proof -> merges
+PASS 714. F7: VIP user unlocking non-free VIP-gated episode -> 200 via VIP, coins 0, balance unchanged, no unlock ledger charge
+PASS 715. F7: non-VIP user unlocking VIP-gated episode -> 403 VIP_REQUIRED as before, balance unchanged
+PASS 716. FIX-3: GET /shorts leaks no stream URL for locked items (videoUrl null/absent); unlocked keep videoUrl; VIP user re-exposes a previously-locked VIP item and playback 403 is unchanged for the free user
+
+===== SUITE 8 SUMMARY =====
+TOTAL: 16  PASSED: 16  FAILED: 0
+ALL PASS
+
