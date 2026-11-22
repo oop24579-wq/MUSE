@@ -72,6 +72,12 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
   /// episode they already own.
   bool _loadFailed = false;
 
+  /// True when playback failed specifically because there is no usable
+  /// session (401/UNAUTHORIZED from the playback endpoint, SIM-A F3).
+  /// Separate from [_loadFailed]: the fix is signing in, not retrying, so
+  /// the error overlay shows a sign-in prompt routing to /login.
+  bool _needsSignIn = false;
+
   /// In-flight guard for the unlock action (double-tap = double charge).
   bool _unlocking = false;
 
@@ -301,6 +307,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       _locked = access != EpisodeAccess.playable;
       _initializing = access == EpisodeAccess.playable;
       _loadFailed = false;
+      _needsSignIn = false;
       // Drop the previous episode's playback/captions immediately: while the
       // new episode loads, the quality/CC buttons and caption overlay must
       // not act on (or render) the old episode's data.
@@ -317,8 +324,22 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     if (!mounted || gen != _loadGen) return;
     _playback = playback;
     var url = playback?.videoUrl;
-    url ??= await DramaService.instance
-        .getEpisodeVideoUrl(episode.id, lang: _selectedLang);
+    if (url == null) {
+      // Fallback single-URL fetch, with failure classification (SIM-A F3):
+      // a 401 here means the caller has no usable session — surface the
+      // sign-in prompt instead of the generic load failure.
+      final res = await DramaService.instance
+          .resolveEpisodeVideoUrl(episode.id, lang: _selectedLang);
+      if (!mounted || gen != _loadGen) return;
+      url = res.url;
+      if (url == null && res.needsSignIn) {
+        setState(() {
+          _initializing = false;
+          _needsSignIn = true;
+        });
+        return;
+      }
+    }
     if (!mounted || gen != _loadGen) return;
     if (_qualityLabel != 'Auto' && playback != null) {
       url = playback.urlForLabel(_qualityLabel) ?? url;
@@ -441,8 +462,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     final epId = _current.id;
     final vtt = await PlaybackService.instance.fetchCaptionVtt(epId, lang);
     if (!mounted || _current.id != epId) return;
-    setState(
-        () => _captionCues = vtt == null ? const [] : parseWebVtt(vtt));
+    setState(() => _captionCues = vtt == null ? const [] : parseWebVtt(vtt));
   }
 
   String? get _activeCaption {
@@ -567,8 +587,9 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     setState(() {
       _sleepAtEpisodeEnd = atEpisodeEnd;
       _sleepSelectedMinutes = minutes;
-      _sleepDeadline =
-          minutes == null ? null : DateTime.now().add(Duration(minutes: minutes));
+      _sleepDeadline = minutes == null
+          ? null
+          : DateTime.now().add(Duration(minutes: minutes));
     });
     if (minutes != null) {
       _sleepTimer = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -633,7 +654,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       episodeId: _current.id,
       episodeNumber: _current.episodeNumber,
       positionSeconds: c?.value.position.inSeconds ?? 0,
-      durationSeconds: c?.value.duration.inSeconds ?? (_current.durationSeconds ?? 0),
+      durationSeconds:
+          c?.value.duration.inSeconds ?? (_current.durationSeconds ?? 0),
       // Once the end-of-episode handler has fired for this episode, every
       // later progress record for it (episode switch, dispose) must keep
       // completed = true: the server's watch-history upsert overwrites the
@@ -662,8 +684,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       _haptic();
       final ep = _episodes[index];
       _swipeToastTimer?.cancel();
-      setState(() =>
-          _swipeToast = 'EP ${ep.episodeNumber} · ${ep.displayTitle}');
+      setState(
+          () => _swipeToast = 'EP ${ep.episodeNumber} · ${ep.displayTitle}');
       _swipeToastTimer = Timer(const Duration(milliseconds: 1600), () {
         if (mounted) setState(() => _swipeToast = null);
       });
@@ -841,8 +863,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     _dragTotalDy = 0;
     _dragStartXFraction =
         size.width == 0 ? 0.5 : (d.globalPosition.dx / size.width);
-    if (_cfg.feature('edge_brightness_volume') &&
-        _dragStartXFraction <= 0.15) {
+    if (_cfg.feature('edge_brightness_volume') && _dragStartXFraction <= 0.15) {
       _dragMode = 'volume';
       _dragStartEdgeValue = _volumeLevel;
     } else if (_cfg.feature('edge_brightness_volume') &&
@@ -870,8 +891,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
   }
 
   Future<void> _applyBrightness(double value) async {
-    final ok =
-        await PlayerPlatformService.instance.setBrightness(value);
+    final ok = await PlayerPlatformService.instance.setBrightness(value);
     if (!ok && mounted) {
       // Fallback: dim overlay over the video.
       setState(() => _dimOpacity = (1 - value) * 0.7);
@@ -973,12 +993,14 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
             if (c != null && c.value.isInitialized)
               Center(
                 child: AspectRatio(
-                  aspectRatio: c.value.aspectRatio == 0 ? 9 / 16 : c.value.aspectRatio,
+                  aspectRatio:
+                      c.value.aspectRatio == 0 ? 9 / 16 : c.value.aspectRatio,
                   child: VideoPlayer(c),
                 ),
               )
             else
-              _PosterBackdrop(url: _current.thumbnailUrl ?? widget.series.posterUrl),
+              _PosterBackdrop(
+                  url: _current.thumbnailUrl ?? widget.series.posterUrl),
 
             // Brightness fallback dim overlay
             if (_dimOpacity > 0)
@@ -988,11 +1010,12 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
               ),
 
             if (_initializing)
-              const Center(child: CircularProgressIndicator(color: Colors.white)),
+              const Center(
+                  child: CircularProgressIndicator(color: Colors.white)),
 
             if (_locked) _lockOverlay(),
 
-            if (!_locked && _loadFailed) _loadErrorOverlay(),
+            if (!_locked && (_loadFailed || _needsSignIn)) _loadErrorOverlay(),
 
             // Double-tap seek ripple
             if (_showRipple && _cfg.feature('double_tap_seek'))
@@ -1041,8 +1064,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
             if (_swipeToast != null)
               Center(
                 child: Container(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.h),
+                  padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.h),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.7),
                     borderRadius: BorderRadius.circular(20),
@@ -1063,7 +1085,11 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
             if (caption != null)
               CaptionOverlay(text: caption, fontSize: _captionFontSizePx),
 
-            if (_controlsVisible && !_locked && !_loadFailed && !_controlsLocked)
+            if (_controlsVisible &&
+                !_locked &&
+                !_loadFailed &&
+                !_needsSignIn &&
+                !_controlsLocked)
               _controls(c),
 
             // Skip intro
@@ -1073,15 +1099,14 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                 _cfg.feature('skip_intro') &&
                 c != null &&
                 c.value.isInitialized &&
-                c.value.position.inSeconds <=
-                    _cfg.skipIntroWindowSeconds &&
+                c.value.position.inSeconds <= _cfg.skipIntroWindowSeconds &&
                 c.value.position.inSeconds < _cfg.skipIntroToSeconds)
               Positioned(
                 right: 4.w,
                 bottom: 12.h,
                 child: FilledButton(
-                  onPressed: () => c.seekTo(
-                      Duration(seconds: _cfg.skipIntroToSeconds)),
+                  onPressed: () =>
+                      c.seekTo(Duration(seconds: _cfg.skipIntroToSeconds)),
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black87,
@@ -1175,46 +1200,14 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
 
   /// Shown when a playable episode's stream failed to load. Retry reloads;
   /// this is intentionally NOT the unlock overlay (see [_loadFailed]).
+  /// When the failure was a 401 (see [_needsSignIn]) the overlay prompts
+  /// for sign-in and routes to /login instead (SIM-A F3).
   Widget _loadErrorOverlay() {
-    return Container(
-      color: Colors.black.withValues(alpha: 0.7),
-      alignment: Alignment.center,
-      padding: EdgeInsets.symmetric(horizontal: 8.w),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.cloud_off_rounded, color: Colors.white, size: 56),
-          SizedBox(height: 2.h),
-          Text(
-            "Couldn't load this episode",
-            style: TextStyle(
-                color: Colors.white, fontSize: 15.sp, fontWeight: FontWeight.w800),
-          ),
-          SizedBox(height: 1.h),
-          Text(
-            'Check your connection and try again.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white70, fontSize: 10.5.sp),
-          ),
-          SizedBox(height: 3.h),
-          FilledButton(
-            onPressed: () => _load(),
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black87,
-              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 1.5.h),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-            ),
-            child: Text('Retry',
-                style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w800)),
-          ),
-          SizedBox(height: 2.h),
-          TextButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            child: const Text('Back', style: TextStyle(color: Colors.white70)),
-          ),
-        ],
-      ),
+    return PlaybackErrorOverlay(
+      needsSignIn: _needsSignIn,
+      onRetry: () => _load(),
+      onSignIn: () => Navigator.of(context).pushNamed('/login'),
+      onBack: () => Navigator.of(context).maybePop(),
     );
   }
 
@@ -1233,7 +1226,9 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
           Text(
             vip ? 'VIP episode' : 'Unlock this episode',
             style: TextStyle(
-                color: Colors.white, fontSize: 15.sp, fontWeight: FontWeight.w800),
+                color: Colors.white,
+                fontSize: 15.sp,
+                fontWeight: FontWeight.w800),
           ),
           SizedBox(height: 1.h),
           Text(
@@ -1249,7 +1244,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
             style: FilledButton.styleFrom(
               backgroundColor: vip ? const Color(0xFFFFB300) : Colors.white,
               padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 1.5.h),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1305,7 +1301,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                               fontSize: 11.sp,
                               fontWeight: FontWeight.w700)),
                       Text('Episode ${_current.episodeNumber}',
-                          style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 11)),
                     ],
                   ),
                 ),
@@ -1369,8 +1366,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                         color: Colors.white, size: 13),
                     SizedBox(width: 1.w),
                     Text(sleepLabel,
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 11)),
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 11)),
                   ],
                 ),
               ),
@@ -1387,8 +1384,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                       : Icons.play_circle_fill_rounded,
                   color: Colors.white.withValues(alpha: 0.9),
                 ),
-                onPressed: () => setState(
-                    () => c.value.isPlaying ? c.pause() : c.play()),
+                onPressed: () =>
+                    setState(() => c.value.isPlaying ? c.pause() : c.play()),
               ),
             ),
 
@@ -1464,7 +1461,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
               child: Row(
                 children: [
                   Text(_fmt(c.value.position),
-                      style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 10)),
                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 2.w),
@@ -1482,7 +1480,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                     ),
                   ),
                   Text(_fmt(c.value.duration),
-                      style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 10)),
                 ],
               ),
             ),
@@ -1662,8 +1661,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                         Padding(
                           padding: EdgeInsets.only(right: 2.w),
                           child: ChoiceChip(
-                            label: Text(
-                                size[0].toUpperCase() + size.substring(1)),
+                            label:
+                                Text(size[0].toUpperCase() + size.substring(1)),
                             selected: _captionFontSize == size,
                             onSelected: (_) async {
                               setSheet(() => _captionFontSize = size);
@@ -1745,16 +1744,14 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Binge mode',
                           style: TextStyle(color: Colors.white)),
-                      subtitle: const Text(
-                          'Play the next episode immediately',
+                      subtitle: const Text('Play the next episode immediately',
                           style: TextStyle(color: Colors.white54)),
                       value: _bingeOn,
                       onChanged: (v) async {
                         setSheet(() => _bingeOn = v);
                         setState(() => _bingeOn = v);
                         try {
-                          final prefs =
-                              await SharedPreferences.getInstance();
+                          final prefs = await SharedPreferences.getInstance();
                           await prefs.setBool('player_binge', v);
                         } catch (_) {}
                       },
@@ -1772,8 +1769,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                         setSheet(() => _bgAudioOn = v);
                         setState(() => _bgAudioOn = v);
                         try {
-                          final prefs =
-                              await SharedPreferences.getInstance();
+                          final prefs = await SharedPreferences.getInstance();
                           await prefs.setBool('player_bg_audio', v);
                         } catch (_) {}
                       },
@@ -1791,8 +1787,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                       children: [
                         ChoiceChip(
                           label: const Text('Off'),
-                          selected: _sleepDeadline == null &&
-                              !_sleepAtEpisodeEnd,
+                          selected:
+                              _sleepDeadline == null && !_sleepAtEpisodeEnd,
                           onSelected: (_) {
                             _setSleepTimer(null);
                             setSheet(() {});
@@ -1884,12 +1880,10 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                       ),
                     ),
                     SizedBox(height: 2.h),
-
                     if (!isVip) ...[
                       _vipBanner(ctx),
                       SizedBox(height: 2.h),
                     ],
-
                     Row(
                       children: [
                         ClipRRect(
@@ -1920,7 +1914,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                               SizedBox(height: 0.4.h),
                               Text('Total $total Episodes',
                                   style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.6),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.6),
                                       fontSize: 9.5.sp)),
                             ],
                           ),
@@ -1958,7 +1953,6 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                       ],
                     ),
                     SizedBox(height: 2.h),
-
                     if (ranges.length > 1) ...[
                       SizedBox(
                         height: 3.5.h,
@@ -1974,7 +1968,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                               onTap: () => setSheet(() => rangeStart = start),
                               child: Container(
                                 alignment: Alignment.center,
-                                padding: EdgeInsets.symmetric(horizontal: 3.5.w),
+                                padding:
+                                    EdgeInsets.symmetric(horizontal: 3.5.w),
                                 child: Text(
                                   '${start + 1}-$rEnd',
                                   style: TextStyle(
@@ -1994,7 +1989,6 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                       ),
                       SizedBox(height: 1.5.h),
                     ],
-
                     Flexible(
                       child: GridView.builder(
                         shrinkWrap: true,
@@ -2210,7 +2204,8 @@ class _PosterBackdrop extends StatelessWidget {
     if (url == null || url!.isEmpty) {
       return const ColoredBox(color: Colors.black);
     }
-    return Image.network(url!, fit: BoxFit.cover,
+    return Image.network(url!,
+        fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black));
   }
 }
@@ -2294,6 +2289,81 @@ class _RailButton extends StatelessWidget {
           ),
           SizedBox(height: 0.5.h),
           Text(label, style: const TextStyle(color: Colors.white, fontSize: 9)),
+        ],
+      ),
+    );
+  }
+}
+
+/// The player's load-error overlay (SIM-A F3). Two states:
+///  - generic failure: "Couldn't load this episode" + Retry;
+///  - [needsSignIn]: the playback endpoint answered 401/UNAUTHORIZED, so
+///    retrying cannot help — the overlay prompts "Sign in to watch" and
+///    the primary action routes to /login (wired by the screen).
+/// Stateless and callback-driven so both states are widget-testable.
+class PlaybackErrorOverlay extends StatelessWidget {
+  const PlaybackErrorOverlay({
+    super.key,
+    required this.needsSignIn,
+    required this.onRetry,
+    required this.onSignIn,
+    required this.onBack,
+  });
+
+  final bool needsSignIn;
+  final VoidCallback onRetry;
+  final VoidCallback onSignIn;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.7),
+      alignment: Alignment.center,
+      padding: EdgeInsets.symmetric(horizontal: 8.w),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            needsSignIn ? Icons.lock_rounded : Icons.cloud_off_rounded,
+            color: Colors.white,
+            size: 56,
+          ),
+          SizedBox(height: 2.h),
+          Text(
+            needsSignIn ? 'Sign in to watch' : "Couldn't load this episode",
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 15.sp,
+                fontWeight: FontWeight.w800),
+          ),
+          SizedBox(height: 1.h),
+          Text(
+            needsSignIn
+                ? 'You need to sign in before this episode can play.'
+                : 'Check your connection and try again.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white70, fontSize: 10.5.sp),
+          ),
+          SizedBox(height: 3.h),
+          FilledButton(
+            key: ValueKey(needsSignIn ? 'player-signin-cta' : 'player-retry'),
+            onPressed: needsSignIn ? onSignIn : onRetry,
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black87,
+              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 1.5.h),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30)),
+            ),
+            child: Text(needsSignIn ? 'Sign in' : 'Retry',
+                style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w800)),
+          ),
+          SizedBox(height: 2.h),
+          TextButton(
+            onPressed: onBack,
+            child: const Text('Back', style: TextStyle(color: Colors.white70)),
+          ),
         ],
       ),
     );

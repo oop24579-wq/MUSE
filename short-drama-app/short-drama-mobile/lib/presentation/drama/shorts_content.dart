@@ -284,27 +284,11 @@ class _ShortPageState extends State<_ShortPage> {
         ),
         if (videoReady && !c.value.isPlaying && widget.active)
           const Center(
-            child: Icon(Icons.play_circle_fill,
-                size: 72, color: Colors.white70),
+            child:
+                Icon(Icons.play_circle_fill, size: 72, color: Colors.white70),
           ),
         if (!item.isUnlocked)
-          Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.lock_rounded, size: 44, color: Colors.white),
-                const SizedBox(height: 8),
-                Text(
-                  item.isVipOnly ? 'VIP episode' : 'Locked episode',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          LockedShortOverlay(item: item, onOpenFull: _openFullEpisode),
         Positioned(
           left: 0,
           right: 0,
@@ -320,6 +304,103 @@ class _ShortPageState extends State<_ShortPage> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The locked-state overlay of a Shorts page (SIM-A F2): poster + lock,
+/// the episode's identity ("EP n · series"), its unlock cost when the
+/// item carries one, and a tappable CTA that routes to the full episode
+/// player — the same destination as "Watch full episode", where the
+/// actual unlock/paywall flow lives. No in-feed unlocking is done here.
+/// Stateless and callback-driven so it is widget-testable.
+class LockedShortOverlay extends StatelessWidget {
+  const LockedShortOverlay({
+    super.key,
+    required this.item,
+    required this.onOpenFull,
+  });
+
+  final ShortItem item;
+  final VoidCallback onOpenFull;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: InkWell(
+        key: const ValueKey('short-locked-cta'),
+        onTap: onOpenFull,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_rounded, size: 44, color: Colors.white),
+              const SizedBox(height: 8),
+              Text(
+                item.isVipOnly ? 'VIP episode' : 'Locked episode',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'EP ${item.episodeNumber} · ${item.seriesTitle}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              if (!item.isVipOnly && item.coinCost > 0) ...[
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.monetization_on_outlined,
+                        size: 15, color: Color(0xFFFFC107)),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Unlock for ${item.coinCost} coins',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 12),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.white54),
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.play_circle_outline,
+                        size: 16, color: Colors.white),
+                    SizedBox(width: 6),
+                    Text(
+                      'Watch full episode',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

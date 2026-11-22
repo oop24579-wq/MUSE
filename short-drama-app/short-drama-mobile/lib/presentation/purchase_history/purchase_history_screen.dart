@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
-import 'package:drama_now/models/user/subscription_model.dart';
+import 'package:drama_now/models/user/order_history_item.dart';
 import 'package:drama_now/services/api/api_client.dart';
 import 'package:drama_now/services/auth/auth_service.dart';
 import '../../l10n/app_localizations.dart';
@@ -19,7 +19,7 @@ class PurchaseHistoryScreen extends StatefulWidget {
 }
 
 class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
-  List<SubscriptionModel> _subscriptions = [];
+  List<OrderHistoryItem> _items = [];
   bool _isLoading = true;
   String? _error;
 
@@ -47,44 +47,19 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
 
       final data = await ApiClient.instance.get('/user/orders');
       final orders = (data['orders'] as List?) ?? const [];
-      final subscriptions = orders.map((raw) {
-        final o = Map<String, dynamic>.from(raw as Map);
-        final created = o['createdAt']?.toString() ??
-            DateTime.now().toUtc().toIso8601String();
-        final status =
-            (o['paymentStatus'] ?? o['status'] ?? 'pending') as String;
-        final planId = (o['subscriptionPlanId'] ??
-                o['type'] ??
-                o['coinPackageId'] ??
-                'order')
-            .toString();
-        final mappedStatus =
-            (status == 'paid' || status == 'delivered') ? 'active' : status;
-        return SubscriptionModel(
-          id: o['id'] as String,
-          userId: (o['userId'] as String?) ?? userId,
-          paymentProvider:
-              (o['paymentMethod'] ?? o['paymentProvider'] ?? 'revenuecat')
-                  as String,
-          planId: planId,
-          status: mappedStatus,
-          currentPeriodStart:
-              DateTime.tryParse(created)?.toUtc() ?? DateTime.now().toUtc(),
-          currentPeriodEnd: DateTime.tryParse(created)
-                  ?.toUtc()
-                  .add(const Duration(days: 30)) ??
-              DateTime.now().toUtc(),
-          cancelAtPeriodEnd: false,
-          revenueCatTransactionId: o['revenueCatTransactionId'] as String?,
-          createdAt:
-              DateTime.tryParse(created)?.toUtc() ?? DateTime.now().toUtc(),
-          updatedAt:
-              DateTime.tryParse(created)?.toUtc() ?? DateTime.now().toUtc(),
-        );
-      }).toList();
+      // SIM-B F2/F3: parsing lives in parseOrderHistoryItem — it uses the
+      // API's periodEnd verbatim (no fabricated createdAt+30d), and keeps
+      // kind/productId/amountCents/currency for display.
+      final items = orders
+          .whereType<Map>()
+          .map((raw) => parseOrderHistoryItem(
+                Map<String, dynamic>.from(raw),
+                userId: userId,
+              ))
+          .toList();
 
       setState(() {
-        _subscriptions = subscriptions;
+        _items = items;
         _isLoading = false;
       });
     } catch (e) {
@@ -100,12 +75,10 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
     final l10n = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? AppTheme.backgroundDark : AppTheme.backgroundLight;
-    final surfaceColor = isDark ? AppTheme.surfaceDark : AppTheme.surfaceLight;
     final textColor =
         isDark ? AppTheme.textPrimaryDark : AppTheme.textPrimaryLight;
     final secondaryTextColor =
         isDark ? AppTheme.textSecondaryDark : AppTheme.textSecondaryLight;
-    final dividerColor = isDark ? AppTheme.dividerDark : AppTheme.dividerLight;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -157,7 +130,7 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                     ],
                   ),
                 )
-              : _subscriptions.isEmpty
+              : _items.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -196,44 +169,54 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                           // Clear the gesture nav bar in Android 15 edge-to-edge
                           bottom: 1.h + MediaQuery.of(context).padding.bottom,
                         ),
-                        itemCount: _subscriptions.length,
-                        itemBuilder: (context, index) {
-                          final subscription = _subscriptions[index];
-                          return _buildPurchaseItem(
-                            context,
-                            subscription,
-                            isDark,
-                            surfaceColor,
-                            textColor,
-                            secondaryTextColor,
-                            dividerColor,
-                          );
-                        },
+                        itemCount: _items.length,
+                        itemBuilder: (context, index) =>
+                            PurchaseHistoryCard(item: _items[index]),
                       ),
                     ),
     );
   }
+}
 
-  Widget _buildPurchaseItem(
-    BuildContext context,
-    SubscriptionModel subscription,
-    bool isDark,
-    Color surfaceColor,
-    Color textColor,
-    Color secondaryTextColor,
-    Color dividerColor,
-  ) {
-    // Format expiration date
-    String? expirationText;
-    if (subscription.expirationDate != null) {
-      try {
-        final expDate = DateTime.parse(subscription.expirationDate!);
-        expirationText =
-            'Expires ${expDate.day}/${expDate.month}/${expDate.year}';
-      } catch (e) {
-        expirationText = null;
-      }
-    }
+/// One purchase-history row. Stateless and driven entirely by
+/// [OrderHistoryItem]'s display mapping, so it is widget-testable without
+/// the API layer (SIM-B F2/F3).
+class PurchaseHistoryCard extends StatelessWidget {
+  const PurchaseHistoryCard({super.key, required this.item});
+
+  final OrderHistoryItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppTheme.surfaceDark : AppTheme.surfaceLight;
+    final textColor =
+        isDark ? AppTheme.textPrimaryDark : AppTheme.textPrimaryLight;
+    final secondaryTextColor =
+        isDark ? AppTheme.textSecondaryDark : AppTheme.textSecondaryLight;
+    final dividerColor = isDark ? AppTheme.dividerDark : AppTheme.dividerLight;
+
+    final subscription = item.subscription;
+    final state = item.badgeState();
+    final isActive = state == OrderBadgeState.active;
+    final isCoins = state == OrderBadgeState.coins;
+    final isCancelledRunning = state == OrderBadgeState.cancelledActiveUntil;
+    final badgeColor = isActive
+        ? AppTheme.success
+        : isCoins
+            ? AppTheme.accentBlue
+            : isCancelledRunning
+                ? Colors.orange
+                : Colors.grey;
+    final badgeIcon = isActive
+        ? Icons.check_circle
+        : isCoins
+            ? Icons.monetization_on_outlined
+            : isCancelledRunning
+                ? Icons.schedule
+                : Icons.cancel;
+    // Coin orders have no period; the period-type badge is VIP-only.
+    final expirationText = item.expiryText();
 
     return Container(
       margin: EdgeInsets.symmetric(horizontal: 4.w, vertical: 0.5.h),
@@ -252,34 +235,29 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
           // First row: Badges and expiration
           Row(
             children: [
-              // Status badge
+              // Status badge — coin orders get a neutral "Coins" state,
+              // never Active/Expired (SIM-B F3).
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 2.5.w, vertical: 1.h),
                 decoration: BoxDecoration(
-                  color: subscription.isActive
-                      ? AppTheme.success.withOpacity(0.15)
-                      : Colors.grey.withOpacity(0.15),
+                  color: badgeColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      subscription.isActive ? Icons.check_circle : Icons.cancel,
+                      badgeIcon,
                       size: 3.5.w,
-                      color: subscription.isActive
-                          ? AppTheme.success
-                          : Colors.grey,
+                      color: badgeColor,
                     ),
                     SizedBox(width: 1.w),
                     Text(
-                      subscription.isActive ? 'Active' : 'Expired',
+                      item.badgeLabel(),
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: subscription.isActive
-                            ? AppTheme.success
-                            : Colors.grey,
+                        color: badgeColor,
                       ),
                     ),
                   ],
@@ -287,12 +265,13 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
               ),
               SizedBox(width: 2.w),
               // Period type badge - clean color
-              if (subscription.periodType != null)
+              if (!item.isCoinOrder && subscription.periodType != null)
                 Container(
                   padding:
                       EdgeInsets.symmetric(horizontal: 2.5.w, vertical: 1.h),
                   decoration: BoxDecoration(
-                    color: AppTheme.accentBlue.withValues(alpha: isDark ? 0.2 : 0.1),
+                    color: AppTheme.accentBlue
+                        .withValues(alpha: isDark ? 0.2 : 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -307,7 +286,8 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                   ),
                 ),
               Spacer(),
-              // Expiration info - simple text near badges
+              // Expiration info - simple text near badges. Only rendered
+              // when the API supplied a real periodEnd (SIM-B F2).
               if (expirationText != null)
                 Text(
                   expirationText,
@@ -318,7 +298,34 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                 ),
             ],
           ),
-          // Second row: Transaction ID (copyable)
+          // Second row: product label + price (SIM-B F3)
+          SizedBox(height: 1.5.h),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  item.productLabel,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (item.priceLabel != null)
+                Text(
+                  item.priceLabel!,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                ),
+            ],
+          ),
+          // Third row: Transaction ID (copyable)
           SizedBox(height: 1.5.h),
           Row(
             children: [
@@ -345,7 +352,8 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                 onTap: () {
                   Clipboard.setData(
                       ClipboardData(text: subscription.transactionId));
-                  showTopToastInfo(context, 'Transaction ID copied', duration: const Duration(seconds: 2));
+                  showTopToastInfo(context, 'Transaction ID copied',
+                      duration: const Duration(seconds: 2));
                 },
                 borderRadius: BorderRadius.circular(4),
                 child: Padding(

@@ -1,0 +1,17 @@
+Server booted on http://127.0.0.1:41485 with temp DB /tmp/dramanow-test7-Mo7Hg1/app.db
+PASS 601. SIM-A F1: unlock on a FREE + VIP-only episode as non-VIP -> 403 VIP_REQUIRED (consistent with playback); VIP user -> 200 coins 0
+PASS 602. SIM-B F1: webhook coins_300 WITH entitlement_ids:["coins"] -> kind coins, +300 coins, no VIP
+PASS 603. SIM-B F4: EXPIRATION and CANCELLATION for a coin product create NO order row and apply nothing
+PASS 604. SIM-B F5b: VIP CANCELLATION with no price inherits amountCents/currency from the most recent paid order for the product
+PASS 605. SIM-B F2 support: VIP order periodEnd = event expiration (webhook) and = applied expiry (admin manual order)
+PASS 606. SIM-C Bug 1: PATCH /auth/me name survives re-login with a different claim name; a new user still gets the claim name
+PASS 607. SIM-C Bug 2: GET /for-you is personalized (completed series excluded); guest gets 200 with the trending fallback
+PASS 608. SIM-C Bug 5: series detail resume restarts at episode 1 after the completed FINAL episode; completed non-final keeps the existing resume point
+PASS 609. SIM-C Bug 3: GET /search ranks title matches first, then tag matches, then synopsis-only matches
+PASS 610. SIM-A F4: connect_email task refuses guests (403 EMAIL_LINK_REQUIRED, no payout); an email-linked user can claim it
+PASS 611. SIM-C Bug 6: maintenance 503 body carries the configured maintenance_message when set
+
+===== SUITE 7 SUMMARY =====
+TOTAL: 11  PASSED: 11  FAILED: 0
+ALL PASS
+

@@ -72,6 +72,34 @@ int resolvePlayerStartIndex(
   return 0;
 }
 
+/// Why a playback-URL resolution failed (SIM-A F3). Only [unauthorized]
+/// is distinguished: a session-less (or expired-session) caller gets a
+/// 401 from the playback endpoint, and the player must be able to show a
+/// "sign in to watch" prompt instead of the generic load failure.
+enum PlaybackFailure { unauthorized, other }
+
+/// Result of resolving an episode's playable URL: either [url], or a
+/// classified [failure] (never both).
+class PlaybackUrlResult {
+  const PlaybackUrlResult({this.url, this.failure});
+
+  final String? url;
+  final PlaybackFailure? failure;
+
+  bool get needsSignIn => failure == PlaybackFailure.unauthorized;
+}
+
+/// Maps any playback error to its [PlaybackFailure]. Pure and top-level
+/// so the mapping is unit-testable without the HTTP layer. The backend's
+/// auth gate answers 401 with code UNAUTHORIZED; either signal suffices.
+PlaybackFailure playbackFailureForError(Object error) {
+  if (error is ApiException &&
+      (error.statusCode == 401 || error.code == 'UNAUTHORIZED')) {
+    return PlaybackFailure.unauthorized;
+  }
+  return PlaybackFailure.other;
+}
+
 /// Central data layer for DramaNow content (web `/api/v1`).
 class DramaService {
   DramaService._();
@@ -328,14 +356,26 @@ class DramaService {
   /// track). Returns null when the caller is not entitled (server enforces
   /// VIP / coin unlock).
   Future<String?> getEpisodeVideoUrl(String episodeId, {String? lang}) async {
+    return (await resolveEpisodeVideoUrl(episodeId, lang: lang)).url;
+  }
+
+  /// Like [getEpisodeVideoUrl] but classifies failures (SIM-A F3): a
+  /// 401/UNAUTHORIZED (no session, or a session the server rejected) is
+  /// reported as [PlaybackFailure.unauthorized] so callers can prompt for
+  /// sign-in instead of collapsing it into the generic load failure.
+  /// Entitlement failures (403 VIP_REQUIRED / EPISODE_LOCKED) stay
+  /// [PlaybackFailure.other] — those callers are already signed in.
+  Future<PlaybackUrlResult> resolveEpisodeVideoUrl(String episodeId,
+      {String? lang}) async {
     try {
       final data = await _api.get(
         '/episodes/$episodeId/playback',
         query: lang != null && lang.isNotEmpty ? {'lang': lang} : null,
       );
-      return rewriteMediaUrl(data['videoUrl'] as String?);
-    } catch (_) {
-      return null;
+      return PlaybackUrlResult(
+          url: rewriteMediaUrl(data['videoUrl'] as String?));
+    } catch (e) {
+      return PlaybackUrlResult(failure: playbackFailureForError(e));
     }
   }
 
@@ -348,8 +388,7 @@ class DramaService {
       final detail = await _api.get('/series/$seriesId');
       final seriesRaw = detail['series'];
       if (seriesRaw is! Map) return null;
-      final series =
-          SeriesModel.fromJson(Map<String, dynamic>.from(seriesRaw));
+      final series = SeriesModel.fromJson(Map<String, dynamic>.from(seriesRaw));
 
       final episodes = await fetchEpisodes(seriesId);
       final seasons = _seasonsFromEpisodes(seriesId, episodes);
@@ -365,8 +404,7 @@ class DramaService {
         isFavorite: (detail['isFavorite'] as bool?) ?? false,
         isFollowing: (detail['isFollowing'] as bool?) ?? false,
         isLiked: (detail['isLiked'] as bool?) ?? false,
-        resumeEpisodeNumber:
-            (detail['resumeEpisodeNumber'] as num?)?.toInt(),
+        resumeEpisodeNumber: (detail['resumeEpisodeNumber'] as num?)?.toInt(),
         resumeEpisodeId: detail['resumeEpisodeId'] as String?,
       );
     } catch (_) {

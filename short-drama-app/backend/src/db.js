@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS orders(
   productId TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'vip',
   amountCents INTEGER DEFAULT 0, currency TEXT DEFAULT 'USD',
   status TEXT NOT NULL DEFAULT 'paid', revenueCatTransactionId TEXT UNIQUE,
+  periodEnd TEXT,
   createdAt TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS checkins(
   userId TEXT NOT NULL, claimDate TEXT NOT NULL, dayIndex INTEGER NOT NULL, coins INTEGER NOT NULL,
@@ -156,6 +157,7 @@ try { db.exec('ALTER TABLE users ADD COLUMN notificationsEnabled INTEGER DEFAULT
 try { db.exec('ALTER TABLE users ADD COLUMN consentJson TEXT'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE watch_time_daily ADD COLUMN paidCoins INTEGER DEFAULT 0'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE caption_jobs ADD COLUMN targets TEXT'); } catch { /* already present */ }
+try { db.exec('ALTER TABLE orders ADD COLUMN periodEnd TEXT'); } catch { /* already present */ }
 // Generate referral codes for users that do not have one yet:
 // 'HD' + 10 hex chars from a hash of the user id (deterministic, stable).
 // 10 chars (was 6) makes birthday collisions negligible at this scale, and the

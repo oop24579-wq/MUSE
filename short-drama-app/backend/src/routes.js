@@ -204,6 +204,7 @@ function orderJson(o) {
     coinPackageId: o.kind === 'coins' ? o.productId : null,
     amountCents: o.amountCents || 0, currency: o.currency || 'USD',
     status: o.status, revenueCatTransactionId: o.revenueCatTransactionId || null,
+    periodEnd: o.periodEnd || null,
     createdAt: o.createdAt };
 }
 /**
@@ -230,11 +231,18 @@ function applyOrderEntitlement(order, { vipExpiresAt = null } = {}) {
 }
 /** Insert an order row and apply its entitlement atomically. */
 function recordOrder({ userId, provider, productId, kind, amountCents = 0, currency = 'USD', status = 'paid', revenueCatTransactionId = null, vipExpiresAt = null }) {
-  const order = { id: auth.uid(), userId, provider, productId, kind, amountCents, currency, status, revenueCatTransactionId, createdAt: now() };
+  // SIM-B F2 support: VIP orders expose the real period end. It is the
+  // store event's expiration when known; for a PAID order without one
+  // (admin manual grants) it is the expiry applyOrderEntitlement will
+  // actually apply (+30 days), computed here so both stay identical.
+  const periodEnd = kind === 'vip'
+    ? (vipExpiresAt || (status === 'paid' ? new Date(Date.now() + 30 * 86400e3).toISOString() : null))
+    : null;
+  const order = { id: auth.uid(), userId, provider, productId, kind, amountCents, currency, status, revenueCatTransactionId, periodEnd, createdAt: now() };
   tx(() => {
-    run('INSERT INTO orders(id,userId,provider,productId,kind,amountCents,currency,status,revenueCatTransactionId,createdAt) VALUES(?,?,?,?,?,?,?,?,?,?)',
-      order.id, order.userId, order.provider, order.productId, order.kind, order.amountCents, order.currency, order.status, order.revenueCatTransactionId, order.createdAt);
-    if (status === 'paid') applyOrderEntitlement(order, { vipExpiresAt });
+    run('INSERT INTO orders(id,userId,provider,productId,kind,amountCents,currency,status,revenueCatTransactionId,periodEnd,createdAt) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+      order.id, order.userId, order.provider, order.productId, order.kind, order.amountCents, order.currency, order.status, order.revenueCatTransactionId, order.periodEnd, order.createdAt);
+    if (status === 'paid') applyOrderEntitlement(order, { vipExpiresAt: periodEnd });
   });
   return order;
 }
@@ -432,29 +440,47 @@ async function handle(req, res, url, body) {
     // recorded exactly once, so a retry can never re-grant coins/VIP time.
     if (txId && get('SELECT 1 x FROM orders WHERE revenueCatTransactionId=?', txId))
       return ok(res, { received: true, applied: false, duplicate: true });
-    const entitlements = Array.isArray(ev.entitlement_ids) ? ev.entitlement_ids.map((x) => String(x).toLowerCase()) : [];
-    const kind = /coin/i.test(productId) && !entitlements.length ? 'coins' : 'vip';
-    const amountCents = Number.isFinite(ev.price_in_pence) ? Math.round(ev.price_in_pence)
+    // SIM-B F1: classification is by PRODUCT, not by what the delivery
+    // happens to carry — a coin product (coins_<n>) delivered WITH
+    // entitlement_ids is still a coin purchase, never a VIP grant.
+    const kind = /coin/i.test(productId) ? 'coins' : 'vip';
+    let amountCents = Number.isFinite(ev.price_in_pence) ? Math.round(ev.price_in_pence)
       : (Number.isFinite(ev.price) ? Math.round(ev.price * 100) : 0);
-    const currency = typeof ev.currency === 'string' && ev.currency ? ev.currency : 'USD';
+    let currency = typeof ev.currency === 'string' && ev.currency ? ev.currency : 'USD';
     const expiresAt = Number.isFinite(ev.expiration_at_ms) ? new Date(ev.expiration_at_ms).toISOString() : null;
+    // SIM-B F4: consumables have no lifecycle — an EXPIRATION/CANCELLATION
+    // for a coin product must not mint a bogus order row or apply anything.
+    if ((type === 'EXPIRATION' || type === 'CANCELLATION') && kind === 'coins')
+      return ok(res, { received: true, applied: false, reason: 'consumable_lifecycle_event_ignored' });
+    // SIM-B F5b: lifecycle events often carry no price — inherit
+    // amount/currency from the user's most recent PAID order for the
+    // same product so the recorded row is not a misleading 0/USD.
+    if ((type === 'EXPIRATION' || type === 'CANCELLATION') && !Number.isFinite(ev.price_in_pence) && !Number.isFinite(ev.price)) {
+      const prev = get("SELECT amountCents, currency FROM orders WHERE userId=? AND productId=? AND status='paid' ORDER BY createdAt DESC, rowid DESC LIMIT 1", target.id, productId);
+      if (prev) { amountCents = prev.amountCents || 0; currency = prev.currency || currency; }
+    }
     if (type === 'EXPIRATION') {
       // Subscription lapsed: record it and let isPro() lapse the access by
       // pinning the expiry at the event's expiration time.
-      const order = recordOrder({ userId: target.id, provider: 'revenuecat', productId, kind, amountCents, currency, status: 'expired', revenueCatTransactionId: txId });
+      const order = recordOrder({ userId: target.id, provider: 'revenuecat', productId, kind, amountCents, currency, status: 'expired', revenueCatTransactionId: txId, vipExpiresAt: expiresAt });
       if (kind === 'vip') run('UPDATE users SET subscriptionExpirationDate=? WHERE id=?', expiresAt || now(), target.id);
       return ok(res, { received: true, applied: true, orderId: order.id });
     }
     if (type === 'CANCELLATION' || type === 'BILLING_ISSUE') {
       // Access continues until expiry on a cancellation — record only.
-      const order = recordOrder({ userId: target.id, provider: 'revenuecat', productId, kind, amountCents, currency, status: 'cancelled', revenueCatTransactionId: txId });
+      const order = recordOrder({ userId: target.id, provider: 'revenuecat', productId, kind, amountCents, currency, status: 'cancelled', revenueCatTransactionId: txId, vipExpiresAt: expiresAt });
       return ok(res, { received: true, applied: false, orderId: order.id });
     }
     const order = recordOrder({ userId: target.id, provider: 'revenuecat', productId, kind, amountCents, currency, status: 'paid', revenueCatTransactionId: txId, vipExpiresAt: expiresAt });
     return ok(res, { received: true, applied: true, orderId: order.id });
   }
   // ---------- MAINTENANCE MODE (settings store; admin API is a separate handler and stays up) ----------
-  if (settings.getSetting('maintenance_mode')) return err(res, 503, 'MAINTENANCE', 'HERO DRAMA is temporarily down for maintenance. Please try again soon!');
+  if (settings.getSetting('maintenance_mode')) {
+    // SIM-C Bug 6 (polish): surface the configured maintenance_message in
+    // the 503 body when set; the gate's status/code are unchanged.
+    const maintMsg = settings.getSetting('maintenance_message');
+    return err(res, 503, 'MAINTENANCE', maintMsg ? String(maintMsg) : 'HERO DRAMA is temporarily down for maintenance. Please try again soon!');
+  }
   // ---------- PLAYBACK TOKEN VERIFY (public: a CDN/reverse proxy calls this; the HMAC is the credential) ----------
   if (req.method === 'GET' && p === '/playback/verify') {
     if (!playbackSecret()) return err(res, 404, 'NOT_FOUND', 'Playback signing is not enabled');
@@ -495,7 +521,9 @@ async function handle(req, res, url, body) {
     } else {
       // Returning user: refresh profile fields from the fresh token's claims
       // (a guest who has since verified an email must not stay isGuest=1).
-      run('UPDATE users SET email=COALESCE(?,email), name=COALESCE(?,name), image=COALESCE(?,image), isGuest=?, deviceId=COALESCE(?,deviceId), linkedAt=? WHERE id=?',
+      // SIM-C Bug 1: the claim name only FILLS an empty stored name — it
+      // must never overwrite a name the user set via PATCH /auth/me.
+      run("UPDATE users SET email=COALESCE(?,email), name=CASE WHEN name IS NULL OR TRIM(name)='' THEN COALESCE(?,name) ELSE name END, image=COALESCE(?,image), isGuest=?, deviceId=COALESCE(?,deviceId), linkedAt=? WHERE id=?",
         claims.email, claims.name, claims.picture, claims.email ? 0 : user.isGuest, body.deviceId || null, now(), user.id);
     }
     touchDevice(req, user); user = get('SELECT * FROM users WHERE id=?', user.id);
@@ -708,10 +736,26 @@ async function handle(req, res, url, body) {
     return ok(res, { series });
   }
   if (req.method === 'GET' && p === '/for-you')
-    return ok(res, { series: all('SELECT * FROM series ORDER BY rankScore DESC, viewCount DESC LIMIT ?', limit).map(seriesJson) });
+    // SIM-C Bug 2: same personalized logic as GET /home's For You section
+    // (affinity-ranked, completed excluded; guests get trending fallback).
+    return ok(res, { series: forYouSeries(user, limit).map(seriesJson) });
   if (req.method === 'GET' && p === '/search') {
     const term = '%' + (q.get('q') || '') + '%';
-    return ok(res, { series: all('SELECT * FROM series WHERE title LIKE ? OR synopsis LIKE ? OR tags LIKE ? LIMIT ?', term, term, term, limit).map(seriesJson) });
+    // SIM-C Bug 3: cheap field ranking — title matches first, then tag
+    // matches, then synopsis-only matches. Array.sort is stable, so the
+    // existing (insertion) order is preserved within each group.
+    const rawQ = String(q.get('q') || '');
+    const needle = rawQ.toLowerCase();
+    const matched = all('SELECT * FROM series WHERE title LIKE ? OR synopsis LIKE ? OR tags LIKE ?', term, term, term);
+    const rankOf = (s) => {
+      if (needle && (s.title || '').toLowerCase().includes(needle)) return 0;
+      let tags = [];
+      try { tags = JSON.parse(s.tags || '[]'); } catch { tags = []; }
+      if (needle && ((Array.isArray(tags) && tags.some((t) => String(t).toLowerCase().includes(needle))) || (s.tags || '').toLowerCase().includes(needle))) return 1;
+      return 2;
+    };
+    const ranked = matched.sort((a, b) => rankOf(a) - rankOf(b)).slice(0, limit);
+    return ok(res, { series: ranked.map(seriesJson) });
   }
   if (req.method === 'GET' && p === '/home') {
     // Honor the app's ?locale= when sections exist for it; fall back to 'en'.
@@ -766,7 +810,26 @@ async function handle(req, res, url, body) {
     const related = all('SELECT * FROM series WHERE genreId=? AND id!=? ORDER BY rankScore DESC LIMIT 6', s.genreId, s.id).map(seriesJson);
     const us = user ? get('SELECT * FROM user_series WHERE userId=? AND seriesId=?', user.id, s.id) : null;
     const hist = user ? get('SELECT * FROM watch_history WHERE userId=? AND seriesId=?', user.id, s.id) : null;
-    return ok(res, { series: seriesJson(s), cast, related, isFavorite: !!(us && us.favorite), isFollowing: !!(us && us.following), isLiked: !!(us && us.liked), resumeEpisodeNumber: hist ? hist.episodeNumber : null, resumeEpisodeId: hist ? hist.episodeId : null });
+    // SIM-C Bug 5: a COMPLETED final episode is not a useful resume point
+    // — restart the series at its first episode instead. Intent for the
+    // other cases (documented): a completed NON-final episode keeps the
+    // pre-existing behaviour (resumeEpisodeId stays that episode, as the
+    // handler has always returned hist.episodeId verbatim), and a partial
+    // episode resumes in place.
+    let resumeEpisodeId = hist ? hist.episodeId : null;
+    let resumeEpisodeNumber = hist ? hist.episodeNumber : null;
+    if (hist && hist.episodeId && user) {
+      const prog = get('SELECT completed FROM episode_progress WHERE userId=? AND episodeId=?', user.id, hist.episodeId);
+      const candidateCompleted = !!(hist.completed || (prog && prog.completed));
+      if (candidateCompleted) {
+        const eps = all('SELECT id, episodeNumber FROM episodes WHERE seriesId=? ORDER BY episodeNumber', s.id);
+        if (eps.length && eps[eps.length - 1].id === hist.episodeId) {
+          resumeEpisodeId = eps[0].id;
+          resumeEpisodeNumber = eps[0].episodeNumber;
+        }
+      }
+    }
+    return ok(res, { series: seriesJson(s), cast, related, isFavorite: !!(us && us.favorite), isFollowing: !!(us && us.following), isLiked: !!(us && us.liked), resumeEpisodeNumber, resumeEpisodeId });
   }
   if (req.method === 'GET' && (m = /^\/series\/([^/]+)\/episodes$/.exec(p))) {
     const s = get('SELECT * FROM series WHERE id=? OR slug=?', decodeURIComponent(m[1]), decodeURIComponent(m[1]));
@@ -837,13 +900,17 @@ async function handle(req, res, url, body) {
   if (req.method === 'POST' && (m = /^\/episodes\/([^/]+)\/unlock$/.exec(p))) {
     const e = get('SELECT * FROM episodes WHERE id=?', decodeURIComponent(m[1]));
     if (!e) return err(res, 404, 'NOT_FOUND', 'Episode not found');
-    if (e.isFree || get('SELECT 1 x FROM episode_unlocks WHERE userId=? AND episodeId=?', user.id, e.id)) return ok(res, { success: true, coins: 0, balance: user.coinBalance });
-    // Never sell an unlock playback will still refuse: VIP-gated content
-    // requires VIP regardless of coin unlocks (mirrors the playback gate).
+    // SIM-A F1: the VIP gate comes FIRST — before the isFree / already-
+    // unlocked short-circuit — exactly as playback checks it. Previously
+    // a free+VIP-only episode short-circuited to {success:true} here
+    // while playback still refused it with 403 VIP_REQUIRED.
     const unlockSeries = get('SELECT * FROM series WHERE id=?', e.seriesId);
     const unlockMode = settings.getSetting('premium_playback_mode');
     const unlockVipGate = unlockMode === 'all_playback' || (unlockMode !== 'disabled' && (e.isVipOnly || (unlockSeries && unlockSeries.isVipOnly)));
     if (unlockVipGate && !isPro(user)) return err(res, 403, 'VIP_REQUIRED', 'This episode requires VIP — coins cannot unlock it');
+    if (e.isFree || get('SELECT 1 x FROM episode_unlocks WHERE userId=? AND episodeId=?', user.id, e.id)) return ok(res, { success: true, coins: 0, balance: user.coinBalance });
+    // Never sell an unlock playback will still refuse: VIP-gated content
+    // requires VIP regardless of coin unlocks (mirrors the playback gate).
     // An episode's own price wins ONLY when explicitly set (> 0); coinCost=0
     // in the DB means "unset" and falls back to the global setting.
     const cost = (e.coinCost != null && e.coinCost > 0) ? e.coinCost : sUnlockCost();
@@ -1069,6 +1136,11 @@ async function handle(req, res, url, body) {
     const t = get('SELECT * FROM reward_tasks WHERE slug=?', decodeURIComponent(m[1]));
     if (!t || t.active === 0) return err(res, 404, 'NOT_FOUND', 'Task not found');
     if (get('SELECT 1 x FROM user_reward_tasks WHERE userId=? AND slug=?', user.id, t.slug)) return ok(res, { success: false, coins: 0 });
+    // SIM-A F4: connect_email pays for LINKING an email — a guest account
+    // has none by definition, so guests cannot claim it. (rate_app /
+    // enable_notifications stay honor-system by design.)
+    if (t.slug === 'connect_email' && (user.isGuest || !user.email))
+      return err(res, 403, 'EMAIL_LINK_REQUIRED', 'Connect an email to your account before claiming this task');
     const isMilestone = t.actionType === 'watch_episodes' || t.actionType === 'collect_series';
     if (isMilestone && taskProgress(user.id, t) < t.target) return ok(res, { success: false, coins: 0 });
     tx(() => {

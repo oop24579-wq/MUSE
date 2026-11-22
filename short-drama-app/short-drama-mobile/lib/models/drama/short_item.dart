@@ -20,6 +20,7 @@ class ShortItem {
     this.videoUrl,
     this.durationSeconds = 0,
     this.likeCount = 0,
+    this.coinCost = 0,
     this.isFree = true,
     this.isVipOnly = false,
     this.isUnlocked = true,
@@ -35,6 +36,11 @@ class ShortItem {
   final String? videoUrl;
   final int durationSeconds;
   final int likeCount;
+
+  /// Coin price of the underlying episode (episodeJson `coinCost`), shown
+  /// on the locked overlay so a locked short carries its unlock cost
+  /// (SIM-A F2). 0 when the episode has no explicit price set.
+  final int coinCost;
   final bool isFree;
   final bool isVipOnly;
   final bool isUnlocked;
@@ -51,6 +57,7 @@ class ShortItem {
       videoUrl: rewriteMediaUrl(json['videoUrl'] as String?),
       durationSeconds: (json['durationSeconds'] as num?)?.toInt() ?? 0,
       likeCount: (json['likeCount'] as num?)?.toInt() ?? 0,
+      coinCost: (json['coinCost'] as num?)?.toInt() ?? 0,
       isFree: (json['isFree'] as bool?) ?? true,
       isVipOnly: (json['isVipOnly'] as bool?) ?? false,
       isUnlocked: (json['isUnlocked'] as bool?) ?? true,

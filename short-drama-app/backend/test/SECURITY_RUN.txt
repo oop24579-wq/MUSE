@@ -1,4 +1,4 @@
-Probe server on http://127.0.0.1:33179 (temp DB /tmp/dramanow-sec-tK6L9K/app.db)
+Probe server on http://127.0.0.1:42143 (temp DB /tmp/dramanow-sec-J3sW1x/app.db)
 Catalog: series=series-married-to-the-ceo freeEp=series-married-to-the-ceo-ep1 lockedEp=series-married-to-the-ceo-ep3 vipEp=series-vip-empire-of-desire-ep1
 [BLOCKED] A1 JWT alg=none forgery — rejected 401
 [BLOCKED] A2 JWT wrong-secret forgery — rejected 401
@@ -15,7 +15,7 @@ Catalog: series=series-married-to-the-ceo freeEp=series-married-to-the-ceo-ep1 l
 [BLOCKED] I4 unlock replay double-charge — first cost 30, second free, balance stable
 [BLOCKED] I5 watch-history userId spoofing — victim history untouched
 [BLOCKED] E1 check-in parallel race (20x) — exactly 1 payout of 10; balance consistent
-[BLOCKED] E2 wheel parallel race (12x) — 6 spins ok, balance 19 == 30 + won 49 - 20*3 paid
+[BLOCKED] E2 wheel parallel race (12x) — 12 spins ok, balance 25 == 30 + won 175 - 20*9 paid
 [BLOCKED] E3 chest parallel race (10x) — exactly 1 pays 15, rest 409
 [BLOCKED] E4 mission parallel race (10x) — exactly 1 pays 20
 [BLOCKED] E5 watch-time parallel race (10x) — total paid exactly 10 across all responses
@@ -50,7 +50,7 @@ Catalog: series=series-married-to-the-ceo freeEp=series-married-to-the-ceo-ep1 l
 [BLOCKED] C5 caption job flooding (30x same episode) — all 30 calls returned the same deduped jobId
 [BLOCKED] C6 caption target-language flooding (60 langs) — generate status=400, tracks=0
 [BLOCKED] C7 VTT cue injection via title/description — no raw <script>; --> only in well-formed timing lines
-[ACCEPTED-RISK] RL1 mass guest account creation (100 in a burst) — 100/100 created in 136ms — NO rate limit; Sybil enabler for referral farming. Recommend Firebase App Check + reverse-proxy rate limiting in production; a server-side limiter was NOT added (would break the 57-test suite + shared-IP app traffic)
+[ACCEPTED-RISK] RL1 mass guest account creation (100 in a burst) — 100/100 created in 153ms — NO rate limit; Sybil enabler for referral farming. Recommend Firebase App Check + reverse-proxy rate limiting in production; a server-side limiter was NOT added (would break the 57-test suite + shared-IP app traffic)
 [BLOCKED] L1 server fingerprint headers — no Server/X-Powered-By headers
 [BLOCKED] L2 /config secret leakage — no secret-ish keys in public config
 [INFO] L3 error-response detail leakage (500 path) — status=400 body={"error":{"code":"BAD_PATH","message":"Malformed URL path"}}
