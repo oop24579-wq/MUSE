@@ -481,3 +481,147 @@ chain is a legal/product call.
   forms, and the real support email + jurisdiction in the legal texts.
 - Product decisions on the GAP-OPEN items above (purchase-history backend,
   downloads, maintenance screen, consent-chain activation).
+
+## Round 4 (2026-11-22) — the five remaining code gaps, built; downloads removed
+
+The user made the product decisions the Round 3 list was waiting on:
+build all five code gaps, and — explicitly — **no offline downloads**
+(the toast-only Download action is removed, not built). Zero cost, code
+only: no real keys, no content, no APK build, no GitHub push (packaging
+is a separate step). All six WIRING_MATRIX_V2.md rows are updated; no
+GAP-OPEN rows remain.
+
+### 1. Purchase history backend (orders + RevenueCat webhook)
+- New `orders` table (`db.js`): id, userId, provider
+  ('revenuecat'|'manual'), productId, kind ('vip'|'coins'), amountCents,
+  currency, status, revenueCatTransactionId (UNIQUE), createdAt. Added to
+  USER_TABLES (account deletion/relink hygiene).
+- `POST /webhooks/revenuecat` (routes.js, exempt from the maintenance
+  gate): RevenueCat-shaped events create orders AND apply entitlements
+  through the single shared path `recordOrder`/`applyOrderEntitlement` —
+  VIP sets `users.isPro` + `subscriptionExpirationDate` (event
+  `expiration_at_ms` when present, else +30d); coins go through
+  `grantCoins(..., 'purchase', orderId)` with the amount parsed from the
+  product id (`coins_500`). No duplicate economy logic. EXPIRATION
+  records an 'expired' order and lapses VIP; CANCELLATION records only
+  (access runs to expiry). Unknown user / missing product → 200
+  `applied:false` (RevenueCat must not retry-storm). Transaction-id
+  idempotency: a redelivery returns `duplicate:true` and grants nothing
+  twice.
+- Signature gate: with `REVENUECAT_WEBHOOK_SECRET` set, the caller must
+  present it as `Authorization: Bearer <secret>` (RevenueCat's scheme)
+  or as hex HMAC-SHA256 of the raw body in `x-webhook-signature`
+  (timing-safe compares; server.js now preserves `req.rawBody`). With
+  the secret UNSET the endpoint accepts only in dev auth mode
+  (AUTH_DEV_MODE=1 / FIREBASE_AUTH_DEV=1); otherwise 503
+  WEBHOOK_NOT_CONFIGURED — production can never run it open by accident.
+- `GET /user/orders`: caller-only, newest-first, limit/offset paged,
+  `{orders, total}` with `orderJson` emitting exactly the shape
+  PurchaseHistoryScreen parses (paymentProvider; subscriptionPlanId for
+  VIP / coinPackageId for coins — `type` deliberately omitted because
+  the screen's planId fallback chain would shadow coinPackageId).
+- `POST /admin/orders` (+ GET list): manual support orders through the
+  same recordOrder path, provider 'manual', X-Admin-Token enforced.
+- Client: 'Purchase history' row added to the Account hub
+  (`profile_content.dart`) — the screen is no longer orphaned.
+
+### 2. Maintenance-mode screen
+- New `MaintenanceScreen` (branded; message from /config
+  `maintenanceMessage` ← new settings key `maintenance_message`,
+  admin-editable, ≤200 chars; default text otherwise). Retry re-fetches
+  /config (the exempt endpoint); on clear it exits — pop when pushed,
+  restart-from-splash when root — and clears the ApiClient latch.
+- Routing, single global handling, no loops: splash checks
+  `AppConfigService.maintenanceMode` before any other routing; mid-session,
+  ApiClient's `_fromDio` funnel invokes a latched `onMaintenance` hook on
+  503 MAINTENANCE (set in bootstrap to push '/maintenance' via the new
+  `appNavigatorKey`). The latch fires once per maintenance episode.
+- Widget tests: renders with Retry; retry-still-down stays + explains;
+  retry-cleared proceeds.
+
+### 3. Real Shorts feed
+- Backend `GET /shorts` (public, optional auth): one item per episode —
+  episodeJson (so `isUnlocked` mirrors the playback gate exactly) plus
+  seriesTitle, posterUrl, likeCount, videoUrl (stored media ref).
+  Ordered by series rankScore → episode viewCount → id, with an opaque
+  base64 offset cursor (`{items, nextCursor}`). Behind
+  settings.shorts_enabled (default ON; /config features.shorts; off →
+  empty feed).
+- Client: `ShortsContent` is now a stateful vertical PageView
+  (`ShortItem`/`parseShortsPage` model + `DramaService.fetchShorts`).
+  Each page owns a VideoPlayerController (lazy on activation, looping,
+  disposed with the page), resolving its stream through the same
+  entitlement-checked playback endpoint as the full player; locked
+  episodes render poster + lock and never fetch a stream. Tap =
+  play/pause, like button → POST /series/:id/like (optimistic, server
+  count wins), mute toggle, "Watch full episode" → full player at that
+  episode. Page changes pause; MainTabs passes `isTabActive` so tab
+  switches pause too. Flag off → 'Shorts are unavailable right now'.
+
+### 4. Personalized "For You" recommendations
+- `forYouSeries(user, limit)` in routes.js: genre affinity from
+  episode_progress (progress + completed weighting), watch_history, and
+  user_series favorites/follows/likes; ranking = affinity DESC, then
+  rankScore, then viewCount. Series the user completed (every episode
+  has a completed progress row) are excluded. No signals — or
+  guest/anonymous — falls back to the current trending order.
+- GET /home fills the `for_you` section with it: the seeded `sec-foryou`
+  row (seed.js, items intentionally empty) gets computed items; catalogs
+  seeded earlier get a synthetic section spliced after the hero, so the
+  section always arrives. Client: `SectionType.forYou('for_you')` added
+  + explicit case in `discover_content._section` → standard carousel.
+
+### 5. Consent chain activation
+- Splash gate (first launch ONLY): `ConsentGate.shouldShowChain`
+  (pure, matrix-tested) = !onboardingCompleted && !hasConsentRecord &&
+  !hasSession → GettingStarted → PrivacyConsent → (PrivacySettings via
+  Customize) → session-aware exit to '/login'. Returning users skip it
+  entirely; the variant onboarding flow still serves launches that
+  already hold a record or a session.
+- Working legal links: GettingStarted's Terms/Privacy spans now carry
+  TapGestureRecognizers opening the round-3 legal screens (disposed
+  with the State); the dead "Privacy Policy" GestureDetectors in
+  PrivacyConsent and PrivacySettings (empty onTap) open
+  LegalRoutes.privacy.
+- Consent record: every `OnboardingService.savePrivacyPreferences`
+  (the store acceptAllPrivacy/refuse/granular all funnel through)
+  stamps version + UTC timestamp + choices (`ConsentRecord`). Sync:
+  new backend allow-list field `consent` on PATCH /auth/me (strictly
+  validated, stored as users.consentJson, echoed in userJson) and
+  `ConsentSyncService.syncIfPossible()` fired from
+  AuthService.exchangeFirebaseToken — the funnel every sign-in/restore
+  passes through; best-effort, local record stays authoritative.
+- Widget test drives the real chain: GettingStarted renders → Terms
+  span tap opens the legal route → Get Started → PrivacyConsent →
+  Accept All → '/login' (session-less env) + record persisted.
+
+### 6. Downloads — RESOLVED-BY-REMOVAL
+- The Download `_action` in `series_detail_screen.dart` (toast-only
+  dead end) is deleted, per the user's explicit decision against
+  offline downloads. No download/offline code exists in the app.
+- Flagged, not silently rewritten: paywall help-dialog copy
+  (`paywallHelpFeature4` = "Download episodes for offline viewing",
+  music-template residue across 13 l10n files) still mentions
+  downloads. It is marketing copy, not a control; a copy pass should
+  decide its replacement text.
+
+### Verification (Round 4)
+- Backend: suites 1–5 unchanged-green (57+36+22+8+11; suite 1 case 5's
+  section-type enumeration gained 'for_you') + new suite 6
+  (`test/run-tests-6.mjs`, cases 501–512: webhook VIP/coins/idempotency/
+  signature/expiration, orders isolation+paging, admin manual orders,
+  /shorts shape+pagination+flag, For You affinity/fallback/exclusion,
+  consent PATCH, /config) = **146/146**.
+- Security probes re-run (webhook/auth-adjacent changes): **54 probes,
+  0 CONFIRMED** (49 BLOCKED, 2 ACCEPTED-RISK, 3 INFO — unchanged profile).
+- Flutter: analyze **0 errors**; tests **84/84** (70 prior + 14 new in
+  `test/round4_test.dart`: ConsentGate matrix, consent-record lifecycle,
+  ShortItem/parseShortsPage mapping, SectionType.forYou, MaintenanceScreen
+  ×3, ShortFeedCard, full consent-chain navigation).
+
+### Still needs the user's real accounts/keys (Round 4 delta)
+- `REVENUECAT_WEBHOOK_SECRET` in the backend env + the webhook URL
+  configured in the RevenueCat dashboard (until then the webhook runs
+  dev-mode-only, by design).
+- Everything from the Round 3 delta list (Firebase project, store
+  consoles, legal placeholders) is unchanged.

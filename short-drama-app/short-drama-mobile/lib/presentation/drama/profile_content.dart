@@ -15,6 +15,7 @@ import '../../widgets/top_toast.dart';
 import '../account/account_helpers.dart';
 import '../account/coin_history_screen.dart';
 import '../account/edit_profile_screen.dart';
+import '../purchase_history/purchase_history_screen.dart';
 import '../app_settings/widgets/email_auth_bottom_sheet.dart';
 import '../app_settings/widgets/sign_in_options_bottom_sheet.dart';
 import 'widgets/coin_balance_header.dart';
@@ -308,6 +309,15 @@ class _ProfileContentState extends ConsumerState<ProfileContent> {
                   'Subscriptions are managed in the App Store / Google Play');
             }
             Navigator.pushNamed(context, '/pricing');
+          }),
+          // Round 4: PurchaseHistoryScreen was orphaned (no caller) while
+          // its endpoint was missing; both now exist — GET /user/orders.
+          _MenuItem(Icons.receipt_long_outlined, 'Purchase history', () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const PurchaseHistoryScreen()),
+            );
           }),
           if (isGuest)
             _MenuItem(Icons.link_rounded, 'Link account', _showLinkAccountSheet),

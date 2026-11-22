@@ -1453,7 +1453,7 @@ abstract class AppLocalizations {
   /// No description provided for @paywallHelpFeature4.
   ///
   /// In en, this message translates to:
-  /// **'Download episodes for offline viewing'**
+  /// **'Ad-free streaming in HD quality'**
   String get paywallHelpFeature4;
 
   /// Dismiss button for Pro help dialog

@@ -1,8 +1,10 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sizer/sizer.dart';
 import 'dart:math' as math;
 
+import '../legal/legal_screens.dart';
 import 'privacy_consent_screen.dart';
 
 /// Getting Started Screen - First screen shown after splash
@@ -20,6 +22,17 @@ class _GettingStartedScreenState extends State<GettingStartedScreen>
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+
+  // Round 4: the legal spans get REAL tap recognizers (they previously
+  // rendered underlined but dead). Owned here so they can be disposed.
+  late final TapGestureRecognizer _termsRecognizer = TapGestureRecognizer()
+    ..onTap = () {
+      if (mounted) Navigator.of(context).pushNamed(LegalRoutes.terms);
+    };
+  late final TapGestureRecognizer _privacyRecognizer = TapGestureRecognizer()
+    ..onTap = () {
+      if (mounted) Navigator.of(context).pushNamed(LegalRoutes.privacy);
+    };
 
   @override
   void initState() {
@@ -54,6 +67,8 @@ class _GettingStartedScreenState extends State<GettingStartedScreen>
 
   @override
   void dispose() {
+    _termsRecognizer.dispose();
+    _privacyRecognizer.dispose();
     _floatController.dispose();
     _fadeController.dispose();
     super.dispose();
@@ -463,6 +478,7 @@ class _GettingStartedScreenState extends State<GettingStartedScreen>
           const TextSpan(text: 'By continuing, you accept our '),
           TextSpan(
             text: 'Terms of Service',
+            recognizer: _termsRecognizer,
             style: GoogleFonts.inter(
               fontSize: 12,
               color: const Color(0xFF1A1A1A),
@@ -473,6 +489,7 @@ class _GettingStartedScreenState extends State<GettingStartedScreen>
           const TextSpan(text: ' and acknowledge\nreceipt of our '),
           TextSpan(
             text: 'Privacy Policy',
+            recognizer: _privacyRecognizer,
             style: GoogleFonts.inter(
               fontSize: 12,
               color: const Color(0xFF1A1A1A),

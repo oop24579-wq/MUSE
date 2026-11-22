@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
+import 'package:drama_now/core/app_navigator.dart';
+import 'package:drama_now/services/api/api_client.dart';
 import 'package:drama_now/services/app_config_service.dart';
 import 'package:drama_now/services/auth/auth_service.dart';
 import 'package:drama_now/services/firebase/firebase_service.dart';
@@ -19,6 +21,13 @@ class AppBootstrap {
   static Future<void> ensureInitialized() => _future ??= _run();
 
   static Future<void> _run() async {
+    // Round 4: any 503 MAINTENANCE response anywhere in the app routes to
+    // the MaintenanceScreen (single global handling in ApiClient; the
+    // latch there prevents stacks/loops).
+    ApiClient.instance.onMaintenance = () {
+      appNavigatorKey.currentState?.pushNamed('/maintenance');
+    };
+
     unawaited(_clearCacheQuietly());
 
     try {

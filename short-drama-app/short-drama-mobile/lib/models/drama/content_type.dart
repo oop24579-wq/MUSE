@@ -26,6 +26,7 @@ enum SectionType {
   verticalGrid('vertical_grid'),
   hotGrid('hot_grid'),
   continueWatching('continue_watching'),
+  forYou('for_you'),
   unknown('unknown');
 
   const SectionType(this.value);

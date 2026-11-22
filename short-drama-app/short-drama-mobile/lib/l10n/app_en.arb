@@ -983,7 +983,7 @@
   "paywallHelpFeature1": "Watch every episode, no coins needed",
   "paywallHelpFeature2": "Exclusive VIP-only series and premieres",
   "paywallHelpFeature3": "Ad-free, HD streaming",
-  "paywallHelpFeature4": "Download episodes for offline viewing",
+  "paywallHelpFeature4": "Ad-free streaming in HD quality",
   "paywallHelpGotIt": "Got it",
   "@paywallHelpGotIt": {
     "description": "Dismiss button for Pro help dialog"

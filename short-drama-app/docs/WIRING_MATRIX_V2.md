@@ -12,6 +12,12 @@
 - **Verdict legend:** `WIRED` = end-to-end pipe verified · `WIRED-WITH-NOTE` = works, with a
   caveat worth knowing · `GAP-FIXED` = was broken, fixed in this pass (file named) ·
   `GAP-OPEN` = broken/missing, not fixed (reason named; outside territory or not code-only).
+- **Round 4 addendum (2026-11-22):** all six remaining GAP-OPEN items are closed — purchase
+  history backend, maintenance screen, real Shorts feed, personalized "For You", and the
+  consent chain are built (rows marked "round 4"), and the Download action is
+  RESOLVED-BY-REMOVAL per the user's explicit no-offline-downloads decision. No GAP-OPEN
+  rows remain in this matrix. Verification: backend 146/146 (suites 1–6), security probes
+  54 with 0 CONFIRMED, Flutter 84/84, analyze 0 errors. See CODE_READINESS.md "Round 4".
 
 Backend handlers are in `backend/src/routes.js` unless another file is named. Client service is
 `DramaService` (`lib/services/drama/drama_service.dart`) unless named otherwise.
@@ -39,6 +45,7 @@ Backend handlers are in `backend/src/routes.js` unless another file is named. Cl
 |---|---|---|---|---|
 | Search bar (fake field) | tap → `DramaNav.openSearch` | — navigation | — | WIRED |
 | Filter tab: Popular | `discoverFilterProvider` → `homeFeedProvider` | GET /home?locale= | routes.js → home_sections + home_section_items (locale filter + en fallback) | WIRED |
+| "For You" home section (round 4) | rendered by `discover_content._section` — new `SectionType.forYou('for_you')` case → standard carousel shelf | GET /home | routes.js `forYouSeries()` — per-user genre affinity from episode_progress + watch_history + user_series (favorite/follow/like), ranked affinity → rankScore → viewCount, completed series excluded; guest/no-signal → trending order. Seeded `sec-foryou` row or a synthetic section spliced after the hero | WIRED — backend suite 6 case 510 (affinity first, guest fallback, completed excluded); client parse covered by SectionType test |
 | Filter tab: Categories | `discoverFilterProvider` → `dramaGenresProvider` + GenreGrid | GET /categories | routes.js → genres | WIRED |
 | Filter tab: Latest | `discoverListProvider` | GET /discover?filter=latest | routes.js → series ORDER BY releaseYear/createdAt | WIRED |
 | Filter tab: Ranking | `discoverListProvider` | GET /discover?filter=ranking | routes.js → series ORDER BY rankScore (rankDelta in serializer) | WIRED |
@@ -76,7 +83,7 @@ Backend handlers are in `backend/src/routes.js` unless another file is named. Cl
 | Like action | optimistic count → `toggleLike`, server count wins, failure reverts | POST /series/:id/like | routes.js → user_series.liked, series.likeCount, user_daily_events | WIRED |
 | **Follow action** | **NEW button** (bell icon, Following state) → optimistic `_followOverride` → `toggleFollow`, add-path failure rolls back | POST /series/:id/follow | routes.js → user_series.following; state read back via GET /series/:id `isFollowing` | **GAP-FIXED** — `series_detail_screen.dart`: service method, backend handler and `isFollowing` parsing all existed but no control ever called them (v1 row 42's claimed UI entry did not exist) |
 | Share action | `shareSeries` (fire-and-forget mission credit) + share_plus sheet | POST /content/share | routes.js → share_events, user_daily_events (1/series/day) | WIRED |
-| Download action | toast "Downloads are a VIP feature" only | — none | — no download/offline pipeline exists anywhere | GAP-OPEN — dead-end control: no backend endpoint, no local download/cache implementation; faking either is not code-only. Needs a product decision (real offline downloads vs remove the button vs route to paywall) |
+| Download action | **REMOVED** (round 4, user decision) | — | — | RESOLVED-BY-REMOVAL — the user explicitly does not want offline downloads; the toast-only `_action` (download icon + "Downloads are a VIP feature") was deleted from `series_detail_screen.dart` and no download/offline code exists anywhere. Leftover note: paywall help-dialog copy (`paywallHelpFeature4`, "Download episodes for offline viewing", music-template residue in 13 l10n files) still mentions downloads — flagged for a copy pass, not silently rewritten |
 | Synopsis expand/collapse | local `setState` | — local | — | WIRED |
 | Season chips | local filter of episode grid | — local (episodes already fetched) | — | WIRED |
 | Episode tile tap | `openPlayer` at tapped index (lock state from `episodeJson.isUnlocked`, mirrors playback gate) | GET /series/:id/episodes | routes.js → episodes, episode_unlocks, users.isPro | WIRED |
@@ -127,8 +134,13 @@ Backend handlers are in `backend/src/routes.js` unless another file is named. Cl
 
 | Control | Handler → Service | Endpoint | Backend handler → data | Verdict |
 |---|---|---|---|---|
-| Poster card tap | `openSeries` | (data via `forYouProvider`) | GET /for-you → series | WIRED-WITH-NOTE — Shorts is a poster grid fed by /for-you, not a vertical video pager; tapping opens series detail (no inline playback exists to wire) |
-| Pull-to-refresh | `ref.refresh(forYouProvider)` | GET /for-you | as above | WIRED |
+| Vertical pager (round 4) | `ShortsContent` (stateful) → `DramaService.fetchShorts` → PageView.builder (vertical), cursor pagination (loads more 3 pages from the end) | GET /shorts?limit=&cursor= | routes.js → episodes JOIN series (rankScore, viewCount order), episodeJson + seriesTitle/posterUrl/likeCount/videoUrl; opaque offset cursor | WIRED — replaces the old /for-you poster grid (the grid rows that stood here before round 4). Backend suite 6 case 509 (shape + full 80-episode cursor walk); `ShortItem`/`parseShortsPage` mapping unit-tested |
+| Clip playback | per-page `VideoPlayerController` (lazy on activation, looping, disposed with the page); stream resolved via `getEpisodeVideoUrl` | GET /episodes/:id/playback | routes.js playback gate (same entitlement as the full player) | WIRED — locked episodes (`isUnlocked=false`) never fetch a stream; poster + lock state renders instead. Tap toggles play/pause; page change and tab switch (`MainTabs` passes `isTabActive`) pause |
+| Like button | optimistic count → `toggleLike`, server count wins, failure reverts | POST /series/:id/like | routes.js → user_series.liked, series.likeCount | WIRED (series-level like, same endpoint as Series detail) |
+| Mute toggle | local state → controller `setVolume(0/1)` | — local | — | WIRED |
+| "Watch full episode" button | `fetchSeriesDetail` → `DramaNav.openPlayer` at the tapped episode's index | GET /series/:id (+ /episodes) | routes.js series detail | WIRED |
+| Feature flag | `AppConfigService.shortsEnabled` gates the tab body ('Shorts are unavailable right now' when off) | GET /config features.shorts | settings.shorts_enabled (default ON); backend also returns an empty feed when off | WIRED |
+| Empty state + Retry | `_loadFirst` re-fetch | GET /shorts | as above | WIRED — the old pull-to-refresh is gone with the grid; Retry covers the failure case |
 
 ## My List / Library
 
@@ -191,8 +203,8 @@ opt-in happens inside completion via `OneSignalService.optInAfterOnboarding()`.
 | PrivacySettings: Confirm | savePrivacyPreferences + setOnboardingCompleted → session-aware exit to '/main-tabs' or '/login' | — local | — | GAP-FIXED — `privacy_settings_screen.dart`: exit now through `navigateOnboardingExit` |
 | PrivacySettings: Accept All / Deny non-essential | acceptAllPrivacy / refuseNonEssentialPrivacy + setOnboardingCompleted → session-aware exit | — local | — | GAP-FIXED — `privacy_settings_screen.dart` (same fix, all three completion methods) |
 | PrivacySettings: Close (×) | `Navigator.pop` back to consent screen | — local | — | WIRED |
-| Consent chain reachability | GettingStartedScreen, PrivacyConsentScreen and PrivacySettingsScreen have **no caller** in the active flow; variants complete via `acceptAllPrivacy()` directly | — | — | GAP-OPEN — the explicit-consent chain is orphaned code (its routes are now fixed, above), and the active flow implicitly accept-alls. Whether first-run must pass through the consent screens is a legal/product decision — Round 3 (Legal) |
-| GettingStarted legal text (Terms / Privacy spans) | RichText spans render underlined but have **no tap recognizers** | — | — | GAP-OPEN — dead legal links in an orphaned screen; belongs to Round 3 (Legal) with the consent-chain decision |
+| Consent chain reachability | **Splash `_navigateToNextScreen`** routes FIRST launch only (no onboarding completion + no consent record + no session — pure `ConsentGate.shouldShowChain`, unit-tested) → `GettingStartedScreen` → PrivacyConsent → (PrivacySettings via Customize) → session-aware exit to '/login' | — local navigation + SharedPreferences consent record | — | **GAP-FIXED (round 4)** — `splash_screen.dart`, `services/consent_gate.dart`: the chain is the first-launch path; every completion stamps a consent record (version + timestamp + choices via `OnboardingService.savePrivacyPreferences`), so returning users skip it entirely. The variant onboarding flow remains for launches that already hold a record/session. Consent syncs to the account via PATCH /auth/me `consent` (allow-list field) from `ConsentSyncService` on every token exchange |
+| GettingStarted legal text (Terms / Privacy spans) | RichText spans carry **TapGestureRecognizers** → `LegalRoutes.terms` / `LegalRoutes.privacy` (round-3 legal screens); recognizers disposed with the State | — navigation | — | **GAP-FIXED (round 4)** — `getting_started_screen.dart`; the previously dead "Privacy Policy" GestureDetectors in `privacy_consent_screen.dart` and `privacy_settings_screen.dart` (empty onTap) now open `LegalRoutes.privacy` too. Widget-tested end-to-end (span tap → terms marker route) |
 
 ## Pricing / paywalls
 
@@ -220,7 +232,8 @@ backend purchase endpoint (v1 row 69); `users.isPro` reaches the backend only vi
 
 | Control | Handler → Service | Endpoint | Backend handler → data | Verdict |
 |---|---|---|---|---|
-| Screen load / Retry / pull-to-refresh | `_loadPurchaseHistory` → `ApiClient.get('/user/orders')`, maps orders → SubscriptionModel | GET /user/orders | **does not exist** in routes.js (no orders table/handler) | GAP-OPEN — screen always lands in its error state. Not fixed: the endpoint + data model are backend work (outside this territory), the screen file itself is outside the write territory, and the screen currently has **no caller** anywhere in the app (orphaned). Needs a product decision: build orders backend (RevenueCat-sourced) or delete the screen |
+| Screen load / Retry / pull-to-refresh | `_loadPurchaseHistory` → `ApiClient.get('/user/orders')`, maps orders → SubscriptionModel | GET /user/orders | routes.js → `orders` table (caller-only, newest-first, limit/offset paged); `orderJson` emits exactly the parsed shape (`orders[]`, paymentProvider, subscriptionPlanId/coinPackageId by kind, status 'paid', revenueCatTransactionId, createdAt) | **GAP-FIXED (round 4)** — backend suite 6 cases 501–508; orders are written by POST /webhooks/revenuecat and POST /admin/orders through the single `recordOrder`/`applyOrderEntitlement` path |
+| Account hub row (round 4) | Profile tab → 'Purchase history' `_MenuItem` → push `PurchaseHistoryScreen` | — navigation | — | **GAP-FIXED (round 4)** — `profile_content.dart`: the screen previously had no caller (orphaned) |
 | Row tap (expand/collapse detail) | local `setState` | — local | — | WIRED (local behaviour only; unreachable until the load gap above is resolved) |
 | Back button | `Navigator.pop` | — local | — | WIRED |
 
@@ -279,22 +292,28 @@ settings key in `backend/src/settings.js`.
 | DramaService.fetchSeasons | no UI caller — detail/player derive seasons locally from the episode list | WIRED-WITH-NOTE — dead service method, no user impact; left in place (removal is cosmetic) |
 | DramaService.toggleFollow | was orphaned; now wired (above) | GAP-FIXED |
 | All /admin/* endpoints | admin dashboard only | WIRED — intentional admin surface (see Dashboard) |
-| GET /user/orders | PurchaseHistoryScreen calls it but it **does not exist** | GAP-OPEN — see Purchase history (reverse orphan: caller without a handler) |
-| Maintenance mode (settings.maintenance_mode) | dashboard sets it; backend gates all app endpoints with 503; `AppConfigService.maintenanceMode` parses it but **no screen renders it** | GAP-OPEN — during maintenance the app fails empty with no explanation screen. Not fixed here: the fix belongs in splash/bootstrap routing, which is outside this pass's write territory |
+| GET /user/orders | PurchaseHistoryScreen (round 4: also reachable from the Account hub) | **GAP-FIXED (round 4)** — see Purchase history |
+| POST /webhooks/revenuecat | RevenueCat servers (round 4) | WIRED — creates orders + applies entitlements via `recordOrder` (VIP: isPro + expiry; coins: grantCoins 'purchase'). Auth: REVENUECAT_WEBHOOK_SECRET as Bearer or HMAC-SHA256 `x-webhook-signature` over the raw body; secret unset → dev-mode only, else 503 WEBHOOK_NOT_CONFIGURED. Transaction-id idempotency (UNIQUE) makes retries grant exactly once; EXPIRATION lapses VIP, CANCELLATION records only. Exempt from the maintenance gate. Suite 6 cases 501–505, 508 |
+| POST /admin/orders (+ GET list) | admin/support (round 4) | WIRED — manual order through the same `recordOrder` path (provider 'manual'); X-Admin-Token enforced. Suite 6 case 507 |
+| GET /shorts | Shorts tab (round 4) | WIRED — see Shorts section. Suite 6 case 509 |
+| Maintenance mode (settings.maintenance_mode) | dashboard sets it; backend gates all app endpoints with 503 (except /config + the webhook) | **GAP-FIXED (round 4)** — `MaintenanceScreen` (branded, message from /config `maintenanceMessage` ← settings.maintenance_message) is routed from splash when the flag is on at launch AND pushed globally by ApiClient's latched 503-MAINTENANCE hook (`ApiClient.onMaintenance`, set in bootstrap, via `appNavigatorKey`); Retry re-fetches /config and exits (pop or restart-from-splash) only when the flag cleared, clearing the latch — no loops. Widget-tested (render, still-down retry, cleared retry proceeds) |
 
 ## Config & settings cross-check (both directions)
 
 - Every key in GET /config (`maintenanceMode`, `premiumPlaybackMode`, `paywallDailyCap`,
-  `features.*` ×22, `player.*` ×3, `visual.*` ×4, `economy.*` ×2) maps to a settings key in
+  `features.*` ×23, `player.*` ×3, `visual.*` ×4, `economy.*` ×2) maps to a settings key in
   `settings.js` and is parsed by `AppConfigService` under the identical name — verified
-  field-by-field. `features.ads` is parsed but has no behavioural consumer (noted above);
-  `economy.wheelFreeSpinsPerDay` is parsed and exposed but the wheel UI uses the value from
-  GET /rewards state instead (same source setting, no drift risk).
+  field-by-field. Round 4 added `features.shorts` (← settings.shorts_enabled) and the
+  top-level `maintenanceMessage` (← settings.maintenance_message, parsed as
+  `AppConfigService.maintenanceMessage`). `features.ads` is parsed but has no behavioural
+  consumer (noted above); `economy.wheelFreeSpinsPerDay` is parsed and exposed but the
+  wheel UI uses the value from GET /rewards state instead (same source setting, no drift
+  risk).
 - Every client-called endpoint exists in routes.js with a matching response envelope
-  (`{data: …}` unwrapped by ApiClient; raw VTT is the single documented exception) — the only
-  exception found is GET /user/orders (GAP-OPEN above). No change to `api_client.dart` was
-  needed: its 401 → POST /auth/refresh → Firebase re-exchange flow matches the backend
-  envelope and token shape, so the flagged-only-if-genuine condition was not met.
+  (`{data: …}` unwrapped by ApiClient; raw VTT is the single documented exception) — round 4
+  closed the last exception (GET /user/orders now exists). `api_client.dart` gained exactly
+  one behaviour in round 4: the latched global 503-MAINTENANCE hook (see the maintenance row
+  above); its 401 → POST /auth/refresh → Firebase re-exchange flow is unchanged.
 
 ## Auth & session (Round 3)
 

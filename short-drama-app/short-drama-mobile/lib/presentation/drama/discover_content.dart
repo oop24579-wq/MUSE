@@ -110,7 +110,10 @@ class DiscoverContent extends ConsumerWidget {
       case SectionType.newReleases:
       case SectionType.seriesCarousel:
       case SectionType.continueWatching:
+      case SectionType.forYou:
       case SectionType.unknown:
+        // for_you (round 4): the personalized section computed by the
+        // backend in GET /home renders with the standard carousel shelf.
         return _carousel(context, section);
     }
   }

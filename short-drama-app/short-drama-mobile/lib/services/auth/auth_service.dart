@@ -11,6 +11,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:drama_now/models/user/user_model.dart';
 import 'package:drama_now/services/api/api_client.dart';
 import 'package:drama_now/services/api/token_store.dart';
+import 'package:drama_now/services/consent_sync_service.dart';
 import 'package:drama_now/services/device_id_service.dart';
 import 'package:drama_now/services/guest_profile_store.dart';
 import 'package:drama_now/services/marketing/marketing_analytics_service.dart';
@@ -185,6 +186,10 @@ class AuthService {
       } catch (e) {
         debugPrint('⚠️ RevenueCat login failed: $e');
       }
+
+      // Round 4: sync the on-device consent record (if one exists) to the
+      // account — best-effort, never blocks the exchange.
+      unawaited(ConsentSyncService.syncIfPossible());
 
       unawaited(OneSignalService.syncUserSession(
         userId: webUserId,

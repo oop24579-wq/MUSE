@@ -39,7 +39,10 @@ class _MainTabsState extends State<MainTabs>
 
   List<Widget> get _tabs => [
         const DiscoverContent(),
-        const ShortsContent(),
+        // Round 4: the Shorts feed plays video — it needs to know when its
+        // tab is not the visible one so clips pause (IndexedStack keeps
+        // every tab mounted).
+        ShortsContent(isTabActive: _currentIndex == 1),
         const RewardsContent(),
         const MyListContent(),
         ProfileContent(

@@ -14,6 +14,7 @@ class AppConfigService {
   Map<String, dynamic> _visual = const {};
   Map<String, dynamic> _economy = const {};
   bool _maintenanceMode = false;
+  String? _maintenanceMessage;
   String _premiumPlaybackMode = '';
   bool _loaded = false;
 
@@ -23,6 +24,8 @@ class AppConfigService {
     try {
       final data = await ApiClient.instance.get('/config');
       _maintenanceMode = (data['maintenanceMode'] as bool?) ?? false;
+      final msg = data['maintenanceMessage'];
+      _maintenanceMessage = (msg is String && msg.isNotEmpty) ? msg : null;
       _premiumPlaybackMode =
           (data['premiumPlaybackMode'] as String?) ?? '';
       final features = data['features'];
@@ -50,6 +53,13 @@ class AppConfigService {
 
   bool get captionsEnabled => feature('captions');
   bool get maintenanceMode => _maintenanceMode;
+
+  /// Operator-set banner text for the MaintenanceScreen (round 4), from
+  /// GET /config `maintenanceMessage`; null when unset.
+  String? get maintenanceMessage => _maintenanceMessage;
+
+  /// Shorts vertical feed flag (round 4), GET /config `features.shorts`.
+  bool get shortsEnabled => feature('shorts');
 
   /// Launch-paywall frequency cap (`paywall_daily_cap` in GET /config):
   /// defaults to ON when the config has not loaded or the request failed.

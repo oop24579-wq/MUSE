@@ -78,6 +78,16 @@ CREATE TABLE IF NOT EXISTS episode_unlocks(
 CREATE TABLE IF NOT EXISTS coin_transactions(
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, amount INTEGER NOT NULL, type TEXT NOT NULL,
   refId TEXT, balanceAfter INTEGER, createdAt TEXT NOT NULL);
+-- Round 4: purchase history. One row per store/support order; written by the
+-- RevenueCat webhook (provider 'revenuecat') or the admin manual-order
+-- endpoint (provider 'manual'). revenueCatTransactionId is UNIQUE so webhook
+-- retries can never double-apply an entitlement (NULLs stay distinct).
+CREATE TABLE IF NOT EXISTS orders(
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, provider TEXT NOT NULL DEFAULT 'revenuecat',
+  productId TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'vip',
+  amountCents INTEGER DEFAULT 0, currency TEXT DEFAULT 'USD',
+  status TEXT NOT NULL DEFAULT 'paid', revenueCatTransactionId TEXT UNIQUE,
+  createdAt TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS checkins(
   userId TEXT NOT NULL, claimDate TEXT NOT NULL, dayIndex INTEGER NOT NULL, coins INTEGER NOT NULL,
   createdAt TEXT NOT NULL, PRIMARY KEY(userId, claimDate));
@@ -143,6 +153,7 @@ try { db.exec('ALTER TABLE users ADD COLUMN xp INTEGER DEFAULT 0'); } catch { /*
 try { db.exec('ALTER TABLE users ADD COLUMN referralCode TEXT'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE users ADD COLUMN referredBy TEXT'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE users ADD COLUMN notificationsEnabled INTEGER DEFAULT 1'); } catch { /* already present */ }
+try { db.exec('ALTER TABLE users ADD COLUMN consentJson TEXT'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE watch_time_daily ADD COLUMN paidCoins INTEGER DEFAULT 0'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE caption_jobs ADD COLUMN targets TEXT'); } catch { /* already present */ }
 // Generate referral codes for users that do not have one yet:

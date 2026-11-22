@@ -11,8 +11,11 @@ import '../../services/marketing/marketing_analytics_service.dart';
 import '../../services/marketing/marketing_event_names.dart' show PaywallTrigger;
 import '../../services/marketing/marketing_funnel_events.dart';
 import '../../services/firebase/remote_config_service.dart';
+import '../../services/app_config_service.dart';
 import '../../services/auth/auth_service.dart';
+import '../../services/consent_gate.dart';
 import '../../services/onboarding_service.dart';
+import '../onboarding/getting_started_screen.dart';
 import '../../services/paywall_frequency.dart';
 import '../../services/paywall_preload_service.dart';
 import '../../services/user_provider.dart';
@@ -201,6 +204,20 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
+    // Round 4 — maintenance gate: /config is exempt from the backend's
+    // maintenance gate precisely so this check can run. Bootstrap loads
+    // the config fire-and-forget, so await a load here when it has not
+    // landed yet. When maintenance is on, the MaintenanceScreen takes
+    // over; its Retry restarts the flow from splash once the flag clears.
+    if (!AppConfigService.instance.isLoaded) {
+      await AppConfigService.instance.load();
+    }
+    if (!mounted) return;
+    if (AppConfigService.instance.maintenanceMode) {
+      Navigator.pushReplacementNamed(context, '/maintenance');
+      return;
+    }
+
     // Check if onboarding is completed
     final isOnboardingCompleted = await OnboardingService.instance.isOnboardingCompleted();
 
@@ -220,6 +237,34 @@ class _SplashScreenState extends State<SplashScreen>
     }
 
     if (!isOnboardingCompleted) {
+      // Round 4 — consent chain gate: on FIRST launch only (no stored
+      // consent record and no session), the explicit chain runs first:
+      // GettingStarted → PrivacyConsent → (PrivacySettings) → Login (the
+      // consent screens exit through navigateOnboardingExit, which lands
+      // session-less users on '/login'). Every completion path stamps a
+      // consent record, so this can never re-fire for the same user;
+      // returning users skip it entirely via the checks below.
+      final hasConsentRecord =
+          await OnboardingService.instance.hasConsentRecord();
+      var hasSession = false;
+      try {
+        hasSession = AuthService.instance.hasStoredSession ||
+            AuthService.instance.currentUser != null;
+      } catch (_) {
+        hasSession = false;
+      }
+      if (!mounted) return;
+      if (ConsentGate.shouldShowChain(
+        onboardingCompleted: isOnboardingCompleted,
+        hasConsentRecord: hasConsentRecord,
+        hasSession: hasSession,
+      )) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const GettingStartedScreen()),
+        );
+        return;
+      }
       // First time — onboarding only; paywall is shown on later app opens.
       // NOTE (login gate): onboarding completion itself navigates straight
       // to '/home' (OnboardingFlowController.completeOnboarding) without

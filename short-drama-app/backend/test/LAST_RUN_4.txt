@@ -1,4 +1,4 @@
-Server booted on http://127.0.0.1:33729 with temp DB /tmp/dramanow-test4-DF46v9/app.db
+Server booted on http://127.0.0.1:40691 with temp DB /tmp/dramanow-test4-3HjFeU/app.db
 PASS 301. S5: per-episode progress returns EVERY watched episode; library/history stays one row per series
 PASS 302. S5: completed is sticky in episode_progress; position follows the latest report
 PASS 303. S5: episode_progress position is clamped to the real episode duration

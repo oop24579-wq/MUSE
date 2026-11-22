@@ -355,11 +355,11 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
           label: 'Share',
           onTap: () => _shareSeries(s),
         ),
-        _action(
-          icon: Icons.download_outlined,
-          label: 'Download',
-          onTap: () => showTopToastInfo(context, 'Downloads are a VIP feature'),
-        ),
+        // Round 4 (user decision): the Download action is REMOVED, not
+        // built — the user explicitly does not want offline downloads, and
+        // the old control was a toast-only dead end ("Downloads are a VIP
+        // feature" with no pipeline behind it). No download/offline code
+        // exists anywhere in the app; do not re-add a placeholder control.
       ],
     );
   }

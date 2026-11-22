@@ -113,6 +113,9 @@ function seedInner() {
   });
   const sections = [
     ['sec-hero', 'featured-hero', 'Featured', 'Top picks for you', 'featured_hero', ['series-married-to-the-ceo', 'series-vip-empire-of-desire', 'series-alpha-fated-mate']],
+    // Round 4: 'for_you' items are computed per user at request time
+    // (routes.js forYouSeries) — the stored item list stays empty on purpose.
+    ['sec-foryou', 'for-you', 'For You', 'Picked from your taste', 'for_you', []],
     ['sec-trending', 'trending-now', 'Trending Now', 'What everyone is watching', 'series_carousel', ['series-married-to-the-ceo', 'series-revenge-of-the-heiress', 'series-my-secret-husband', 'series-the-last-signal']],
     ['sec-ranking', 'top-ranking', 'Top Ranking', 'Ranked by fans', 'ranking_list', ['series-married-to-the-ceo', 'series-vip-empire-of-desire', 'series-revenge-of-the-heiress', 'series-the-last-signal', 'series-my-secret-husband']],
     ['sec-new', 'new-releases', 'New Releases', 'Fresh this week', 'new_releases', ['series-revenge-of-the-heiress', 'series-alpha-fated-mate', 'series-the-last-signal', 'series-reborn-as-the-villainess']],

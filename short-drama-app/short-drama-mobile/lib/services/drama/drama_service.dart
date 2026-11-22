@@ -5,6 +5,7 @@ import 'package:drama_now/services/api/api_exception.dart';
 import '../../core/media_url.dart';
 import '../../models/drama/content_type.dart';
 import '../../models/drama/episode_model.dart';
+import '../../models/drama/short_item.dart';
 import '../../models/drama/genre_model.dart';
 import '../../models/drama/home_section_model.dart';
 import '../../models/drama/notification_model.dart';
@@ -228,6 +229,21 @@ class DramaService {
       return _parseSeriesList(data['series']);
     } catch (_) {
       return [];
+    }
+  }
+
+  /// Round 4: one page of the vertical Shorts feed (GET /shorts, cursor
+  /// pagination). An empty page on any failure — the tab shows its empty
+  /// state instead of an error.
+  Future<ShortsPage> fetchShorts({String? cursor, int limit = 20}) async {
+    try {
+      final data = await _api.get('/shorts', query: {
+        'limit': limit,
+        if (cursor != null) 'cursor': cursor,
+      });
+      return parseShortsPage(data);
+    } catch (_) {
+      return const ShortsPage(items: []);
     }
   }
 

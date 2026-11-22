@@ -765,7 +765,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get paywallHelpFeature3 => 'Ad-free, HD streaming';
 
   @override
-  String get paywallHelpFeature4 => 'Download episodes for offline viewing';
+  String get paywallHelpFeature4 => 'Ad-free streaming in HD quality';
 
   @override
   String get paywallHelpGotIt => 'Got it';

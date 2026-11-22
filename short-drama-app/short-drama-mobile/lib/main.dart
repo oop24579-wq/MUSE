@@ -6,6 +6,7 @@ import 'package:sizer/sizer.dart';
 import 'package:provider/provider.dart';
 
 import 'package:drama_now/core/app_export.dart';
+import 'package:drama_now/core/app_navigator.dart';
 import 'package:drama_now/widgets/custom_error_widget.dart';
 import 'package:drama_now/services/theme_provider.dart';
 import 'package:drama_now/services/user_provider.dart';
@@ -72,6 +73,7 @@ class MyApp extends StatelessWidget {
       return Consumer2<ThemeProvider, LocaleProvider>(
         builder: (context, themeProvider, localeProvider, child) {
           return MaterialApp(
+            navigatorKey: appNavigatorKey,
             title: 'HERO DRAMA',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,

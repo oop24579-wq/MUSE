@@ -1,0 +1,18 @@
+Servers booted: main http://127.0.0.1:34981, secret http://127.0.0.1:33037
+PASS 501. webhook VIP purchase (dev mode, no secret): order recorded in the exact screen shape + VIP entitlement applied
+PASS 502. webhook coins purchase: grantCoins path credits the balance and writes a purchase ledger row
+PASS 503. webhook idempotency: the same transaction id delivered twice grants exactly once
+PASS 504. webhook signature gate (secret set): missing/wrong signature -> 401, HMAC and Bearer both accepted
+PASS 505. webhook unknown user / missing product: 200 with applied:false, nothing recorded, no crash
+PASS 506. GET /user/orders: caller-only isolation, newest-first paging, 401 without a token
+PASS 507. admin manual order: creates + applies VIP via the shared path, provider manual; auth and validation enforced
+PASS 508. webhook EXPIRATION: lapsed subscription records an expired order and isPro falls
+PASS 509. GET /shorts: item shape, cursor pagination covers all 80 episodes without overlap, flag off -> empty
+PASS 510. GET /home For You: genre affinity ranks first, guest gets the trending fallback, completed series excluded
+PASS 511. PATCH /auth/me consent: round-trips through userJson, strict validation, unknown key still BAD_FIELD
+PASS 512. GET /config: features.shorts present (default on) and maintenanceMessage round-trips from settings
+
+===== SUITE 6 SUMMARY =====
+TOTAL: 12  PASSED: 12  FAILED: 0
+ALL PASS
+

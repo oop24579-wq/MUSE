@@ -27,6 +27,9 @@ function readBody(req) {
     req.on('data', (c) => { if (settled) return; data += c; if (data.length > 5e6) fail(413, 'PAYLOAD_TOO_LARGE', 'Request body too large'); });
     req.on('end', () => {
       if (settled) return; settled = true;
+      // The raw body is kept on the request: the RevenueCat webhook verifies
+      // an HMAC over the exact bytes received (routes.js /webhooks/revenuecat).
+      req.rawBody = data;
       if (!data) return resolve({});
       try {
         const parsed = JSON.parse(data);

@@ -61,6 +61,10 @@ const DEFAULTS = {
   // Launch paywall frequency cap (client reads it from GET /config):
   // when true, the app shows the cold-start VIP paywall at most once per 24h.
   paywall_daily_cap: true,
+  // Round 4: Shorts vertical feed (GET /shorts + the Shorts tab) and the
+  // operator-editable maintenance banner text shown on the MaintenanceScreen.
+  shorts_enabled: true,
+  maintenance_message: '',
   // ---- Phase 2: player feature flags ----
   ...Object.fromEntries(PLAYER_FLAGS.map((k) => [k, true])),
   skip_intro_window_seconds: 90,
@@ -83,7 +87,7 @@ const BOOL_KEYS = new Set([
   'maintenance_mode', 'ads_enabled', 'wheel_enabled', 'chests_enabled',
   'watch_time_enabled', 'missions_enabled', 'referrals_enabled',
   'confetti_enabled', 'haptics_enabled', 'captions_enabled', 'captions_auto_generate',
-  'paywall_daily_cap',
+  'paywall_daily_cap', 'shorts_enabled',
   ...PLAYER_FLAGS,
 ]);
 const INT_KEYS = new Set([
@@ -132,6 +136,9 @@ function updateSettings(patch) {
       clean[k] = v;
     } else if (k === 'mt_provider') {
       if (!['demo', 'deepl', 'google'].includes(v)) return { error: 'mt_provider must be one of demo|deepl|google' };
+      clean[k] = v;
+    } else if (k === 'maintenance_message') {
+      if (typeof v !== 'string' || v.length > 200) return { error: 'maintenance_message must be a string of at most 200 characters' };
       clean[k] = v;
     } else if (k === 'checkin_amounts') {
       if (!Array.isArray(v) || v.length !== 7 || v.some((n) => !Number.isInteger(n) || n < 0 || n > 1e9)) return { error: 'checkin_amounts must be an array of 7 non-negative integers (each <= 1e9)' };

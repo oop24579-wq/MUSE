@@ -1,4 +1,4 @@
-Server booted on http://127.0.0.1:38397 with temp DB /tmp/dramanow-test5-1fxYZZ/app.db
+Server booted on http://127.0.0.1:36897 with temp DB /tmp/dramanow-test5-BoEIuu/app.db
 PASS 401. logout: refresh works before; after logout the caller refresh AND a second session refresh are 401 (family revocation)
 PASS 402. logout: no token and garbage token -> 401
 PASS 403. PATCH /auth/me: happy path persists every allowed field and is visible via GET /auth/me

@@ -21,6 +21,30 @@ class ApiClient {
   FirebaseReExchange? onRefreshFailedReExchange;
   bool _refreshing = false;
 
+  // --- Round 4: global maintenance handling ---------------------------------
+  /// Invoked ONCE per maintenance episode when any request fails with
+  /// 503 MAINTENANCE, so the app shell can route to the MaintenanceScreen.
+  /// Set by bootstrap to a navigator push. The latch stops a burst of
+  /// failing requests from stacking maintenance screens; the screen clears
+  /// it via [clearMaintenanceLatch] after a successful /config re-check,
+  /// so a LATER maintenance episode routes again.
+  void Function()? onMaintenance;
+  bool _maintenanceLatched = false;
+
+  void clearMaintenanceLatch() => _maintenanceLatched = false;
+
+  void _noteMaintenance(ApiException e) {
+    if (e.statusCode != 503 || e.code != 'MAINTENANCE') return;
+    if (_maintenanceLatched) return;
+    _maintenanceLatched = true;
+    final hook = onMaintenance;
+    if (hook != null) {
+      try {
+        hook();
+      } catch (_) {/* routing must never break error handling */}
+    }
+  }
+
   // Device context. The API's `mobile.context` middleware keeps
   // `users.platform` / `app_version` / `locale` and the `user_devices` row
   // current from these headers; without them every mobile account lands in the
@@ -263,18 +287,22 @@ class ApiClient {
 
   ApiException _fromDio(DioException e) {
     final data = e.response?.data;
+    final ApiException out;
     if (data is Map && data['error'] is Map) {
       final err = data['error'] as Map;
-      return ApiException(
+      out = ApiException(
         (err['code'] as String?) ?? 'HTTP_ERROR',
         (err['message'] as String?) ?? e.message ?? 'Request failed',
         statusCode: e.response?.statusCode,
       );
+    } else {
+      out = ApiException(
+        'HTTP_ERROR',
+        e.message ?? 'Request failed',
+        statusCode: e.response?.statusCode,
+      );
     }
-    return ApiException(
-      'HTTP_ERROR',
-      e.message ?? 'Request failed',
-      statusCode: e.response?.statusCode,
-    );
+    _noteMaintenance(out);
+    return out;
   }
 }

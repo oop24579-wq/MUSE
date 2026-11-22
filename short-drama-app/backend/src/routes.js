@@ -141,12 +141,16 @@ function watchTimeState(userId) {
 
 function userJson(u) {
   const xp = u.xp || 0;
+  // Round 4: the synced consent record (PATCH /auth/me 'consent'), parsed
+  // back out of its JSON column; null until the app syncs one.
+  let consent = null;
+  if (u.consentJson) { try { consent = JSON.parse(u.consentJson); } catch { consent = null; } }
   return { id: u.id, firebaseUid: u.firebaseUid, email: u.email, name: u.name, displayName: u.name, image: u.image, photoUrl: u.image,
     deviceId: u.deviceId, isGuest: !!u.isGuest, isAnonymous: !!u.isGuest, isPro: isPro(u), isVip: isPro(u),
     coinBalance: u.coinBalance, autoplayNext: !!u.autoplayNext, videoQuality: u.videoQuality || 'auto',
     notificationsEnabled: u.notificationsEnabled == null ? true : !!u.notificationsEnabled,
     subscriptionExpirationDate: u.subscriptionExpirationDate, platform: u.platform, appVersion: u.appVersion, locale: u.locale,
-    referralCode: u.referralCode || referralCodeFor(u.id), xp, level: levelFromXp(xp),
+    referralCode: u.referralCode || referralCodeFor(u.id), xp, level: levelFromXp(xp), consent,
     createdAt: u.createdAt, updatedAt: u.updatedAt, linkedAt: u.linkedAt || u.updatedAt };
 }
 function genreJson(g) { return { id: g.id, slug: g.slug, name: g.name, description: g.description, iconUrl: g.iconUrl, colorHex: g.colorHex, sortOrder: g.sortOrder }; }
@@ -186,6 +190,85 @@ function grantCoins(userId, amount, type, refId) {
   run('INSERT INTO coin_transactions(id,userId,amount,type,refId,balanceAfter,createdAt) VALUES(?,?,?,?,?,?,?)', auth.uid(), userId, amount, type, refId || null, u.coinBalance, now());
   return u.coinBalance;
 }
+// ---- Round 4: orders / purchase history ----
+// The exact shape PurchaseHistoryScreen parses: it reads data.orders[], and
+// per order: id (string), paymentMethod ?? paymentProvider, planId from
+// subscriptionPlanId ?? type ?? coinPackageId, status (paid -> active),
+// createdAt, revenueCatTransactionId. `type` is deliberately NOT emitted:
+// the screen's planId fallback order would shadow coinPackageId with the
+// literal string 'coins'. `kind` carries the same information safely.
+function orderJson(o) {
+  return { id: o.id, userId: o.userId, paymentProvider: o.provider,
+    productId: o.productId, kind: o.kind,
+    subscriptionPlanId: o.kind === 'vip' ? o.productId : null,
+    coinPackageId: o.kind === 'coins' ? o.productId : null,
+    amountCents: o.amountCents || 0, currency: o.currency || 'USD',
+    status: o.status, revenueCatTransactionId: o.revenueCatTransactionId || null,
+    createdAt: o.createdAt };
+}
+/**
+ * Apply an order's entitlement through the EXISTING economy paths — this is
+ * the single place orders turn into value, shared by the RevenueCat webhook
+ * and the admin manual-order endpoint (no duplicate economy logic):
+ *  - vip:   users.isPro + subscriptionExpirationDate (the same columns the
+ *           admin VIP grant and isPro() read). Expiry comes from the store
+ *           event when known, else +30 days.
+ *  - coins: grantCoins() with type 'purchase' (ledger-visible, capped paths
+ *           untouched). The coin amount is encoded in the product id
+ *           (e.g. 'coins_500'); a coin product without an amount grants 0
+ *           and is only recorded.
+ */
+function applyOrderEntitlement(order, { vipExpiresAt = null } = {}) {
+  if (order.kind === 'coins') {
+    const mAmt = /(\d+)\s*$/.exec(String(order.productId || ''));
+    const coins = mAmt ? parseInt(mAmt[1], 10) : 0;
+    if (coins > 0) grantCoins(order.userId, coins, 'purchase', order.id);
+    return;
+  }
+  const exp = vipExpiresAt || new Date(Date.now() + 30 * 86400e3).toISOString();
+  run('UPDATE users SET isPro=1, subscriptionExpirationDate=? WHERE id=?', exp, order.userId);
+}
+/** Insert an order row and apply its entitlement atomically. */
+function recordOrder({ userId, provider, productId, kind, amountCents = 0, currency = 'USD', status = 'paid', revenueCatTransactionId = null, vipExpiresAt = null }) {
+  const order = { id: auth.uid(), userId, provider, productId, kind, amountCents, currency, status, revenueCatTransactionId, createdAt: now() };
+  tx(() => {
+    run('INSERT INTO orders(id,userId,provider,productId,kind,amountCents,currency,status,revenueCatTransactionId,createdAt) VALUES(?,?,?,?,?,?,?,?,?,?)',
+      order.id, order.userId, order.provider, order.productId, order.kind, order.amountCents, order.currency, order.status, order.revenueCatTransactionId, order.createdAt);
+    if (status === 'paid') applyOrderEntitlement(order, { vipExpiresAt });
+  });
+  return order;
+}
+// ---- Round 4: personalized "For You" ranking (GET /home section) ----
+/**
+ * Rank series for one user from data that already exists: genre affinity
+ * from episode_progress (completed weighs most), watch_history, favorites,
+ * follows and likes (user_series). Ordering is affinity DESC, then the
+ * global popularity order (rankScore, viewCount). Series the user has
+ * COMPLETED (every episode has a completed episode_progress row) are
+ * excluded. A user with no signals — and every guest/anonymous caller —
+ * gets the plain trending order (the pre-round-4 behaviour).
+ */
+function forYouSeries(user, max = 10) {
+  const trending = () => all('SELECT * FROM series ORDER BY rankScore DESC, viewCount DESC LIMIT ?', max);
+  if (!user) return trending();
+  const affinity = new Map(); // genreId -> weight
+  const bump = (genreId, w) => { if (genreId) affinity.set(genreId, (affinity.get(genreId) || 0) + w); };
+  for (const r of all(`SELECT sr.genreId g, COUNT(*) c, SUM(ep.completed) done FROM episode_progress ep
+      JOIN episodes e ON e.id=ep.episodeId JOIN series sr ON sr.id=e.seriesId
+      WHERE ep.userId=? GROUP BY sr.id`, user.id))
+    bump(r.g, r.c + 2 * (r.done || 0));
+  for (const r of all('SELECT sr.genreId g FROM watch_history wh JOIN series sr ON sr.id=wh.seriesId WHERE wh.userId=?', user.id)) bump(r.g, 1);
+  for (const r of all('SELECT sr.genreId g, us.favorite, us.following, us.liked FROM user_series us JOIN series sr ON sr.id=us.seriesId WHERE us.userId=?', user.id))
+    bump(r.g, (r.favorite ? 2 : 0) + (r.following ? 2 : 0) + (r.liked ? 1 : 0));
+  if (!affinity.size) return trending();
+  const completed = new Set(all(`SELECT ep.seriesId sid FROM episode_progress ep WHERE ep.userId=? AND ep.completed=1
+      GROUP BY ep.seriesId HAVING COUNT(DISTINCT ep.episodeId) >= (SELECT COUNT(*) FROM episodes e WHERE e.seriesId=ep.seriesId)`, user.id).map((r) => r.sid));
+  return all('SELECT * FROM series')
+    .filter((s) => !completed.has(s.id))
+    .sort((a, b) => ((affinity.get(b.genreId) || 0) - (affinity.get(a.genreId) || 0))
+      || (b.rankScore - a.rankScore) || (b.viewCount - a.viewCount))
+    .slice(0, max);
+}
 function touchDevice(req, user) {
   const platform = req.headers['x-platform'], appVersion = req.headers['x-app-version'], locale = req.headers['x-locale'], deviceId = req.headers['x-device-id'];
   if (!user) return;
@@ -221,7 +304,7 @@ function taskProgress(userId, t) {
   return done ? t.target : 0;
 }
 /** Every per-user table that holds account state (used by relink + deletion). */
-const USER_TABLES = ['refresh_tokens', 'user_devices', 'user_series', 'watch_history', 'episode_progress', 'episode_unlocks', 'coin_transactions', 'checkins', 'user_reward_tasks', 'ad_rewards', 'notifications', 'wheel_spins', 'chest_claims', 'watch_time_daily', 'watch_events', 'watch_progress', 'share_events', 'user_daily_events', 'mission_claims'];
+const USER_TABLES = ['refresh_tokens', 'user_devices', 'user_series', 'watch_history', 'episode_progress', 'episode_unlocks', 'coin_transactions', 'checkins', 'user_reward_tasks', 'ad_rewards', 'notifications', 'wheel_spins', 'chest_claims', 'watch_time_daily', 'watch_events', 'watch_progress', 'share_events', 'user_daily_events', 'mission_claims', 'orders'];
 function deleteUserRows(userId) { for (const t of USER_TABLES) run(`DELETE FROM ${t} WHERE userId=?`, userId); }
 
 function rewardsState(user) {
@@ -297,6 +380,7 @@ async function handle(req, res, url, body) {
     const S = settings.getSettings();
     return ok(res, {
       maintenanceMode: !!S.maintenance_mode, premiumPlaybackMode: S.premium_playback_mode,
+      maintenanceMessage: S.maintenance_message ? String(S.maintenance_message) : null,
       paywallDailyCap: !!S.paywall_daily_cap,
       features: {
         swipe_next_episode: !!S.player_swipe_next_episode, double_tap_seek: !!S.player_double_tap_seek,
@@ -308,12 +392,66 @@ async function handle(req, res, url, body) {
         share_moment: !!S.player_share_moment, captions: !!S.captions_enabled,
         wheel: !!S.wheel_enabled, chests: !!S.chests_enabled, missions: !!S.missions_enabled,
         referrals: !!S.referrals_enabled, watch_time: !!S.watch_time_enabled, ads: !!S.ads_enabled,
-        paywall_daily_cap: !!S.paywall_daily_cap,
+        paywall_daily_cap: !!S.paywall_daily_cap, shorts: !!S.shorts_enabled,
       },
       player: { skipIntroWindowSeconds: S.skip_intro_window_seconds, skipIntroToSeconds: S.skip_intro_to_seconds, autoNextCountdownSeconds: S.auto_next_countdown_seconds },
       visual: { defaultThemePreset: S.default_theme_preset, confettiEnabled: !!S.confetti_enabled, hapticsEnabled: !!S.haptics_enabled, accentColorOverride: S.accent_color_override },
       economy: { episodeUnlockCoinCost: S.episode_unlock_coin_cost, wheelFreeSpinsPerDay: S.wheel_free_spins_per_day },
     });
+  }
+  // ---------- REVENUECAT WEBHOOK (Round 4; server-to-server, no user auth) ----------
+  // Exempt from the maintenance gate on purpose: purchases must keep
+  // recording while the app is down, and RevenueCat retries non-2xx.
+  // Auth is the shared secret: when REVENUECAT_WEBHOOK_SECRET is set, the
+  // caller must present it either as `Authorization: Bearer <secret>`
+  // (RevenueCat's own webhook auth scheme) or as an HMAC-SHA256 hex
+  // signature of the raw body in `x-webhook-signature`. When the secret is
+  // UNSET the endpoint accepts ONLY in dev auth mode (AUTH_DEV_MODE=1 /
+  // FIREBASE_AUTH_DEV=1) — a production deploy without the secret gets 503
+  // WEBHOOK_NOT_CONFIGURED instead of an open entitlement-minting endpoint.
+  if (req.method === 'POST' && p === '/webhooks/revenuecat') {
+    const secret = process.env.REVENUECAT_WEBHOOK_SECRET || '';
+    if (secret) {
+      const bearer = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '');
+      const sigHex = String(req.headers['x-webhook-signature'] || '');
+      const expectSig = crypto.createHmac('sha256', secret).update(req.rawBody || '').digest('hex');
+      const eq = (a, b) => { const ba = Buffer.from(String(a)); const bb = Buffer.from(String(b)); return ba.length === bb.length && crypto.timingSafeEqual(ba, bb); };
+      if (!((bearer && eq(bearer[1], secret)) || (sigHex && eq(sigHex, expectSig))))
+        return err(res, 401, 'INVALID_SIGNATURE', 'Webhook signature verification failed');
+    } else if (auth.firebaseAuthMode() !== 'dev') {
+      return err(res, 503, 'WEBHOOK_NOT_CONFIGURED', 'REVENUECAT_WEBHOOK_SECRET is not set');
+    }
+    const ev = (body && typeof body === 'object' && body.event && typeof body.event === 'object') ? body.event : body;
+    const rcUserId = ev.app_user_id || ev.original_app_user_id || null;
+    const productId = ev.product_id || null;
+    const txId = ev.transaction_id || ev.original_transaction_id || ev.id || null;
+    const type = String(ev.type || 'INITIAL_PURCHASE').toUpperCase();
+    const target = rcUserId ? get('SELECT * FROM users WHERE id=?', rcUserId) : null;
+    if (!target || !productId) return ok(res, { received: true, applied: false, reason: !target ? 'unknown_user' : 'missing_product' });
+    // Idempotency: RevenueCat retries deliveries; a transaction id may be
+    // recorded exactly once, so a retry can never re-grant coins/VIP time.
+    if (txId && get('SELECT 1 x FROM orders WHERE revenueCatTransactionId=?', txId))
+      return ok(res, { received: true, applied: false, duplicate: true });
+    const entitlements = Array.isArray(ev.entitlement_ids) ? ev.entitlement_ids.map((x) => String(x).toLowerCase()) : [];
+    const kind = /coin/i.test(productId) && !entitlements.length ? 'coins' : 'vip';
+    const amountCents = Number.isFinite(ev.price_in_pence) ? Math.round(ev.price_in_pence)
+      : (Number.isFinite(ev.price) ? Math.round(ev.price * 100) : 0);
+    const currency = typeof ev.currency === 'string' && ev.currency ? ev.currency : 'USD';
+    const expiresAt = Number.isFinite(ev.expiration_at_ms) ? new Date(ev.expiration_at_ms).toISOString() : null;
+    if (type === 'EXPIRATION') {
+      // Subscription lapsed: record it and let isPro() lapse the access by
+      // pinning the expiry at the event's expiration time.
+      const order = recordOrder({ userId: target.id, provider: 'revenuecat', productId, kind, amountCents, currency, status: 'expired', revenueCatTransactionId: txId });
+      if (kind === 'vip') run('UPDATE users SET subscriptionExpirationDate=? WHERE id=?', expiresAt || now(), target.id);
+      return ok(res, { received: true, applied: true, orderId: order.id });
+    }
+    if (type === 'CANCELLATION' || type === 'BILLING_ISSUE') {
+      // Access continues until expiry on a cancellation — record only.
+      const order = recordOrder({ userId: target.id, provider: 'revenuecat', productId, kind, amountCents, currency, status: 'cancelled', revenueCatTransactionId: txId });
+      return ok(res, { received: true, applied: false, orderId: order.id });
+    }
+    const order = recordOrder({ userId: target.id, provider: 'revenuecat', productId, kind, amountCents, currency, status: 'paid', revenueCatTransactionId: txId, vipExpiresAt: expiresAt });
+    return ok(res, { received: true, applied: true, orderId: order.id });
   }
   // ---------- MAINTENANCE MODE (settings store; admin API is a separate handler and stays up) ----------
   if (settings.getSetting('maintenance_mode')) return err(res, 503, 'MAINTENANCE', 'HERO DRAMA is temporarily down for maintenance. Please try again soon!');
@@ -378,7 +516,7 @@ async function handle(req, res, url, body) {
     return ok(res, { tokens, user: userJson(user) });
   }
   // all routes below need auth except public catalog GETs (still accept optional auth)
-  const PUBLIC = req.method === 'GET' && ['/categories', '/discover', '/for-you', '/search', '/home'].includes(p) || (req.method === 'GET' && /^\/genres\/[^/]+\/series$/.test(p)) || (req.method === 'GET' && /^\/series\/[^/]+$/.test(p)) || (req.method === 'GET' && /^\/series\/[^/]+\/episodes$/.test(p));
+  const PUBLIC = req.method === 'GET' && ['/categories', '/discover', '/for-you', '/search', '/home', '/shorts'].includes(p) || (req.method === 'GET' && /^\/genres\/[^/]+\/series$/.test(p)) || (req.method === 'GET' && /^\/series\/[^/]+$/.test(p)) || (req.method === 'GET' && /^\/series\/[^/]+\/episodes$/.test(p));
   let user = PUBLIC ? optionalAuth(req) : requireAuth(req, res);
   if (!PUBLIC && !user) return;
   if (req.method === 'POST' && p === '/auth/relink') {
@@ -438,7 +576,7 @@ async function handle(req, res, url, body) {
   if (req.method === 'PATCH' && p === '/auth/me') {
     // Strict allow-list patch of the CALLER's own profile (user is always the
     // authenticated caller — there is no id parameter to abuse).
-    const ALLOWED = ['name', 'image', 'autoplayNext', 'videoQuality', 'locale', 'notificationsEnabled'];
+    const ALLOWED = ['name', 'image', 'autoplayNext', 'videoQuality', 'locale', 'notificationsEnabled', 'consent'];
     const keys = Object.keys(body || {});
     for (const k of keys) if (!ALLOWED.includes(k)) return err(res, 400, 'BAD_FIELD', `Unknown field: ${k}`);
     if (!keys.length) return err(res, 400, 'VALIDATION', 'At least one field is required');
@@ -470,6 +608,17 @@ async function handle(req, res, url, body) {
       if (typeof body.notificationsEnabled !== 'boolean') return bad('notificationsEnabled must be a boolean');
       sets.notificationsEnabled = body.notificationsEnabled ? 1 : 0;
     }
+    if (body.consent !== undefined) {
+      // Round 4: the app's local consent record (version + timestamp +
+      // granular choices from the consent chain), synced for signed-in
+      // users. Stored verbatim as JSON after strict shape validation.
+      const c = body.consent;
+      if (!c || typeof c !== 'object' || Array.isArray(c)) return bad('consent must be an object');
+      if (!Number.isInteger(c.version) || c.version < 1 || c.version > 1000) return bad('consent.version must be an integer 1..1000');
+      if (typeof c.analytics !== 'boolean' || typeof c.profiling !== 'boolean') return bad('consent.analytics and consent.profiling must be booleans');
+      if (c.updatedAt !== undefined && (typeof c.updatedAt !== 'string' || c.updatedAt.length > 40)) return bad('consent.updatedAt must be an ISO timestamp string');
+      sets.consentJson = JSON.stringify({ version: c.version, analytics: c.analytics, profiling: c.profiling, updatedAt: c.updatedAt || now() });
+    }
     const cols = Object.keys(sets);
     run(`UPDATE users SET ${cols.map((c) => c + '=?').join(',')}, updatedAt=? WHERE id=?`, ...cols.map((c) => sets[c]), now(), user.id);
     return ok(res, { user: userJson(get('SELECT * FROM users WHERE id=?', user.id)) });
@@ -483,6 +632,18 @@ async function handle(req, res, url, body) {
     const items = all('SELECT * FROM coin_transactions WHERE userId=? ORDER BY createdAt DESC, rowid DESC LIMIT ? OFFSET ?', user.id, txLimit, txOffset)
       .map((t) => ({ id: t.id, amount: t.amount, type: t.type, refId: t.refId, balanceAfter: t.balanceAfter, createdAt: t.createdAt }));
     return ok(res, { items, total });
+  }
+  if (req.method === 'GET' && p === '/user/orders') {
+    // Round 4: purchase history for PurchaseHistoryScreen — caller-only,
+    // newest-first, paged like /me/transactions. The list key is `orders`
+    // (that is what the screen reads), items use orderJson's exact shape.
+    const rawOLimit = parseInt(q.get('limit') || '50', 10);
+    const oLimit = Number.isFinite(rawOLimit) ? Math.max(1, Math.min(rawOLimit, 100)) : 50;
+    const rawOOffset = parseInt(q.get('offset') || '0', 10);
+    const oOffset = Number.isFinite(rawOOffset) ? Math.max(0, rawOOffset) : 0;
+    const total = get('SELECT COUNT(*) c FROM orders WHERE userId=?', user.id).c;
+    const orders = all('SELECT * FROM orders WHERE userId=? ORDER BY createdAt DESC, rowid DESC LIMIT ? OFFSET ?', user.id, oLimit, oOffset).map(orderJson);
+    return ok(res, { orders, total });
   }
   if (req.method === 'POST' && p === '/auth/referral') {
     if (!settings.getSetting('referrals_enabled')) return err(res, 403, 'FEATURE_DISABLED', 'Referrals are disabled');
@@ -561,7 +722,41 @@ async function handle(req, res, url, body) {
       id: s.id, slug: s.slug, title: s.title, subtitle: s.subtitle, sectionType: s.sectionType, sortOrder: s.sortOrder,
       series: all('SELECT sr.* FROM home_section_items i JOIN series sr ON sr.id=i.seriesId WHERE i.sectionId=? ORDER BY i.sortOrder', s.id).map(seriesJson),
     }));
+    // Round 4: the "For You" section is COMPUTED per user (forYouSeries),
+    // never stored in home_section_items. A seeded 'for_you' row gets its
+    // items replaced; on catalogs seeded before round 4 (no such row) a
+    // synthetic section is spliced in right after the hero so the client
+    // always receives it.
+    const forYou = { id: 'for-you', slug: 'for-you', title: 'For You', subtitle: 'Picked from your taste', sectionType: 'for_you', sortOrder: 2, series: forYouSeries(user, 10).map(seriesJson) };
+    const existing = sections.findIndex((s) => s.sectionType === 'for_you');
+    if (existing >= 0) sections[existing] = { ...sections[existing], series: forYou.series };
+    else sections.splice(Math.min(1, sections.length), 0, forYou);
     return ok(res, { sections });
+  }
+  if (req.method === 'GET' && p === '/shorts') {
+    // Round 4: vertical Shorts feed — one item per episode (teaser-length
+    // clips), ordered by series popularity then episode views, with an
+    // opaque offset cursor. `videoUrl` is the stored media ref; the client
+    // resolves the entitlement-checked stream via GET /episodes/:id/playback
+    // before playing (locked episodes serialize isUnlocked=false via
+    // episodeJson, exactly like the episode list).
+    if (!settings.getSetting('shorts_enabled')) return ok(res, { items: [], nextCursor: null });
+    let offset = 0;
+    const cur = q.get('cursor');
+    if (cur) { const n = parseInt(Buffer.from(cur, 'base64url').toString('utf8'), 10); if (Number.isFinite(n) && n > 0) offset = n; }
+    const rows = all(`SELECT e.*, sr.title sTitle, sr.coverImageUrl sCover, sr.likeCount sLikes, sr.isVipOnly sVip
+      FROM episodes e JOIN series sr ON sr.id=e.seriesId
+      ORDER BY sr.rankScore DESC, e.viewCount DESC, e.id ASC LIMIT ? OFFSET ?`, limit + 1, offset);
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const items = page.map((e) => {
+      const sRow = get('SELECT * FROM series WHERE id=?', e.seriesId);
+      return { ...episodeJson(e, user, sRow),
+        seriesTitle: e.sTitle, posterUrl: e.sCover, likeCount: e.sLikes,
+        videoUrl: e.videoUrl || null };
+    });
+    const nextCursor = hasMore ? Buffer.from(String(offset + page.length), 'utf8').toString('base64url') : null;
+    return ok(res, { items, nextCursor });
   }
   if (req.method === 'GET' && (m = /^\/series\/([^/]+)$/.exec(p))) {
     const s = get('SELECT * FROM series WHERE id=? OR slug=?', decodeURIComponent(m[1]), decodeURIComponent(m[1]));
@@ -1046,6 +1241,32 @@ function adminHandle(req, res, url, body) {
     const total = get(`SELECT COUNT(*) c FROM coin_transactions t${where}`, ...args).c;
     const items = all(`SELECT t.*, u.email userEmail, u.name userName FROM coin_transactions t LEFT JOIN users u ON u.id=t.userId${where} ORDER BY t.createdAt DESC, t.rowid DESC LIMIT ? OFFSET ?`, ...args, tLimit, tOffset);
     return ok(res, { items, total, limit: tLimit, offset: tOffset });
+  }
+  // ---------- ROUND 4: ORDERS (manual support orders + list) ----------
+  if (p === '/orders') {
+    if (req.method === 'GET') {
+      const oLimit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 200);
+      const oOffset = Math.max(parseInt(url.searchParams.get('offset') || '0', 10) || 0, 0);
+      const uidFilter = url.searchParams.get('userId');
+      const total = uidFilter ? get('SELECT COUNT(*) c FROM orders WHERE userId=?', uidFilter).c : get('SELECT COUNT(*) c FROM orders').c;
+      const rows = uidFilter
+        ? all('SELECT * FROM orders WHERE userId=? ORDER BY createdAt DESC, rowid DESC LIMIT ? OFFSET ?', uidFilter, oLimit, oOffset)
+        : all('SELECT * FROM orders ORDER BY createdAt DESC, rowid DESC LIMIT ? OFFSET ?', oLimit, oOffset);
+      return ok(res, { items: rows.map(orderJson), total, limit: oLimit, offset: oOffset });
+    }
+    if (req.method === 'POST') {
+      // Manual order for support cases (e.g. a store purchase that never
+      // webhooked). Applies the entitlement through recordOrder — the same
+      // single path the RevenueCat webhook uses.
+      const target = body.userId ? get('SELECT * FROM users WHERE id=?', body.userId) : null;
+      if (!target) return err(res, 404, 'NOT_FOUND', 'User not found');
+      if (!body.productId || typeof body.productId !== 'string') return err(res, 400, 'VALIDATION', 'productId is required');
+      const kind = body.kind === 'coins' ? 'coins' : 'vip';
+      const amount = body.amountCents === undefined ? 0 : Number(body.amountCents);
+      if (!Number.isInteger(amount) || amount < 0 || amount > 1e9) return err(res, 400, 'VALIDATION', 'amountCents must be a non-negative integer');
+      const order = recordOrder({ userId: target.id, provider: 'manual', productId: body.productId, kind, amountCents: amount, currency: typeof body.currency === 'string' && body.currency ? body.currency : 'USD', status: 'paid' });
+      return ok(res, orderJson(order), 201);
+    }
   }
   // ---------- REWARD TASKS CRUD ----------
   if (p === '/reward-tasks' || p.startsWith('/reward-tasks/')) {

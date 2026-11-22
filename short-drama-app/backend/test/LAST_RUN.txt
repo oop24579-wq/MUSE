@@ -1,4 +1,4 @@
-Server booted on http://127.0.0.1:42899 with temp DB /tmp/dramanow-test-MFWtCG/app.db
+Server booted on http://127.0.0.1:41987 with temp DB /tmp/dramanow-test-uz09ph/app.db
 PASS 1. health/root responds
 PASS 2. dev firebase auth creates user + welcome coin bonus (30)
 PASS 3. refresh flow: new tokens issued; old refresh token rejected

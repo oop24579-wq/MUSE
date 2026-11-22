@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../services/onboarding_service.dart';
+import '../legal/legal_screens.dart';
 import 'shared/onboarding_flow_controller.dart';
 
 /// Privacy Settings Screen - Detailed privacy toggle settings
@@ -151,9 +152,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                               alignment: PlaceholderAlignment.baseline,
                               baseline: TextBaseline.alphabetic,
                               child: GestureDetector(
-                                onTap: () {
-                                  // Open privacy policy
-                                },
+                                // Round 4: was an empty onTap — now opens
+                                // the round-3 Privacy Policy screen.
+                                onTap: () => Navigator.of(context)
+                                    .pushNamed(LegalRoutes.privacy),
                                 child: Text(
                                   'Privacy Policy',
                                   style: GoogleFonts.inter(

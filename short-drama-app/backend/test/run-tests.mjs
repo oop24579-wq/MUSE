@@ -161,7 +161,7 @@ try {
 
   // 5. home sections shape
   await testCase(5, 'GET /home sections shape', async () => {
-    const KNOWN = new Set(['featured_hero', 'series_carousel', 'ranking_list', 'new_releases', 'hot_grid', 'vertical_grid', 'genre_grid']);
+    const KNOWN = new Set(['featured_hero', 'series_carousel', 'ranking_list', 'new_releases', 'hot_grid', 'vertical_grid', 'genre_grid', 'for_you']); // for_you added in round 4 (computed per user in GET /home)
     const r = await req('GET', '/home');
     assertEq(r.status, 200, 'home status');
     const sections = r.json.data.sections;
