@@ -29,14 +29,32 @@ class ChestRow extends StatelessWidget {
   }
 }
 
-class _ChestCard extends StatelessWidget {
+class _ChestCard extends StatefulWidget {
   const _ChestCard({required this.chest, required this.onClaim});
 
   final ChestState chest;
   final Future<void> Function(ChestState chest) onClaim;
 
   @override
+  State<_ChestCard> createState() => _ChestCardState();
+}
+
+class _ChestCardState extends State<_ChestCard> {
+  bool _busy = false;
+
+  Future<void> _claim() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.onClaim(widget.chest);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final chest = widget.chest;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor =
         isDark ? AppTheme.textPrimaryDark : AppTheme.textPrimaryLight;
@@ -89,7 +107,7 @@ class _ChestCard extends StatelessWidget {
               SizedBox(
                 height: 3.4.h,
                 child: ElevatedButton(
-                  onPressed: () => onClaim(chest),
+                  onPressed: _busy ? null : _claim,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFFB300),
                     foregroundColor: Colors.black87,

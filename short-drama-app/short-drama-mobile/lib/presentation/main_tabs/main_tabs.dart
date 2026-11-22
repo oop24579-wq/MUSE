@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/app_export.dart';
+import '../../core/tab_router.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/main_tab_bar.dart';
 import '../drama/discover_content.dart';
@@ -55,10 +56,14 @@ class _MainTabsState extends State<MainTabs>
       duration: const Duration(milliseconds: 280),
       value: 1,
     );
+    // Let pushed screens (e.g. the player after a failed unlock) jump to a
+    // tab — see TabRouter.
+    TabRouter.register(_onTabTapped);
   }
 
   @override
   void dispose() {
+    TabRouter.unregister(_onTabTapped);
     _headerController.dispose();
     super.dispose();
   }

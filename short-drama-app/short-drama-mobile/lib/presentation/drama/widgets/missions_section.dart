@@ -54,14 +54,32 @@ class MissionsSection extends StatelessWidget {
   }
 }
 
-class _MissionRow extends StatelessWidget {
+class _MissionRow extends StatefulWidget {
   const _MissionRow({required this.mission, required this.onClaim});
 
   final DailyMission mission;
   final Future<void> Function(DailyMission mission) onClaim;
 
   @override
+  State<_MissionRow> createState() => _MissionRowState();
+}
+
+class _MissionRowState extends State<_MissionRow> {
+  bool _busy = false;
+
+  Future<void> _claim() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.onClaim(widget.mission);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final mission = widget.mission;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor =
         isDark ? AppTheme.textPrimaryDark : AppTheme.textPrimaryLight;
@@ -163,7 +181,7 @@ class _MissionRow extends StatelessWidget {
                 SizedBox(
                   height: 3.4.h,
                   child: ElevatedButton(
-                    onPressed: claimable ? () => onClaim(mission) : null,
+                    onPressed: claimable && !_busy ? _claim : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.accentBlue,
                       foregroundColor: Colors.white,

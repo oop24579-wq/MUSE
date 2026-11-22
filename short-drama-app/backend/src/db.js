@@ -97,7 +97,14 @@ CREATE TABLE IF NOT EXISTS chest_claims(
   claimedAt TEXT NOT NULL, PRIMARY KEY(userId, chestDate, threshold));
 CREATE TABLE IF NOT EXISTS watch_time_daily(
   userId TEXT NOT NULL, watchDate TEXT NOT NULL, seconds INTEGER DEFAULT 0, blocksClaimed INTEGER DEFAULT 0,
+  paidCoins INTEGER DEFAULT 0,
   PRIMARY KEY(userId, watchDate));
+CREATE TABLE IF NOT EXISTS watch_progress(
+  userId TEXT NOT NULL, episodeId TEXT NOT NULL, eventDate TEXT NOT NULL, maxPosition INTEGER DEFAULT 0,
+  PRIMARY KEY(userId, episodeId, eventDate));
+CREATE TABLE IF NOT EXISTS share_events(
+  userId TEXT NOT NULL, seriesId TEXT NOT NULL, eventDate TEXT NOT NULL,
+  PRIMARY KEY(userId, seriesId, eventDate));
 CREATE TABLE IF NOT EXISTS watch_events(
   userId TEXT NOT NULL, episodeId TEXT NOT NULL, eventDate TEXT NOT NULL,
   PRIMARY KEY(userId, episodeId, eventDate));
@@ -120,25 +127,36 @@ CREATE TABLE IF NOT EXISTS caption_tracks(
   createdAt TEXT NOT NULL, UNIQUE(episodeId, lang));
 CREATE TABLE IF NOT EXISTS caption_jobs(
   id TEXT PRIMARY KEY, episodeId TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued',
-  step TEXT, error TEXT, createdAt TEXT NOT NULL, finishedAt TEXT);
+  step TEXT, error TEXT, targets TEXT, createdAt TEXT NOT NULL, finishedAt TEXT);
 `);
 // Migrations for DBs created before these columns existed.
 try { db.exec('ALTER TABLE reward_tasks ADD COLUMN active INTEGER DEFAULT 1'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE users ADD COLUMN xp INTEGER DEFAULT 0'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE users ADD COLUMN referralCode TEXT'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE users ADD COLUMN referredBy TEXT'); } catch { /* already present */ }
+try { db.exec('ALTER TABLE watch_time_daily ADD COLUMN paidCoins INTEGER DEFAULT 0'); } catch { /* already present */ }
+try { db.exec('ALTER TABLE caption_jobs ADD COLUMN targets TEXT'); } catch { /* already present */ }
 // Generate referral codes for users that do not have one yet:
-// 'HD' + 6 chars from a hash of the user id (deterministic, stable).
+// 'HD' + 10 hex chars from a hash of the user id (deterministic, stable).
+// 10 chars (was 6) makes birthday collisions negligible at this scale, and the
+// UNIQUE index below enforces it where the existing data allows.
 {
   const crypto = require('node:crypto');
   const rows = db.prepare('SELECT id FROM users WHERE referralCode IS NULL').all();
   const upd = db.prepare('UPDATE users SET referralCode=? WHERE id=?');
   for (const r of rows) {
-    const code = 'HD' + crypto.createHash('sha256').update(String(r.id)).digest('hex').slice(0, 6).toUpperCase();
+    const code = 'HD' + crypto.createHash('sha256').update(String(r.id)).digest('hex').slice(0, 10).toUpperCase();
     upd.run(code, r.id);
   }
+  try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referralCode)'); } catch { /* legacy duplicates: index skipped */ }
 }
 const all = (sql, ...p) => db.prepare(sql).all(...p);
 const get = (sql, ...p) => db.prepare(sql).get(...p);
 const run = (sql, ...p) => db.prepare(sql).run(...p);
-module.exports = { db, all, get, run, DB_PATH };
+/** Run fn inside a single IMMEDIATE transaction (all-or-nothing). */
+function tx(fn) {
+  db.exec('BEGIN IMMEDIATE');
+  try { const r = fn(); db.exec('COMMIT'); return r; }
+  catch (e) { try { db.exec('ROLLBACK'); } catch { /* ignore */ } throw e; }
+}
+module.exports = { db, all, get, run, tx, DB_PATH };

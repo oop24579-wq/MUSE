@@ -14,6 +14,7 @@ class AppConfigService {
   Map<String, dynamic> _visual = const {};
   Map<String, dynamic> _economy = const {};
   bool _maintenanceMode = false;
+  String _premiumPlaybackMode = '';
   bool _loaded = false;
 
   bool get isLoaded => _loaded;
@@ -22,6 +23,8 @@ class AppConfigService {
     try {
       final data = await ApiClient.instance.get('/config');
       _maintenanceMode = (data['maintenanceMode'] as bool?) ?? false;
+      _premiumPlaybackMode =
+          (data['premiumPlaybackMode'] as String?) ?? '';
       final features = data['features'];
       if (features is Map) {
         _features = Map<String, dynamic>.from(features);
@@ -47,6 +50,10 @@ class AppConfigService {
 
   bool get captionsEnabled => feature('captions');
   bool get maintenanceMode => _maintenanceMode;
+
+  /// `premium_playback_mode` from `GET /config` (`disabled` |
+  /// `premium_content` | `all_playback`); '' when not loaded yet.
+  String get premiumPlaybackMode => _premiumPlaybackMode;
 
   int get skipIntroWindowSeconds =>
       (_player['skipIntroWindowSeconds'] as num?)?.toInt() ?? 90;

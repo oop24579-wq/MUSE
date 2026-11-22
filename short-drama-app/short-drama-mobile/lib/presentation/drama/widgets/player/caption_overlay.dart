@@ -19,7 +19,8 @@ class CaptionCue {
 /// NOTE/STYLE blocks and multi-line cue text (tags stripped).
 List<CaptionCue> parseWebVtt(String source) {
   final cues = <CaptionCue>[];
-  final lines = source.replaceAll('\r\n', '\n').split('\n');
+  final lines =
+      source.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
   var i = 0;
   while (i < lines.length) {
     final line = lines[i].trim();

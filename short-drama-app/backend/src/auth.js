@@ -26,14 +26,23 @@ const hash = (s) => crypto.createHash('sha256').update(s).digest('hex');
 function issueTokens(userId) {
   const accessToken = sign({ sub: userId, type: 'access' }, 3600);
   const refreshToken = sign({ sub: userId, type: 'refresh', jti: uid() }, 30 * 24 * 3600);
+  // Prune this user's expired refresh rows so the table cannot grow unboundedly.
+  run('DELETE FROM refresh_tokens WHERE userId=? AND expiresAt<=?', userId, new Date().toISOString());
   run('INSERT INTO refresh_tokens(id,userId,tokenHash,expiresAt,createdAt) VALUES(?,?,?,?,?)',
     uid(), userId, hash(refreshToken), new Date(Date.now() + 30 * 24 * 3600e3).toISOString(), new Date().toISOString());
   return { accessToken, refreshToken };
 }
 function rotateRefresh(oldToken) {
   const p = verify(oldToken); if (!p || p.type !== 'refresh') return null;
-  const row = get('SELECT * FROM refresh_tokens WHERE tokenHash=? AND revoked=0', hash(oldToken));
+  const h = hash(oldToken);
+  const row = get('SELECT * FROM refresh_tokens WHERE tokenHash=?', h);
   if (!row) return null;
+  if (row.revoked) {
+    // Reuse of an already-rotated token: treat as theft — revoke the whole family.
+    run('UPDATE refresh_tokens SET revoked=1 WHERE userId=?', row.userId);
+    return null;
+  }
+  if (row.expiresAt <= new Date().toISOString()) return null; // DB-side expiry (not just the JWT exp)
   run('UPDATE refresh_tokens SET revoked=1 WHERE id=?', row.id);
   return issueTokens(row.userId);
 }

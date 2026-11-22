@@ -83,7 +83,11 @@ class _WheelWidgetState extends State<WheelWidget>
     _spinFrom = _rotation;
     _spinTo = _rotation + math.pi * 2 * 5 + delta;
     HapticsService.instance.medium();
-    await _controller.forward(from: 0);
+    try {
+      await _controller.forward(from: 0);
+    } catch (_) {
+      return; // disposed mid-spin (TickerCanceled) — nothing left to update
+    }
     if (!mounted) return;
     setState(() {
       _rotation = _spinTo;

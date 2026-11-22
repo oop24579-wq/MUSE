@@ -201,3 +201,166 @@ Known Phase 2 scaffolds (honest list, also in `docs/VISUAL_FEATURES_50.md`):
   render movement arrows yet.
 - Still static-only verification: no Flutter SDK in this environment, so no
   `flutter analyze`/build was run for Phase 2 either.
+
+---
+
+# Phase 3 — Full file-by-file review (2026-11-22)
+
+Four parallel reviewers + coordinator consolidation. **Files read in full:
+129** (backend core 7, captions/economy 8, dashboard 4, Flutter 110) plus the
+coordinator's own full reads of routes.js/settings.js/auth.js/db.js/
+captions.js/server.js/seed.js and the test suite. Wiring matrix:
+`docs/FEATURE_WIRING_MATRIX.md` (69 features).
+
+## Verification
+- Backend suite extended 42 → **57 cases, ALL PASS** (`backend/test/LAST_RUN.txt`).
+  Case 34 was rewritten to accrue watch-time honestly (the old version relied
+  on the forgery that is now blocked).
+- Manual smoke on a fresh DB: register → browse → free playback → admin
+  PATCH settings (unlock cost 7, wheel off) → `/config` reflects both → wheel
+  spin returns 403 FEATURE_DISABLED.
+- Dart static audit re-run after all Flutter edits: **187 files, 1,008
+  imports, 0 unresolved, 0 unbalanced** (plus a targeted balance check on
+  `reward_models.dart` after the coordinator's levelProgress fix).
+
+## Blockers fixed
+- **Relink coin-mint + crash** (routes.js): coin grant ran before an
+  unguarded watch_history UPDATE that throws on PK conflict → retry granted
+  again. Whole merge is now one transaction, conflict-safe, and carries XP,
+  VIP, check-ins, tasks, notifications and daily progress.
+- **Relink account takeover**: any logged-in user could merge/delete ANY
+  account by id. Now only `isGuest` accounts can be merged (403 otherwise).
+  Residual: guest-id knowledge still suffices for guests — see security list.
+- **Watch-history forgery** (routes.js): client-supplied duration/position
+  and invented episode ids farmed chests, missions and watch-time coins.
+  Now: series/episode validated, positions clamped to the episode's real
+  duration, per-episode daily high-water mark (`watch_progress`), and
+  `watch_events` only recorded when real progress (delta > 0) was made.
+
+## Majors fixed (backend)
+- Account deletion now erases all 18 user tables (was: 2).
+- VIP expiry (`subscriptionExpirationDate`) is enforced via an `isPro()`
+  helper in serializers and all playback/unlock/caption gates.
+- Unlock refuses VIP-gated episodes for non-VIPs (was: charged coins,
+  playback still 403); episode price precedence fixed (`coinCost=0` means
+  "unset" → global setting, not free-at-global-price ambiguity).
+- Caption VTT/list endpoints are entitlement-gated like playback (locked
+  episodes' full dialogue no longer readable by any logged-in user).
+- Mission claim now checks `missions_enabled` (was the only claim without).
+- Like counts/mission progress move only on real transitions; share mission
+  progress is validated + once per series per day.
+- Check-in ladder follows the consecutive streak (a missed day restarts at
+  Day 1) in both payout and `/rewards` state; bonuses are settings keys
+  (`checkin_level_bonus/streak_bonus/streak_cap`).
+- Watch-time cap is enforced on actual coins paid (`paidCoins`), so a 2×
+  event can no longer pay 200 against a 100 cap.
+- Events with NULL dates now fire (open-ended); admin event dates are
+  normalized/validated; overlapping events still resolve to max multiplier.
+- Referral codes widened to 10 hex chars + UNIQUE index; codes are
+  case-insensitive on entry; applying is limited to accounts ≤ 24h old.
+- Refresh: user-existence checked before rotation (was a 500); DB-side
+  token expiry honored; revoked-token reuse revokes the whole family;
+  expired rows pruned on issue.
+- Server: malformed JSON → 400 BAD_JSON (was silent `{}`), oversized body
+  → 413 (was a hang), 500s no longer leak internal messages, admin token no
+  longer printed at startup, production refuses dev-default secrets, admin
+  static path check hardened (`ADMIN_DIR + sep`).
+- Admin CRUD: PATCH/DELETE on missing genres/series/episodes now 404 (was
+  500/false success); negative episode `coinCost` rejected (would mint
+  coins on unlock); cast `characterName` can be cleared again.
+- Captions: fetch timeouts + 200 MB download cap (a hung provider wedged
+  the whole queue); startup recovery re-queues `processing` jobs; failed
+  regeneration restores previously-ready tracks; duplicate jobs suppressed
+  and targets persisted on the job row; `renderVtt` escapes markup,
+  flattens newlines, sorts and clamps cues; manual generate respects
+  `captions_enabled`; episode `videoUrl` change re-enqueues generation.
+- Economy mutations (check-in, wheel, chest, mission, task, ad, watch-time,
+  unlock, referral, relink, deletions) are wrapped in DB transactions.
+- Settings: single-query `getSettings()`; wheel segments/weights
+  cross-validated; duplicate chest thresholds rejected;
+  `watch_time_block_minutes=0` rejected; task progress for `watch_episodes`
+  counts distinct episodes (was series — and made the seeded
+  series_watch_10/25 tasks unreachable).
+- `/home` honors `?locale=` with an `en` fallback; negative `limit` clamped
+  (SQLite `LIMIT -5` meant "no limit"); `today()` is the server-local day
+  (set `TZ` in production); seed runs in one transaction (crash-safe);
+  returning-user Firebase exchange refreshes profile claims.
+
+## Majors fixed (Flutter — by the Flutter reviewer)
+- Client VIP gating now reads the backend `premiumPlaybackMode` from
+  `/config` (was: Firebase defaults → always `disabled`, so the app offered
+  playback the backend then refused).
+- Theme preset from `/config` is now actually applied (provider re-checks
+  after config loads; was stuck on the pre-config default).
+
+## Minors fixed
+- Unlock failure toast keys off the error `code` (`INSUFFICIENT_COINS`) —
+  the "Not enough coins" message was unreachable; coin/rewards providers
+  invalidated after unlock; double-submit guards on chest/mission/task/
+  watch-time claims; `shareSeries()` is now actually called from the
+  detail/player share actions (shares missions could never progress);
+  wheel spin `TickerCanceled` guarded; VTT parser handles lone-`\r`;
+  `RewardsState.levelProgress` measures progress within the current level.
+- Dashboard: captions Generate was unreachable for episodes without tracks
+  (admin endpoint INNER JOIN) — matrix now merges the episode list;
+  transaction type filter no longer limited to page-1 types; caption track
+  delete button available for failed/queued tracks too.
+
+## Not fixed (deliberate, with reason)
+- Per-user timezone for reward days: the app sends no timezone; reward day
+  is the server-local day (documented, set `TZ` in production).
+- One-shot starter tasks remain honor-system (the actions happen off-platform
+  and cannot be verified server-side); milestone tasks are verified.
+- Double-claim convention stays mixed (200 `{success:false}` for
+  check-in/ad/tasks/watch-time — the app keys off `success`; 409 for
+  chest/mission/referral).
+- `/config` keys `features.ads`, `visual.accentColorOverride`,
+  `economy.wheelFreeSpinsPerDay` have no app consumer yet; `maintenanceMode`
+  is parsed but has no dedicated app screen.
+- Player nits needing redesign, not minimal edits: overlapping `_load()`
+  race, caption fetch applying to a previous episode after a mid-fetch
+  switch, `user_provider` subscriptions never cancelled (app-lifetime
+  singleton).
+
+## Security audit — exposed Firebase API keys (GitHub secret scanning, 2026-11-22)
+
+**Finding (Medium).** GitHub secret scanning flagged valid Google API keys in
+repo `oop24579-wq/MUSE` at commit `4e3c8d7` (the Phase 1 app upload), and the
+same files were re-committed in `ec9ff1e` (Phase 2):
+- `android/app/google-services.json` line 31 — Android Firebase API key
+- `ios/Runner/GoogleService-Info.plist` line 12 — iOS Firebase API key
+- `ios/GoogleService-Info.plist` line 12 — byte-identical copy of the iOS file
+
+Two distinct keys, both for Firebase project `short-drama-c8029`. The files
+came with the user's original app zip; a workspace-wide scan found no other
+exposed secrets (no private keys, no `sk-`/`ghp_`/`AKIA` tokens;
+`backend/.env.example` holds placeholders only).
+
+**Honest severity framing.** Firebase client API keys (`AIza…`) are embedded
+in every shipped Android/iOS app by design — they are not server secrets and
+alone grant no admin access; Firebase Auth/Firestore/Storage are protected by
+Security Rules, not by the key. The real risk depends entirely on the keys'
+restrictions in Google Cloud Console, which only the user can see: if a key is
+unrestricted (no Android/iOS app restriction, no API restriction), anyone
+holding it can call the project's enabled Google APIs against its quota and
+billing, and can hit Firebase endpoints. That is why this is rated Medium,
+not Critical — and not Low either, because the keys are now in public git
+history (if the repo is public) or at least in the repo's history.
+
+**Hygiene done locally (no push).**
+- The three real filenames were added to `short-drama-mobile/.gitignore`.
+- Placeholder templates were added next to them:
+  `android/app/google-services.json.example` and
+  `ios/Runner/GoogleService-Info.plist.example` (verified to contain no
+  real key, project number, or client id).
+- The real files stay on disk — the app cannot build without them.
+
+**Still owed by the user (in order).**
+1. In Google Cloud Console → APIs & Services → Credentials, inspect both
+   keys: add the Android package / iOS bundle-id restriction and restrict
+   the key to only the APIs the app needs — or rotate the keys outright.
+2. If rotated, replace the three local files with the new values.
+3. Only AFTER rotation does a history purge make sense
+   (`git filter-repo` / BFG on the repo) — purging first would leave the
+   live key still valid and exposed in the meantime. History purge is a
+   separate, user-approved operation; it was not attempted here.

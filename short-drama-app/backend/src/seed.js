@@ -1,5 +1,5 @@
 'use strict';
-const { all, get, run } = require('./db');
+const { all, get, run, tx } = require('./db');
 const { uid } = require('./auth');
 const captions = require('./captions');
 const UNLOCK_COST = parseInt(process.env.EPISODE_UNLOCK_COIN_COST || '30', 10);
@@ -66,6 +66,12 @@ function seedMissions() {
   MISSIONS.forEach((ms) => run('INSERT INTO missions(slug,title,description,metric,target,coins,sortOrder,active) VALUES(?,?,?,?,?,?,?,1)', ...ms));
 }
 function seed() {
+  // Crash-safety: the whole seed (including the 'seeded' flag, written last)
+  // runs in ONE transaction — a crash mid-seed rolls everything back instead
+  // of leaving partial rows that would make the next boot's seed throw.
+  tx(() => seedInner());
+}
+function seedInner() {
   seedMissions();
   if (get("SELECT value FROM meta WHERE key='seeded'")) return;
   const now = new Date().toISOString();

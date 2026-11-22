@@ -317,7 +317,13 @@ class RewardsState {
     this.referralCode = '',
   });
 
-  /// 0..1 progress of [xp] toward [nextLevelXp] (for the level ring).
-  double get levelProgress =>
-      nextLevelXp > 0 ? (xp / nextLevelXp).clamp(0.0, 1.0) : 0.0;
+  /// 0..1 progress WITHIN the current level (for the level ring).
+  /// Backend level thresholds: level L starts at 100*(L-1)^2 XP and
+  /// nextLevelXp = 100*L^2, so progress is measured from the level floor —
+  /// previously xp/nextLevelXp showed 25% the moment level 2 was reached.
+  double get levelProgress {
+    final floor = 100 * (level - 1) * (level - 1);
+    final span = nextLevelXp - floor;
+    return span > 0 ? ((xp - floor) / span).clamp(0.0, 1.0) : 0.0;
+  }
 }

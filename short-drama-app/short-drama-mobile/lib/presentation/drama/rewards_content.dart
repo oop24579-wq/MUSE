@@ -374,14 +374,32 @@ class _EventBanner extends StatelessWidget {
 
 /// Watch-time card: minutes watched today, progress toward the next block,
 /// claimable coins and a Claim button.
-class _WatchTimeCard extends StatelessWidget {
+class _WatchTimeCard extends StatefulWidget {
   const _WatchTimeCard({required this.watchTime, required this.onClaim});
 
   final WatchTimeState watchTime;
   final Future<void> Function() onClaim;
 
   @override
+  State<_WatchTimeCard> createState() => _WatchTimeCardState();
+}
+
+class _WatchTimeCardState extends State<_WatchTimeCard> {
+  bool _busy = false;
+
+  Future<void> _claim() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.onClaim();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final watchTime = widget.watchTime;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor =
         isDark ? AppTheme.textPrimaryDark : AppTheme.textPrimaryLight;
@@ -441,7 +459,7 @@ class _WatchTimeCard extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: canClaim ? onClaim : null,
+              onPressed: canClaim && !_busy ? _claim : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.accentBlue,
                 foregroundColor: Colors.white,

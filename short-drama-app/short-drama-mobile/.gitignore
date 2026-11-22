@@ -77,3 +77,16 @@ app.*.map.json
 # Each developer copies Signing.xcconfig.example and fills in their own.
 ios/Flutter/Signing.xcconfig
 !ios/Flutter/Signing.xcconfig.example
+
+# Firebase client configs — GitHub secret scanning flagged the API keys in
+# these files (repo oop24579-wq/MUSE, commit 4e3c8d7). The files are needed
+# locally to build/run the app, so keep them on disk but out of the repo.
+# Templates with placeholders live next to them; copy and fill in your own:
+#   android/app/google-services.json.example -> google-services.json
+#   ios/Runner/GoogleService-Info.plist.example -> GoogleService-Info.plist
+# NOTE: the real files are already in git history. Ignoring them now only
+# stops FUTURE commits from containing them — rotate the keys in Google
+# Cloud Console first, then (optionally) purge history with git filter-repo.
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+ios/GoogleService-Info.plist

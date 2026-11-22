@@ -635,11 +635,15 @@ try {
   });
 
   // 34. watch-time claim + daily cap
-  await testCase(34, 'watch-time: >=10 min accrual -> claim pays 10; second claim pays 0; daily cap respected', async () => {
+  // NOTE (review fix): accrual is now server-verified — positions are clamped
+  // to each episode's real durationSeconds and a per-episode daily high-water
+  // mark applies, so the old single forged 600s report no longer works. This
+  // case accrues honestly: 6 full episodes = 97+104+111+118+125+132 = 687s.
+  await testCase(34, 'watch-time: >=10 min honest accrual -> claim pays 10; second claim pays 0; daily cap respected', async () => {
     const u = await freshUser('watchtime');
     const t = u.tokens.accessToken;
     const eps = await seriesEpisodes(t, seriesId);
-    await postWatch(t, seriesId, eps[0], 600, 600);
+    for (let i = 0; i < 6; i++) await postWatch(t, seriesId, eps[i], eps[i].durationSeconds, eps[i].durationSeconds);
     const rw = await req('GET', '/rewards', { token: t });
     assert(rw.json.data.watchTime.minutesToday >= 10, `minutesToday >= 10 (got ${rw.json.data.watchTime.minutesToday})`);
     assertEq(rw.json.data.watchTime.claimableCoins, 10, 'claimable = 1 block x 10 coins');
@@ -657,7 +661,7 @@ try {
       const u2 = await freshUser('watchcap');
       const t2 = u2.tokens.accessToken;
       const eps2 = await seriesEpisodes(t2, seriesId);
-      await postWatch(t2, seriesId, eps2[0], 600, 600);
+      for (let i = 0; i < 6; i++) await postWatch(t2, seriesId, eps2[i], eps2[i].durationSeconds, eps2[i].durationSeconds);
       const rw2 = await req('GET', '/rewards', { token: t2 });
       assertEq(rw2.json.data.watchTime.claimableCoins, 5, 'claimable clamped to daily cap 5');
       const c2 = await req('POST', '/rewards/watch-time/claim', { token: t2, body: {} });
@@ -828,6 +832,240 @@ try {
     } finally { await patchSettings({ maintenance_mode: false }); }
     const after = await req('GET', '/config');
     assertEq(after.json.data.maintenanceMode, false, 'maintenance off after restore');
+  });
+
+  // ================= PHASE 3: review-fix regression tests =================
+  const emailToken = (email, sub) => {
+    const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+    return `${b64u({ alg: 'none' })}.${b64u({ sub, email, name: email })}.sig`;
+  };
+  const watchRaw = (token, body) => req('POST', '/me/watch-history', { token, body });
+
+  // 43. ad reward: settings amount is authoritative, daily cap enforced
+  await testCase(43, 'ad reward: pays settings amount (body amount ignored), cap 5/day, 6th pays 0', async () => {
+    const u = await freshUser('ad');
+    const t = u.tokens.accessToken;
+    const b0 = await balanceOf(t);
+    for (let i = 0; i < 5; i++) {
+      const r = await req('POST', '/rewards/ad', { token: t, body: { amount: 9999 } });
+      assertEq(r.status, 200, 'ad claim status');
+      assert(r.json.data.success === true && r.json.data.coins === 20, `ad pays settings amount 20, not client amount (got ${r.json.data.coins})`);
+    }
+    assertEq(await balanceOf(t), b0 + 100, 'balance +5x20 after 5 ad claims');
+    const sixth = await req('POST', '/rewards/ad', { token: t, body: {} });
+    assert(sixth.json.data.success === false && sixth.json.data.coins === 0, '6th ad claim pays 0 (daily cap)');
+  });
+
+  // 44. like transitions: repeat like does not inflate likeCount or missions
+  await testCase(44, 'like: likeCount moves only on transitions (like,like,unlike,like)', async () => {
+    const u = await freshUser('liker');
+    const t = u.tokens.accessToken;
+    const before = (await req('GET', `/series/${seriesId}`, { token: t })).json.data.series.likeCount;
+    const like = (want) => req('POST', `/series/${seriesId}/like`, { token: t, body: { like: want } });
+    assertEq((await like(true)).json.data.likeCount, before + 1, 'first like +1');
+    assertEq((await like(true)).json.data.likeCount, before + 1, 'repeat like: no change');
+    assertEq((await like(false)).json.data.likeCount, before, 'unlike -1');
+    assertEq((await like(true)).json.data.likeCount, before + 1, 're-like +1');
+  });
+
+  // 45. watch-history is server-verified (forgery gets nothing)
+  await testCase(45, 'watch-history: invented ids rejected; zero-position posts unlock nothing; inflated/seek-back positions earn nothing extra', async () => {
+    const u = await freshUser('forger');
+    const t = u.tokens.accessToken;
+    const eps = await seriesEpisodes(t, seriesId);
+    const bad1 = await watchRaw(t, { seriesId, episodeId: 'episode-invented', episodeNumber: 1, positionSeconds: 50, durationSeconds: 50, completed: false });
+    assertEq(bad1.status, 400, 'invented episodeId -> 400');
+    const bad2 = await watchRaw(t, { seriesId: 'series-invented', episodeId: eps[0].id, episodeNumber: 1, positionSeconds: 50, durationSeconds: 50, completed: false });
+    assertEq(bad2.status, 404, 'invented seriesId -> 404');
+    for (let i = 0; i < 3; i++) await postWatch(t, seriesId, eps[i], 0);
+    const chestTry = await req('POST', '/rewards/chests/chest_3/claim', { token: t, body: {} });
+    assertEq(chestTry.status, 403, 'zero-position posts do NOT unlock chest_3');
+    await postWatch(t, seriesId, eps[0], 999999, 999999);
+    let rw = await req('GET', '/rewards', { token: t });
+    assertEq(rw.json.data.watchTime.minutesToday, Math.floor(eps[0].durationSeconds / 60), 'inflated position clamped to real episode duration');
+    await postWatch(t, seriesId, eps[0], 0);
+    await postWatch(t, seriesId, eps[0], eps[0].durationSeconds, eps[0].durationSeconds);
+    rw = await req('GET', '/rewards', { token: t });
+    assertEq(rw.json.data.watchTime.minutesToday, Math.floor(eps[0].durationSeconds / 60), 'seek-back re-post earns nothing (high-water mark)');
+  });
+
+  // 46. mission claim respects missions_enabled
+  await testCase(46, 'missions: claim works when enabled; 403 FEATURE_DISABLED when missions_enabled=false', async () => {
+    const u = await freshUser('missionflag');
+    const t = u.tokens.accessToken;
+    await req('POST', '/rewards/checkin', { token: t, body: {} });
+    try {
+      await patchSettings({ missions_enabled: false });
+      const blocked = await req('POST', '/rewards/missions/daily_checkin/claim', { token: t, body: {} });
+      assertEq(blocked.status, 403, 'mission claim while disabled -> 403');
+      assertEq(blocked.json.error.code, 'FEATURE_DISABLED', 'FEATURE_DISABLED code');
+    } finally { await patchSettings({ missions_enabled: true }); }
+    const okClaim = await req('POST', '/rewards/missions/daily_checkin/claim', { token: t, body: {} });
+    assertEq(okClaim.status, 200, 'mission claim after re-enable');
+    assertEq(okClaim.json.data.coins, 10, 'daily_checkin mission pays 10');
+  });
+
+  // 47. unlock refuses VIP-gated episodes for non-VIP (no charge)
+  await testCase(47, 'unlock: VIP-only episode as non-VIP -> 403 VIP_REQUIRED, balance unchanged', async () => {
+    const u = await freshUser('vipunlock');
+    const t = u.tokens.accessToken;
+    // NB: vipEp (episodes[0] of the VIP series) is isFree — pick a non-free one.
+    const vipEps = await seriesEpisodes(t, vipSeriesId);
+    const target = vipEps.find((e) => !e.isFree && e.isVipOnly);
+    assert(target, 'non-free VIP episode fixture');
+    const b0 = await balanceOf(t);
+    const r = await req('POST', `/episodes/${target.id}/unlock`, { token: t, body: {} });
+    assertEq(r.status, 403, `VIP unlock status (body ${r.text})`);
+    assertEq(r.json.error.code, 'VIP_REQUIRED', 'VIP_REQUIRED code');
+    assertEq(await balanceOf(t), b0, 'no coins charged for refused unlock');
+  });
+
+  // 48. captions are entitlement-gated like playback
+  await testCase(48, 'captions: locked episode list [] and VTT 403 before unlock; VTT 200 after unlock', async () => {
+    const gen = await req('POST', `/admin/episodes/${lockedEp.id}/captions/generate`, { admin: true, body: {} });
+    assertEq(gen.status, 201, 'admin generate for locked episode');
+    let done = false;
+    for (let i = 0; i < 75 && !done; i++) {
+      const adm = await req('GET', '/admin/captions', { admin: true });
+      const job = (adm.json.data.jobs || []).find((j) => j.id === gen.json.data.jobId);
+      if (job && (job.status === 'done' || job.status === 'failed')) done = job.status === 'done';
+      else await new Promise((r) => setTimeout(r, 200));
+    }
+    assert(done, 'caption job for locked episode done');
+    const u = await freshUser('capgate');
+    const t = u.tokens.accessToken;
+    const list = await req('GET', `/episodes/${lockedEp.id}/captions`, { token: t });
+    assertEq(list.json.data.languages.length, 0, 'locked episode exposes no caption languages');
+    const raw = await req('GET', `/episodes/${lockedEp.id}/captions/orig`, { token: t });
+    assertEq(raw.status, 403, 'locked episode VTT -> 403');
+    await req('POST', `/admin/users/${u.user.id}/coins`, { admin: true, body: { amount: 500 } });
+    const unl = await req('POST', `/episodes/${lockedEp.id}/unlock`, { token: t, body: {} });
+    assertEq(unl.status, 200, 'unlock after admin coin grant');
+    const raw2 = await req('GET', `/episodes/${lockedEp.id}/captions/orig`, { token: t });
+    assertEq(raw2.status, 200, 'VTT served after unlock');
+    assert(raw2.text.startsWith('WEBVTT'), 'VTT content after unlock');
+  });
+
+  // 49. relink: guest merge works once, is conflict-safe; non-guest target refused
+  await testCase(49, 'relink: guest coins merge into primary; guest deleted; merging a non-guest account -> 403', async () => {
+    const guest = await freshUser('relink-guest');
+    const primary = await req('POST', '/auth/firebase', { body: { idToken: emailToken('primary@example.com', 'sub-primary-1') } });
+    assertEq(primary.status, 200, 'primary (email) auth');
+    const pt = primary.json.data.tokens.accessToken;
+    const guestBal = await balanceOf(guest.tokens.accessToken);
+    const pBefore = await balanceOf(pt);
+    const r = await req('POST', '/auth/relink', { token: pt, body: { guestUserId: guest.user.id } });
+    assertEq(r.status, 200, `relink status (body ${r.text})`);
+    assertEq(await balanceOf(pt), pBefore + guestBal, 'primary balance gained guest coins');
+    const guestMe = await req('GET', '/auth/me', { token: guest.tokens.accessToken });
+    assertEq(guestMe.status, 401, 'merged guest account is gone');
+    const retry = await req('POST', '/auth/relink', { token: pt, body: { guestUserId: guest.user.id } });
+    assertEq(retry.status, 200, 'relink retry is idempotent (no double grant)');
+    assertEq(await balanceOf(pt), pBefore + guestBal, 'retry did not grant twice');
+    const victim = await req('POST', '/auth/firebase', { body: { idToken: emailToken('victim@example.com', 'sub-victim-1') } });
+    const attack = await req('POST', '/auth/relink', { token: pt, body: { guestUserId: victim.json.data.user.id } });
+    assertEq(attack.status, 403, 'merging a non-guest account -> 403');
+    const victimMe = await req('GET', '/auth/me', { token: victim.json.data.tokens.accessToken });
+    assertEq(victimMe.status, 200, 'victim account untouched');
+  });
+
+  // 50. account deletion erases the account (me + refresh both die)
+  await testCase(50, 'DELETE /auth/account: /auth/me 401 and refresh 401 afterwards', async () => {
+    const u = await freshUser('deleteme');
+    const del = await req('DELETE', '/auth/account', { token: u.tokens.accessToken });
+    assertEq(del.status, 200, 'delete status');
+    const me = await req('GET', '/auth/me', { token: u.tokens.accessToken });
+    assertEq(me.status, 401, 'me after delete -> 401');
+    const ref = await req('POST', '/auth/refresh', { body: { refreshToken: u.tokens.refreshToken } });
+    assertEq(ref.status, 401, 'refresh after delete -> 401');
+  });
+
+  // 51. refresh for an admin-deleted user is a clean 401, never a 500
+  await testCase(51, 'refresh after admin user-delete -> 401 (not 500)', async () => {
+    const u = await freshUser('admindeleted');
+    const del = await req('DELETE', `/admin/users/${u.user.id}`, { admin: true });
+    assertEq(del.status, 200, 'admin delete status');
+    const ref = await req('POST', '/auth/refresh', { body: { refreshToken: u.tokens.refreshToken } });
+    assertEq(ref.status, 401, `refresh status (body ${ref.text})`);
+  });
+
+  // 52. malformed JSON -> 400; unknown settings key -> 400; negative limit clamped
+  await testCase(52, 'robustness: malformed JSON 400 BAD_JSON; unknown settings key 400; limit=-5 clamped', async () => {
+    const bad = await fetch(`${API}/auth/firebase`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{not json' });
+    assertEq(bad.status, 400, 'malformed JSON -> 400');
+    const badJson = await bad.json();
+    assertEq(badJson.error.code, 'BAD_JSON', 'BAD_JSON code');
+    const unk = await req('PATCH', '/admin/settings', { admin: true, body: { no_such_setting: 1 } });
+    assertEq(unk.status, 400, 'unknown settings key -> 400');
+    const lim = await req('GET', '/discover?limit=-5');
+    assertEq(lim.status, 200, 'negative limit still 200');
+    assert(Array.isArray(lim.json.data.series) && lim.json.data.series.length >= 1 && lim.json.data.series.length <= 100, 'negative limit clamped to a sane page');
+  });
+
+  // 53. admin PATCH/DELETE on missing rows -> 404 (not 500 / false success)
+  await testCase(53, 'admin: PATCH/DELETE missing genre, episode, series -> 404', async () => {
+    assertEq((await req('PATCH', '/admin/genres/genre-nope', { admin: true, body: { name: 'X' } })).status, 404, 'PATCH missing genre 404');
+    assertEq((await req('DELETE', '/admin/genres/genre-nope', { admin: true })).status, 404, 'DELETE missing genre 404');
+    assertEq((await req('PATCH', '/admin/episodes/ep-nope', { admin: true, body: { title: 'X' } })).status, 404, 'PATCH missing episode 404');
+    assertEq((await req('DELETE', '/admin/episodes/ep-nope', { admin: true })).status, 404, 'DELETE missing episode 404');
+    assertEq((await req('PATCH', '/admin/series/series-nope', { admin: true, body: { title: 'X' } })).status, 404, 'PATCH missing series 404');
+    const neg = await req('POST', '/admin/episodes', { admin: true, body: { seriesId, episodeNumber: 99, coinCost: -5 } });
+    assertEq(neg.status, 400, 'negative coinCost rejected (would mint coins on unlock)');
+  });
+
+  // 54. referral code is case-insensitive on entry
+  await testCase(54, 'referral: lower-case transcription of a valid code applies', async () => {
+    const a = await freshUser('refcase-a');
+    const code = (await req('GET', '/auth/me', { token: a.tokens.accessToken })).json.data.user.referralCode;
+    const b = await freshUser('refcase-b');
+    const apply = await req('POST', '/auth/referral', { token: b.tokens.accessToken, body: { code: code.toLowerCase() } });
+    assertEq(apply.status, 200, `lowercase referral apply (body ${apply.text})`);
+  });
+
+  // 55. check-in day-1 payout equals the configured base exactly (streak ladder)
+  await testCase(55, 'checkin: fresh user day-1 payout = checkin_amounts[0] exactly', async () => {
+    const s = await getSettings();
+    const u = await freshUser('checkin-amount');
+    const ci = await req('POST', '/rewards/checkin', { token: u.tokens.accessToken, body: {} });
+    assertEq(ci.status, 200, 'checkin status');
+    assertEq(ci.json.data.coins, s.checkin_amounts[0], `day-1 coins = base ${s.checkin_amounts[0]}`);
+    const rw = await req('GET', '/rewards', { token: u.tokens.accessToken });
+    assertEq(rw.json.data.currentDay, 1, 'currentDay 1 after first claim');
+    assertEq(rw.json.data.currentStreak, 1, 'streak 1 after first claim');
+  });
+
+  // 56. event with open-ended (null) dates is active
+  await testCase(56, 'events: null startsAt/endsAt event is active and doubles checkin', async () => {
+    const s = await getSettings();
+    const ev = await req('POST', '/admin/events', { admin: true, body: { name: 'Open-ended x2', multiplier: 2, active: true } });
+    assertEq(ev.status, 201, `open-ended event create (body ${ev.text})`);
+    const evId = ev.json.data.id;
+    try {
+      const u = await freshUser('open-event');
+      const rw = await req('GET', '/rewards', { token: u.tokens.accessToken });
+      assert(rw.json.data.activeEvent && rw.json.data.activeEvent.multiplier === 2, 'open-ended event reported active');
+      const ci = await req('POST', '/rewards/checkin', { token: u.tokens.accessToken, body: {} });
+      assertEq(ci.json.data.coins, s.checkin_amounts[0] * 2, 'checkin doubled by open-ended event');
+    } finally { await req('PATCH', `/admin/events/${evId}`, { admin: true, body: { active: false } }); }
+  });
+
+  // 57. watch-time daily cap binds even under a 2x event
+  await testCase(57, 'watch-time: payout never exceeds daily cap, even with a 2x event active', async () => {
+    const ev = await req('POST', '/admin/events', { admin: true, body: { name: 'Cap Test x2', multiplier: 2, startsAt: new Date(Date.now() - 60000).toISOString(), endsAt: new Date(Date.now() + 3600000).toISOString(), active: true } });
+    assertEq(ev.status, 201, 'cap-test event created');
+    try {
+      await patchSettings({ watch_time_daily_cap_coins: 5 });
+      const u = await freshUser('capevent');
+      const t = u.tokens.accessToken;
+      const eps = await seriesEpisodes(t, seriesId);
+      for (let i = 0; i < 6; i++) await postWatch(t, seriesId, eps[i], eps[i].durationSeconds, eps[i].durationSeconds);
+      const claim = await req('POST', '/rewards/watch-time/claim', { token: t, body: {} });
+      assertEq(claim.status, 200, 'cap claim status');
+      assertEq(claim.json.data.coins, 5, `payout capped at 5 despite 2x event (got ${claim.json.data.coins})`);
+    } finally {
+      await patchSettings({ watch_time_daily_cap_coins: 100 });
+      await req('PATCH', `/admin/events/${ev.json.data.id}`, { admin: true, body: { active: false } });
+    }
   });
 } catch (e) {
   failed++;

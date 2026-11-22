@@ -1,0 +1,58 @@
+Probe server on http://127.0.0.1:41411 (temp DB /tmp/dramanow-sec-mJCSEA/app.db)
+Catalog: series=series-married-to-the-ceo freeEp=series-married-to-the-ceo-ep1 lockedEp=series-married-to-the-ceo-ep3 vipEp=series-vip-empire-of-desire-ep1
+[BLOCKED] A1 JWT alg=none forgery — rejected 401
+[BLOCKED] A2 JWT wrong-secret forgery — rejected 401
+[BLOCKED] A3 JWT tampered-payload (sub swap) — rejected 401
+[BLOCKED] A4 JWT expired token — rejected 401
+[BLOCKED] A5 tokens of deleted user — access 401 + refresh 401
+[BLOCKED] A6 refresh reuse after rotation (family revoked) — old 401 + new (family) 401
+[BLOCKED] A7 access/refresh token type confusion — both 401
+[BLOCKED] A8 dev-auth token games — same token=same user; empty-sub/number/huge handled; empty rejected 400; server alive
+[BLOCKED] A9 production refuses default secrets — exited 1 with FATAL
+[BLOCKED] A9b production /auth/firebase without Firebase verification — 501 AUTH_NOT_CONFIGURED
+[BLOCKED] I1 cross-user notification read/mark — no leak; victim notification stays unread
+[BLOCKED] I3 locked/VIP playback + captions gating — no-token 401; locked 403; VIP 403; captions [] + 403
+[BLOCKED] I4 unlock replay double-charge — first cost 30, second free, balance stable
+[BLOCKED] I5 watch-history userId spoofing — victim history untouched
+[BLOCKED] E1 check-in parallel race (20x) — exactly 1 payout of 20; balance consistent
+[BLOCKED] E2 wheel parallel race (12x) — 12 spins ok, balance 5 == 30 + won 155 - 20*9 paid
+[BLOCKED] E3 chest parallel race (10x) — exactly 1 pays 15, rest 409
+[BLOCKED] E4 mission parallel race (10x) — exactly 1 pays 20
+[BLOCKED] E5 watch-time parallel race (10x) — total paid exactly 10 across all responses
+[BLOCKED] E6 referral Sybil farming (12 accounts) — referrer gain 500 (cap 10/day); applied=10 rejected=2
+[BLOCKED] E7 ad reward amount tampering — body amount ignored; server pays 20 each
+[BLOCKED] E8 negative coinCost episode create/patch — both 400
+[ACCEPTED-RISK] E9 watch-time forgery on unknown-duration episode — one forged post accrued 16666 min; claim paid 100 (bounded by daily cap 100; client-asserted positions are honor-system)
+[BLOCKED] R1 relink merge of non-guest victim — 403 + victim intact
+[BLOCKED] R2 guest merge transfers coins + deletes guest — primary 30+50=80; guest token 401
+[BLOCKED] R3 relink loop/idempotency — re-merge, self-merge, ghost-merge all no-ops, balance stable
+[BLOCKED] AD1 admin token variants — all six variants 401
+[BLOCKED] AD2 admin routes outside /admin prefix — 401/404/404
+[BLOCKED] AD3 settings type confusion + proto keys — all 9 rejected 400; no pollution
+[INFO] AD4 SQL injection + LIKE wildcard — injection BLOCKED (table alive, no leak); '%' wildcard returns all 8 series (public catalog, INFO only)
+[BLOCKED] AD5 stored XSS in dashboard rendering — esc() neutralizes < > " ' everywhere; no unescaped data interpolations
+[BLOCKED] AD6 admin coin grant NaN/huge + VIP ghost — "abc" 400, balance intact 30; 1e21 400; VIP ghost 404
+[BLOCKED] AD7 negative coins in missions/tasks — both 400
+[BLOCKED] AD8 event multiplier 1e308 overflow — event rejected 400
+[BLOCKED] AD9 admin static path traversal — all 404, no file content leaked
+[BLOCKED] IN1 JSON null body — 400 (no 500)
+[BLOCKED] IN2 number/array JSON body — both 400 VALIDATION
+[BLOCKED] IN3 6MB body — 413 PAYLOAD_TOO_LARGE
+[BLOCKED] IN4 malformed JSON — 400 BAD_JSON
+[BLOCKED] IN5 malformed percent-encoding path — 400
+[BLOCKED] IN6 unicode/NUL in text fields — stored + returned, no crash
+[INFO] IN7 non-JSON content-type with JSON body — parsed anyway (tolerant, no security impact)
+[BLOCKED] IN8 __proto__ in user JSON body — no pollution; request accepted normally
+[BLOCKED] C1 SSRF: caption worker fetched loopback URL — no fetch to loopback; job status=failed error=Video URL resolves to a private/loopback address — blocked (SSRF guard)
+[BLOCKED] C2 SSRF: localhost hostname — no fetch via localhost
+[BLOCKED] C3 file:// videoUrl in caption pipeline — job failed cleanly; server alive
+[BLOCKED] C4 WHISPER_CMD shell injection — no shell: marker file never created
+[BLOCKED] C5 caption job flooding (30x same episode) — all 30 calls returned the same deduped jobId
+[BLOCKED] C6 caption target-language flooding (60 langs) — generate status=400, tracks=0
+[BLOCKED] C7 VTT cue injection via title/description — no raw <script>; --> only in well-formed timing lines
+[ACCEPTED-RISK] RL1 mass guest account creation (100 in a burst) — 100/100 created in 177ms — NO rate limit; Sybil enabler for referral farming. Recommend Firebase App Check + reverse-proxy rate limiting in production; a server-side limiter was NOT added (would break the 57-test suite + shared-IP app traffic)
+[BLOCKED] L1 server fingerprint headers — no Server/X-Powered-By headers
+[BLOCKED] L2 /config secret leakage — no secret-ish keys in public config
+[INFO] L3 error-response detail leakage (500 path) — status=400 body={"error":{"code":"BAD_PATH","message":"Malformed URL path"}}
+
+SUMMARY: total=54 BLOCKED=49 CONFIRMED=0 ACCEPTED-RISK=2 INFO=3

@@ -7,7 +7,7 @@
  * GET/PATCH /api/v1/admin/settings take effect at runtime immediately —
  * routes read through getSetting() on every request, never a cached copy.
  */
-const { get, run } = require('./db');
+const { all, get, run } = require('./db');
 
 const CHECKIN_DEFAULT = [20, 50, 35, 30, 35, 20, 50]; // kDailyCheckinRewards
 const intEnv = (name, dflt) => { const v = parseInt(process.env[name] || '', 10); return Number.isFinite(v) ? v : dflt; };
@@ -47,6 +47,13 @@ const DEFAULTS = {
   referrals_enabled: true,
   referral_bonus_referrer: 50,
   referral_bonus_referee: 50,
+  // Anti-Sybil: max referral REWARDS one referrer can earn per (UTC) day.
+  // A farm of fresh guest accounts can otherwise mint unlimited coins
+  // (see security audit E6); the 24h referee window alone does not stop it.
+  referral_daily_reward_cap: 10,
+  checkin_level_bonus: 5, // extra coins per level above 1 on check-in
+  checkin_streak_bonus: 2, // extra coins per streak day on check-in
+  checkin_streak_cap: 7, // streak days counted toward the check-in bonus
   // ---- Phase 2: player feature flags ----
   ...Object.fromEntries(PLAYER_FLAGS.map((k) => [k, true])),
   skip_intro_window_seconds: 90,
@@ -75,7 +82,8 @@ const INT_KEYS = new Set([
   'welcome_coin_bonus', 'episode_unlock_coin_cost', 'ad_reward_amount', 'ad_daily_cap',
   'wheel_free_spins_per_day', 'wheel_extra_spin_cost',
   'watch_time_coins_per_block', 'watch_time_block_minutes', 'watch_time_daily_cap_coins',
-  'referral_bonus_referrer', 'referral_bonus_referee',
+  'referral_bonus_referrer', 'referral_bonus_referee', 'referral_daily_reward_cap',
+  'checkin_level_bonus', 'checkin_streak_bonus', 'checkin_streak_cap',
   'skip_intro_window_seconds', 'skip_intro_to_seconds', 'auto_next_countdown_seconds',
 ]);
 
@@ -88,9 +96,10 @@ ensureSettings();
 
 function getSettings() {
   const out = { ...DEFAULTS };
-  for (const k of Object.keys(DEFAULTS)) {
-    const row = get('SELECT value FROM settings WHERE key=?', k);
-    if (row) { try { out[k] = JSON.parse(row.value); } catch { /* keep default */ } }
+  for (const row of all('SELECT key, value FROM settings')) {
+    // hasOwn, NOT `in`: a legacy 'constructor' row would otherwise shadow
+    // Object.prototype.constructor on the returned settings object.
+    if (Object.hasOwn(out, row.key)) { try { out[row.key] = JSON.parse(row.value); } catch { /* keep default */ } }
   }
   return out;
 }
@@ -101,7 +110,9 @@ function updateSettings(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return { error: 'Body must be an object' };
   const clean = {};
   for (const [k, v] of Object.entries(patch)) {
-    if (!(k in DEFAULTS)) return { error: `Unknown setting: ${k}` };
+    // hasOwn, NOT `in`: `'__proto__' in {}` and `'constructor' in {}` are
+    // true via the prototype chain, which let inherited keys into the store.
+    if (!Object.hasOwn(DEFAULTS, k)) return { error: `Unknown setting: ${k}` };
     if (BOOL_KEYS.has(k)) {
       if (typeof v !== 'boolean') return { error: `${k} must be a boolean` };
       clean[k] = v;
@@ -115,17 +126,26 @@ function updateSettings(patch) {
       if (!['demo', 'deepl', 'google'].includes(v)) return { error: 'mt_provider must be one of demo|deepl|google' };
       clean[k] = v;
     } else if (k === 'checkin_amounts') {
-      if (!Array.isArray(v) || v.length !== 7 || v.some((n) => !Number.isInteger(n) || n < 0)) return { error: 'checkin_amounts must be an array of 7 non-negative integers' };
+      if (!Array.isArray(v) || v.length !== 7 || v.some((n) => !Number.isInteger(n) || n < 0 || n > 1e9)) return { error: 'checkin_amounts must be an array of 7 non-negative integers (each <= 1e9)' };
       clean[k] = v;
     } else if (k === 'wheel_segments' || k === 'wheel_weights') {
-      if (!Array.isArray(v) || !v.length || v.some((n) => !Number.isInteger(n) || n < 0)) return { error: `${k} must be a non-empty array of non-negative integers` };
+      if (!Array.isArray(v) || !v.length || v.some((n) => !Number.isInteger(n) || n < 0 || n > 1e9)) return { error: `${k} must be a non-empty array of non-negative integers (each <= 1e9)` };
       clean[k] = v;
     } else if (k === 'chest_milestones') {
       const bad = !Array.isArray(v) || v.some((ms) => !ms || typeof ms !== 'object' || !Number.isInteger(ms.threshold) || ms.threshold <= 0 || !Number.isInteger(ms.coins) || ms.coins < 0);
       if (bad) return { error: 'chest_milestones must be an array of {threshold: positive int, coins: non-negative int}' };
+      const thresholds = v.map((ms) => ms.threshold);
+      if (new Set(thresholds).size !== thresholds.length) return { error: 'chest_milestones thresholds must be unique (duplicate thresholds make chests unclaimable)' };
       clean[k] = v.map((ms) => ({ threshold: ms.threshold, coins: ms.coins }));
+    } else if (k === 'watch_time_block_minutes') {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 1 || n > 1e9) return { error: 'watch_time_block_minutes must be a positive integer (1..1e9)' };
+      clean[k] = n;
     } else if (k === 'caption_target_languages') {
-      if (!Array.isArray(v) || v.some((s) => typeof s !== 'string' || !s)) return { error: 'caption_target_languages must be an array of language code strings' };
+      // Capped + shaped: an unbounded list would auto-generate that many
+      // caption tracks (and MT calls) per episode (see security audit C6).
+      const LANG = /^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})?$/;
+      if (!Array.isArray(v) || v.length > 10 || v.some((s) => typeof s !== 'string' || !s || (s !== 'orig' && !LANG.test(s)))) return { error: 'caption_target_languages must be an array of at most 10 language codes' };
       clean[k] = v;
     } else if (k === 'default_theme_preset') {
       const n = Number(v);
@@ -136,13 +156,25 @@ function updateSettings(patch) {
       clean[k] = v;
     } else if (INT_KEYS.has(k)) {
       const n = Number(v);
-      if (!Number.isInteger(n) || n < 0) return { error: `${k} must be a non-negative integer` };
+      // 1e20 etc. are "integers" to Number.isInteger but overflow SQLite
+      // INTEGER storage and break coin math — cap every admin int at 1e9.
+      if (!Number.isInteger(n) || n < 0 || n > 1e9) return { error: `${k} must be a non-negative integer (<= 1e9)` };
       clean[k] = n;
     } else { // numeric settings (fallback)
       const n = Number(v);
-      if (!Number.isInteger(n) || n < 0) return { error: `${k} must be a non-negative integer` };
+      if (!Number.isInteger(n) || n < 0 || n > 1e9) return { error: `${k} must be a non-negative integer (<= 1e9)` };
       clean[k] = n;
     }
+  }
+  // Cross-field validation: wheel geometry must stay consistent with the
+  // effective (patched-or-current) counterpart, or the spin silently degrades
+  // to uniform random.
+  const effective = { ...getSettings(), ...clean };
+  if (Array.isArray(effective.wheel_segments) && Array.isArray(effective.wheel_weights)) {
+    if (effective.wheel_segments.length !== effective.wheel_weights.length)
+      return { error: `wheel_weights length (${effective.wheel_weights.length}) must equal wheel_segments length (${effective.wheel_segments.length})` };
+    if (effective.wheel_weights.reduce((a, b) => a + b, 0) <= 0)
+      return { error: 'wheel_weights must sum to more than 0' };
   }
   for (const [k, v] of Object.entries(clean)) {
     run('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', k, JSON.stringify(v));

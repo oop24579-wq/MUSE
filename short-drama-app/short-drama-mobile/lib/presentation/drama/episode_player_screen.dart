@@ -10,6 +10,7 @@ import 'package:sizer/sizer.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/app_export.dart';
+import '../../core/tab_router.dart';
 import '../../models/drama/episode_model.dart';
 import '../../models/drama/playback_model.dart';
 import '../../models/drama/series_model.dart';
@@ -58,6 +59,22 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
   bool _controlsVisible = true;
   bool _locked = false;
   EpisodeAccess _access = EpisodeAccess.playable;
+
+  /// Monotonic load generation: a stale `_load()` (user switched episode
+  /// while a fetch/init was in flight) must never touch state afterwards.
+  int _loadGen = 0;
+
+  /// True when a playable episode's stream failed to load (network/bad URL).
+  /// Deliberately separate from [_locked]: a load failure is NOT a paywall,
+  /// and showing the coin-unlock overlay for it could charge the user for an
+  /// episode they already own.
+  bool _loadFailed = false;
+
+  /// In-flight guard for the unlock action (double-tap = double charge).
+  bool _unlocking = false;
+
+  /// Whether this series is in My List (episode-sheet button state).
+  bool _inMyList = false;
 
   /// Selected dub language (null = original track).
   String? _selectedLang;
@@ -148,7 +165,12 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _episodes = List.of(widget.episodes);
-    _index = widget.startIndex.clamp(0, _episodes.length - 1);
+    // Guard the empty list: clamp(0, -1) throws, and _current would
+    // RangeError on every build. Callers currently prevent this, but the
+    // player must not be a crash landmine for any future entry point.
+    _index = _episodes.isEmpty
+        ? 0
+        : widget.startIndex.clamp(0, _episodes.length - 1);
     _rippleAnim = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 550));
     _rippleAnim.addStatusListener((s) {
@@ -158,7 +180,17 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     });
     _loadPrefs();
     _loadHistory();
+    _loadMyListState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _loadMyListState() async {
+    try {
+      final detail =
+          await DramaService.instance.fetchSeriesDetail(widget.series.id);
+      if (!mounted || detail == null) return;
+      setState(() => _inMyList = detail.isFavorite);
+    } catch (_) {}
   }
 
   Future<void> _loadPrefs() async {
@@ -208,6 +240,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
   }
 
   Future<void> _load({Duration? seekTo}) async {
+    if (_episodes.isEmpty) return;
+    final gen = ++_loadGen;
     _cancelAutoNext();
     _endHandled = false;
     _showResumeBanner = false;
@@ -219,6 +253,12 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       _access = access;
       _locked = access != EpisodeAccess.playable;
       _initializing = access == EpisodeAccess.playable;
+      _loadFailed = false;
+      // Drop the previous episode's playback/captions immediately: while the
+      // new episode loads, the quality/CC buttons and caption overlay must
+      // not act on (or render) the old episode's data.
+      _playback = null;
+      _captionCues = const [];
     });
 
     if (access != EpisodeAccess.playable) return;
@@ -227,19 +267,19 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     // the legacy single-URL fetch as fallback.
     final playback = await PlaybackService.instance
         .getPlayback(episode.id, lang: _selectedLang);
-    if (!mounted) return;
+    if (!mounted || gen != _loadGen) return;
     _playback = playback;
     var url = playback?.videoUrl;
     url ??= await DramaService.instance
         .getEpisodeVideoUrl(episode.id, lang: _selectedLang);
-    if (!mounted) return;
+    if (!mounted || gen != _loadGen) return;
     if (_qualityLabel != 'Auto' && playback != null) {
       url = playback.urlForLabel(_qualityLabel) ?? url;
     }
     if (url == null || url.isEmpty) {
       setState(() {
         _initializing = false;
-        _locked = true;
+        _loadFailed = true;
       });
       return;
     }
@@ -256,7 +296,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
 
     final ok = await _initController(url,
         seekTo: seekTo ?? resumeSeek, autoPlay: true);
-    if (!ok) return;
+    if (!ok || gen != _loadGen) return;
     if (_resumeBannerSeconds != null && mounted) {
       setState(() => _showResumeBanner = true);
     }
@@ -277,6 +317,11 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     _controller = controller;
     try {
       await controller.initialize();
+      // A newer load/switch may have disposed this controller while it was
+      // initializing. Bail out silently — touching state here (the old code
+      // set _locked = true) corrupted the NEW episode's screen, and calling
+      // addListener/play on a disposed controller throws.
+      if (!identical(_controller, controller)) return false;
       controller.setLooping(false);
       controller.addListener(_onTick);
       await controller.setPlaybackSpeed(_speed);
@@ -284,13 +329,21 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
         await controller.seekTo(seekTo);
       }
       if (autoPlay) await controller.play();
-      if (mounted) setState(() => _initializing = false);
-      return true;
-    } catch (_) {
       if (mounted) {
         setState(() {
           _initializing = false;
-          _locked = true;
+          _loadFailed = false;
+        });
+      }
+      return true;
+    } catch (_) {
+      // Only the CURRENT controller's failure is a real load failure. A
+      // stale controller throws because it was disposed mid-init — that is
+      // not a lock and must not touch state at all.
+      if (mounted && identical(_controller, controller)) {
+        setState(() {
+          _initializing = false;
+          _loadFailed = true;
         });
       }
       return false;
@@ -335,9 +388,12 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       if (mounted) setState(() => _captionCues = const []);
       return;
     }
-    final vtt =
-        await PlaybackService.instance.fetchCaptionVtt(_current.id, lang);
-    if (!mounted) return;
+    // Capture the episode this fetch belongs to: if the user switches
+    // episode while the VTT is in flight, the late response must not land
+    // on the new episode.
+    final epId = _current.id;
+    final vtt = await PlaybackService.instance.fetchCaptionVtt(epId, lang);
+    if (!mounted || _current.id != epId) return;
     setState(
         () => _captionCues = vtt == null ? const [] : parseWebVtt(vtt));
   }
@@ -496,7 +552,12 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       episodeNumber: _current.episodeNumber,
       positionSeconds: c?.value.position.inSeconds ?? 0,
       durationSeconds: c?.value.duration.inSeconds ?? (_current.durationSeconds ?? 0),
-      completed: completed,
+      // Once the end-of-episode handler has fired for this episode, every
+      // later progress record for it (episode switch, dispose) must keep
+      // completed = true: the server's watch-history upsert overwrites the
+      // flag verbatim, so a plain progress post used to resurrect finished
+      // episodes in Continue Watching and drop their watched checkmarks.
+      completed: completed || _endHandled,
     );
   }
 
@@ -537,37 +598,99 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
   /// re-reads its lock state from the API.
   void _invalidateSeriesCaches() {
     ref.invalidate(seriesDetailProvider(widget.series.id));
+    // A coin unlock changed the balance — keep the Rewards tab / any coin
+    // balance reader from showing the pre-unlock amount.
+    ref.invalidate(rewardsProvider);
+    ref.invalidate(coinBalanceProvider);
   }
 
   Future<void> _handleUnlock() async {
-    if (_access == EpisodeAccess.vipRequired) {
-      final nowVip = await DramaEntitlementService.instance
-          .presentPaywall(context, trigger: 'drama_episode');
-      if (nowVip && mounted) {
+    // The lock overlay stays visible during the network call, so without
+    // this guard a double-tap fires two unlock POSTs (double coin charge /
+    // stacked paywalls).
+    if (_unlocking) return;
+    _unlocking = true;
+    try {
+      if (_access == EpisodeAccess.vipRequired) {
+        final nowVip = await DramaEntitlementService.instance
+            .presentPaywall(context, trigger: 'drama_episode');
+        if (nowVip && mounted) {
+          _invalidateSeriesCaches();
+          _load();
+        }
+        return;
+      }
+      // Coin unlock
+      final res = await DramaService.instance.unlockEpisode(_current.id);
+      if (res['success'] == true) {
+        if (mounted) {
+          showTopToastSuccess(context, 'Episode unlocked');
+          context.read<UserProvider>().refreshUserInBackground();
+        }
+        final fresh = await DramaService.instance
+            .fetchEpisode(_current.id, seriesId: widget.series.id);
+        if (!mounted) return;
+        _episodes[_index] = fresh ?? _current.copyWith(isUnlocked: true);
         _invalidateSeriesCaches();
         _load();
+      } else if (res['code'] == 'INSUFFICIENT_COINS') {
+        // Was a dead-end toast before: now a dialog with the exact
+        // shortfall and an "Earn coins" action into the Rewards tab.
+        if (mounted) {
+          _showInsufficientCoins(res['message'] as String?);
+        }
+      } else {
+        if (mounted) showTopToastError(context, 'Could not unlock episode');
       }
-      return;
+    } finally {
+      _unlocking = false;
     }
-    // Coin unlock
-    final res = await DramaService.instance.unlockEpisode(_current.id);
-    if (res['success'] == true) {
-      if (mounted) {
-        showTopToastSuccess(context, 'Episode unlocked');
-        context.read<UserProvider>().refreshUserInBackground();
-      }
-      final fresh = await DramaService.instance
-          .fetchEpisode(_current.id, seriesId: widget.series.id);
-      if (!mounted) return;
-      _episodes[_index] = fresh ?? _current.copyWith(isUnlocked: true);
-      _invalidateSeriesCaches();
-      _load();
-    } else {
-      final msg = res['message'] == 'insufficient_coins'
-          ? 'Not enough coins'
-          : 'Could not unlock episode';
-      if (mounted) showTopToastError(context, msg);
-    }
+  }
+
+  /// Insufficient-coins dialog: how many coins the user is short (computed
+  /// from the episode cost and the displayed balance; the server's own
+  /// message — "Need N coins, balance is B" — is the fallback when the
+  /// local numbers can't produce a shortfall) plus an Earn-coins action.
+  void _showInsufficientCoins(String? serverMessage) {
+    final cost = _current.coinCost;
+    final balance = context.read<UserProvider>().user?.coinBalance ?? 0;
+    final shortfall = cost - balance;
+    final body = shortfall > 0
+        ? 'You need $shortfall more coins to unlock this episode '
+            '(cost: $cost · your balance: $balance). Daily check-ins, '
+            'missions and the lucky wheel all pay out coins.'
+        : (serverMessage != null && serverMessage.isNotEmpty
+            ? serverMessage
+            : 'Earn more coins with daily check-ins, missions and the '
+                'lucky wheel, then try again.');
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.backgroundDark,
+        title: const Text('Not enough coins',
+            style: TextStyle(color: Colors.white)),
+        content: Text(body, style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _goEarnCoins();
+            },
+            child: const Text('Earn coins'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Leave the player and land on the Rewards tab of the main shell.
+  void _goEarnCoins() {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    TabRouter.goTo(TabRouter.rewards);
   }
 
   void _disposeController() {
@@ -584,7 +707,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     _hudTimer?.cancel();
     _swipeToastTimer?.cancel();
     _rippleAnim.dispose();
-    _record();
+    if (_episodes.isNotEmpty) _record();
     _disposeController();
     super.dispose();
   }
@@ -718,6 +841,31 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_episodes.isEmpty) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.movie_outlined,
+                    color: Colors.white54, size: 56),
+                SizedBox(height: 2.h),
+                const Text('No episodes available',
+                    style: TextStyle(color: Colors.white, fontSize: 15)),
+                SizedBox(height: 2.h),
+                TextButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: const Text('Back',
+                      style: TextStyle(color: Colors.white70)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final c = _controller;
     final size = MediaQuery.of(context).size;
     final caption = _activeCaption;
@@ -761,6 +909,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
               const Center(child: CircularProgressIndicator(color: Colors.white)),
 
             if (_locked) _lockOverlay(),
+
+            if (!_locked && _loadFailed) _loadErrorOverlay(),
 
             // Double-tap seek ripple
             if (_showRipple && _cfg.feature('double_tap_seek'))
@@ -831,11 +981,12 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
             if (caption != null)
               CaptionOverlay(text: caption, fontSize: _captionFontSizePx),
 
-            if (_controlsVisible && !_locked && !_controlsLocked)
+            if (_controlsVisible && !_locked && !_loadFailed && !_controlsLocked)
               _controls(c),
 
             // Skip intro
             if (!_locked &&
+                !_loadFailed &&
                 !_controlsLocked &&
                 _cfg.feature('skip_intro') &&
                 c != null &&
@@ -932,6 +1083,51 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Shown when a playable episode's stream failed to load. Retry reloads;
+  /// this is intentionally NOT the unlock overlay (see [_loadFailed]).
+  Widget _loadErrorOverlay() {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.7),
+      alignment: Alignment.center,
+      padding: EdgeInsets.symmetric(horizontal: 8.w),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.cloud_off_rounded, color: Colors.white, size: 56),
+          SizedBox(height: 2.h),
+          Text(
+            "Couldn't load this episode",
+            style: TextStyle(
+                color: Colors.white, fontSize: 15.sp, fontWeight: FontWeight.w800),
+          ),
+          SizedBox(height: 1.h),
+          Text(
+            'Check your connection and try again.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white70, fontSize: 10.5.sp),
+          ),
+          SizedBox(height: 3.h),
+          FilledButton(
+            onPressed: () => _load(),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black87,
+              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 1.5.h),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+            ),
+            child: Text('Retry',
+                style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w800)),
+          ),
+          SizedBox(height: 2.h),
+          TextButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            child: const Text('Back', style: TextStyle(color: Colors.white70)),
+          ),
+        ],
       ),
     );
   }
@@ -1553,6 +1749,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
         : 'Episode ${ep.episodeNumber}';
     final pos = _controller?.value.position ?? Duration.zero;
     final stamp = _cfg.feature('share_moment') ? ' at ${_fmt(pos)}' : '';
+    unawaited(DramaService.instance.shareSeries(widget.series.id));
     try {
       await SharePlus.instance.share(ShareParams(
         text: 'Watch "${widget.series.title}" ($label)$stamp on HERO DRAMA',
@@ -1565,7 +1762,6 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
   void _showEpisodeSheet() {
     const rangeSize = 30;
     final total = _episodes.length;
-    bool inList = false;
     int rangeStart = (_index ~/ rangeSize) * rangeSize;
     final isVip = _isVip;
 
@@ -1643,18 +1839,34 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                           ),
                         ),
                         SizedBox(width: 4.w),
-                        _myListButton(inList, () async {
-                          inList = !inList;
+                        _myListButton(_inMyList, () async {
+                          // Was a sheet-local `false` before: the button
+                          // always claimed "not in list", so the first tap
+                          // re-added (and could never remove). State now
+                          // comes from the server via _loadMyListState.
+                          final add = !_inMyList;
+                          setState(() => _inMyList = add);
                           setSheet(() {});
-                          await DramaService.instance
-                              .toggleFavorite(widget.series.id, inList);
-                          if (mounted) {
-                            showTopToastSuccess(
-                                context,
-                                inList
-                                    ? 'Added to My List'
-                                    : 'Removed from My List');
+                          final ok = await DramaService.instance
+                              .toggleFavorite(widget.series.id, add);
+                          if (!mounted) return;
+                          // toggleFavorite returns the requested state on
+                          // success; a failed ADD returns false, which is
+                          // distinguishable (a successful remove also
+                          // returns false, so only the add path verifies).
+                          if (add && !ok) {
+                            setState(() => _inMyList = false);
+                            setSheet(() {});
+                            showTopToastError(
+                                context, 'Could not update My List');
+                            return;
                           }
+                          ref.invalidate(myListProvider);
+                          showTopToastSuccess(
+                              context,
+                              add
+                                  ? 'Added to My List'
+                                  : 'Removed from My List');
                         }),
                       ],
                     ),

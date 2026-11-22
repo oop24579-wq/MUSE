@@ -660,7 +660,7 @@ class DramaService {
       final data = await _api.post('/episodes/$episodeId/unlock');
       return data;
     } on ApiException catch (e) {
-      return {'success': false, 'message': e.message};
+      return {'success': false, 'code': e.code, 'message': e.message};
     } catch (_) {
       return {'success': false, 'message': 'error'};
     }

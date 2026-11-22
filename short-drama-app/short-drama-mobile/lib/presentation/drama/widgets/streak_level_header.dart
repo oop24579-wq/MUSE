@@ -27,8 +27,13 @@ class StreakLevelHeader extends StatelessWidget {
     final textColor =
         isDark ? AppTheme.textPrimaryDark : AppTheme.textPrimaryLight;
     final subColor = textColor.withValues(alpha: 0.55);
-    final progress =
-        nextLevelXp > 0 ? (xp / nextLevelXp).clamp(0.0, 1.0) : 0.0;
+    // Progress WITHIN the current level, not xp/nextLevelXp: the backend's
+    // thresholds are cumulative (level L starts at 100*(L-1)^2 XP and
+    // nextLevelXp = 100*L^2), so the raw ratio showed 25% the moment level
+    // 2 was reached. Mirrors RewardsState.levelProgress in reward_models.
+    final floor = 100 * (level - 1) * (level - 1);
+    final span = nextLevelXp - floor;
+    final progress = span > 0 ? ((xp - floor) / span).clamp(0.0, 1.0) : 0.0;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 4.w),

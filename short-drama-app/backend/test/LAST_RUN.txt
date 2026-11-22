@@ -1,4 +1,4 @@
-Server booted on http://127.0.0.1:34665 with temp DB /tmp/dramanow-test-B6p31C/app.db
+Server booted on http://127.0.0.1:33087 with temp DB /tmp/dramanow-test-nhmqzA/app.db
 PASS 1. health/root responds
 PASS 2. dev firebase auth creates user + welcome coin bonus (30)
 PASS 3. refresh flow: new tokens issued; old refresh token rejected
@@ -32,7 +32,7 @@ PASS 30. premium_playback_mode=all_playback -> free playback 403 for non-VIP; ba
 PASS 31. GET /config shape (features/player/visual/economy) + PATCH player_pip=false reflects
 PASS 32. wheel: free spin shape, free spins exhaust at setting=1, paid spin deducts cost, insufficient -> 402
 PASS 33. chests: claim before unlock -> 403; watch 3 distinct episodes -> claim pays 15; second -> 409
-PASS 34. watch-time: >=10 min accrual -> claim pays 10; second claim pays 0; daily cap respected
+PASS 34. watch-time: >=10 min honest accrual -> claim pays 10; second claim pays 0; daily cap respected
 PASS 35. missions: watch_3_episodes progress 3 after 3 episodes; claim pays 20 once; second -> 409
 PASS 36. referral: B uses A code -> both +50; reuse -> 409; self-code -> 400
 PASS 37. event multiplier x2 (admin-created, active now) doubles checkin; deactivated after
@@ -41,6 +41,24 @@ PASS 39. playback includes captionLanguages [orig,ar,en] and qualities array of 
 PASS 40. admin DELETE caption track -> gone from list; captions_enabled=false -> playback captionLanguages []
 PASS 41. auto-generate: admin-create episode with videoUrl -> caption job appears for it
 PASS 42. maintenance: app endpoints 503 while GET /config still responds 200
+PASS 43. ad reward: pays settings amount (body amount ignored), cap 5/day, 6th pays 0
+PASS 44. like: likeCount moves only on transitions (like,like,unlike,like)
+PASS 45. watch-history: invented ids rejected; zero-position posts unlock nothing; inflated/seek-back positions earn nothing extra
+PASS 46. missions: claim works when enabled; 403 FEATURE_DISABLED when missions_enabled=false
+PASS 47. unlock: VIP-only episode as non-VIP -> 403 VIP_REQUIRED, balance unchanged
+PASS 48. captions: locked episode list [] and VTT 403 before unlock; VTT 200 after unlock
+PASS 49. relink: guest coins merge into primary; guest deleted; merging a non-guest account -> 403
+PASS 50. DELETE /auth/account: /auth/me 401 and refresh 401 afterwards
+PASS 51. refresh after admin user-delete -> 401 (not 500)
+PASS 52. robustness: malformed JSON 400 BAD_JSON; unknown settings key 400; limit=-5 clamped
+PASS 53. admin: PATCH/DELETE missing genre, episode, series -> 404
+PASS 54. referral: lower-case transcription of a valid code applies
+PASS 55. checkin: fresh user day-1 payout = checkin_amounts[0] exactly
+PASS 56. events: null startsAt/endsAt event is active and doubles checkin
+PASS 57. watch-time: payout never exceeds daily cap, even with a 2x event active
 
-SUMMARY: total=42 passed=42 failed=0
+SUMMARY: total=57 passed=57 failed=0
 RESULT: ALL PASS
+
+SECURITY PROBES: see test/SECURITY_RUN.txt — 54 attack probes executed 2026-11-22
+(backend/test/security-probes.mjs): 49 BLOCKED, 0 CONFIRMED, 2 ACCEPTED-RISK, 3 INFO.

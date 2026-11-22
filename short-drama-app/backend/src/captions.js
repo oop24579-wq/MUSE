@@ -14,13 +14,79 @@
  * keys (OPENAI_API_KEY / DEEPL_API_KEY / GOOGLE_TRANSLATE_API_KEY / WHISPER_CMD)
  * and switch the provider settings for production output.
  */
+const dns = require('node:dns').promises;
 const fs = require('node:fs');
+const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { all, get, run } = require('./db');
 const auth = require('./auth');
 const settings = require('./settings');
+
+/**
+ * SSRF guard for the ASR downloader (security audit C1/C2): episode videoUrls
+ * are admin-set, but a stolen admin token must not turn the server into a
+ * proxy into the private network (loopback, RFC1918, link-local, cloud
+ * metadata 169.254.169.254). Every URL — including redirect hops — is
+ * validated before fetching. TOCTOU note: the DNS answer is checked at
+ * validation time; fetch may resolve again, so this is defense-in-depth,
+ * not a guarantee against a hostile DNS.
+ */
+function isBlockedIp(ip) {
+  if (net.isIP(ip) === 4) {
+    const [a, b] = ip.split('.').map(Number);
+    if (a === 0 || a === 10 || a === 127) return true; // 0/8, 10/8, loopback
+    if (a === 169 && b === 254) return true; // link-local incl. cloud metadata
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16/12
+    if (a === 192 && b === 168) return true; // 192.168/16
+    if (a === 100 && b >= 64 && b <= 127) return true; // 100.64/10 CGNAT
+    if (a >= 224) return true; // multicast + reserved
+    return false;
+  }
+  if (net.isIP(ip) === 6) {
+    const low = ip.toLowerCase();
+    if (low === '::1' || low === '::') return true;
+    if (/^fe[89ab][0-9a-f]*:/.test(low)) return true; // fe80::/10 link-local
+    if (/^f[cd][0-9a-f]*:/.test(low)) return true; // fc00::/7 unique-local
+    if (low.startsWith('::ffff:')) { const v4 = low.slice(7); if (net.isIP(v4) === 4) return isBlockedIp(v4); }
+    return false;
+  }
+  return true; // not an IP at all -> blocked (defensive)
+}
+async function assertPublicHttpUrl(raw) {
+  let u;
+  try { u = new URL(raw); } catch { throw new Error('Invalid video URL for ASR'); }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('Video URL for ASR must be http(s)');
+  const host = u.hostname.toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) throw new Error('Video URL host is not public (localhost)');
+  if (net.isIP(host)) {
+    if (isBlockedIp(host)) throw new Error('Video URL resolves to a private/loopback address — blocked (SSRF guard)');
+    return u.toString();
+  }
+  let addrs;
+  try { addrs = await dns.lookup(host, { all: true }); } catch { throw new Error('Video URL host could not be resolved'); }
+  if (!addrs.length) throw new Error('Video URL host could not be resolved');
+  for (const a of addrs) if (isBlockedIp(a.address)) throw new Error('Video URL resolves to a private/loopback address — blocked (SSRF guard)');
+  return u.toString();
+}
+
+// Language-code shape for caption targets: 2-3 letter code, optional region.
+const LANG_RE = /^[a-z]{2,3}(-[a-zA-Z]{2,4})?$/;
+/** Sanitize a targets list: keep 'orig' + valid codes, dedupe, cap at 10. */
+function sanitizeTargets(targets) {
+  const list = Array.isArray(targets) ? targets : settings.getSetting('caption_target_languages');
+  const seen = new Set(); const out = [];
+  for (const t of list) {
+    if (typeof t !== 'string') continue;
+    const lang = t.trim();
+    if (lang !== 'orig' && !LANG_RE.test(lang)) continue;
+    if (seen.has(lang)) continue;
+    seen.add(lang); out.push(lang);
+    if (out.length >= 10) break;
+  }
+  return out.length ? out : ['ar', 'en'];
+}
 
 const now = () => new Date().toISOString();
 
@@ -33,9 +99,23 @@ function fmtTime(sec) {
   const milli = String(ms % 1000).padStart(3, '0');
   return `${h}:${m}:${s}.${milli}`;
 }
+function cleanSegments(segments) {
+  // Sanitize + normalize provider output before rendering: escape VTT markup
+  // chars, flatten newlines (a raw newline would inject fake cues), drop empty
+  // cues, sort by start, and guarantee end > start.
+  return (segments || [])
+    .map((s) => ({
+      start: Math.max(0, Number(s.start) || 0),
+      end: Number(s.end) || 0,
+      text: String(s.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\s*\n\s*/g, ' ').trim(),
+    }))
+    .filter((s) => s.text)
+    .sort((a, b) => a.start - b.start)
+    .map((s) => ({ ...s, end: Math.max(s.end, s.start + 0.5) }));
+}
 function renderVtt(segments) {
   let out = 'WEBVTT\n\n';
-  for (const seg of segments) out += `${fmtTime(seg.start)} --> ${fmtTime(seg.end)}\n${seg.text}\n\n`;
+  for (const seg of cleanSegments(segments)) out += `${fmtTime(seg.start)} --> ${fmtTime(seg.end)}\n${seg.text}\n\n`;
   return out;
 }
 
@@ -71,12 +151,31 @@ function demoAsrSegments(episode) {
 
 // ------------------------------------------------------------------ ASR -----
 async function downloadToTemp(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to download video for ASR (HTTP ${res.status})`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  const file = path.join(os.tmpdir(), `hd-asr-${auth.uid()}.mp4`);
-  fs.writeFileSync(file, buf);
-  return file;
+  // Bounded download: a stalled or huge videoUrl must never wedge the single
+  // caption worker (30s timeout, 200 MB cap). Redirects are followed manually
+  // (max 3) so every hop passes the SSRF guard — fetch's default redirect
+  // following would let a public URL bounce into the private network.
+  let current = url;
+  for (let hop = 0; hop < 4; hop++) {
+    const safe = await assertPublicHttpUrl(current);
+    const res = await fetch(safe, { signal: AbortSignal.timeout(30000), redirect: 'manual' });
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get('location');
+      if (!loc) throw new Error(`Failed to download video for ASR (HTTP ${res.status})`);
+      if (hop === 3) throw new Error('Too many redirects fetching video for ASR');
+      current = new URL(loc, safe).toString();
+      continue;
+    }
+    if (!res.ok) throw new Error(`Failed to download video for ASR (HTTP ${res.status})`);
+    const declared = parseInt(res.headers.get('content-length') || '0', 10);
+    if (declared > 200 * 1024 * 1024) throw new Error('Video too large for ASR download (>200MB)');
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > 200 * 1024 * 1024) throw new Error('Video too large for ASR download (>200MB)');
+    const file = path.join(os.tmpdir(), `hd-asr-${auth.uid()}.mp4`);
+    fs.writeFileSync(file, buf);
+    return file;
+  }
+  throw new Error('Too many redirects fetching video for ASR');
 }
 
 async function asrSegments(episode) {
@@ -92,7 +191,7 @@ async function asrSegments(episode) {
       form.append('model', 'whisper-1');
       form.append('response_format', 'verbose_json');
       const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form,
+        method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form, signal: AbortSignal.timeout(120000),
       });
       if (!res.ok) throw new Error(`OpenAI transcription failed (HTTP ${res.status}): ${(await res.text()).slice(0, 200)}`);
       const json = await res.json();
@@ -141,7 +240,7 @@ async function translateSegments(segments, lang) {
     segments.forEach((s) => params.append('text', s.text));
     params.append('target_lang', lang.toUpperCase());
     const res = await fetch('https://api-free.deepl.com/v2/translate', {
-      method: 'POST', headers: { Authorization: `DeepL-Auth-Key ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: params,
+      method: 'POST', headers: { Authorization: `DeepL-Auth-Key ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: params, signal: AbortSignal.timeout(60000),
     });
     if (!res.ok) throw new Error(`DeepL translate failed (HTTP ${res.status})`);
     const json = await res.json();
@@ -152,7 +251,7 @@ async function translateSegments(segments, lang) {
     if (!key) throw new Error('mt_provider=google but GOOGLE_TRANSLATE_API_KEY is not set');
     const res = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(key)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ q: segments.map((s) => s.text), target: lang, format: 'text' }),
+      body: JSON.stringify({ q: segments.map((s) => s.text), target: lang, format: 'text' }), signal: AbortSignal.timeout(60000),
     });
     if (!res.ok) throw new Error(`Google Translate failed (HTTP ${res.status})`);
     const json = await res.json();
@@ -186,7 +285,7 @@ function readyLanguages(episodeId) {
 function generateDemoTracksSync(episodeId, targets) {
   const episode = get('SELECT * FROM episodes WHERE id=?', episodeId);
   if (!episode) return;
-  const langs = targets && targets.length ? targets : settings.getSetting('caption_target_languages');
+  const langs = sanitizeTargets(targets);
   const segments = demoAsrSegments(episode);
   upsertTrack(episodeId, 'orig', 'asr', 'ready', renderVtt(segments));
   for (const lang of langs) {
@@ -198,17 +297,26 @@ function generateDemoTracksSync(episodeId, targets) {
 
 // --------------------------------------------------------------- Worker -----
 let workerRunning = false;
-const jobTargets = new Map(); // jobId -> target langs (not persisted; defaults re-read if lost)
 
 function enqueueCaptionJob(episodeId, targets) {
-  const langs = targets && targets.length ? targets : settings.getSetting('caption_target_languages');
+  const langs = sanitizeTargets(targets);
+  // Dedupe: an already queued/processing job for this episode is reused, so a
+  // double-click (or create + manual generate) never runs ASR/MT twice.
+  const existing = get("SELECT * FROM caption_jobs WHERE episodeId=? AND status IN ('queued','processing') ORDER BY createdAt ASC LIMIT 1", episodeId);
+  if (existing) return existing.id;
   const jobId = auth.uid();
-  run("INSERT INTO caption_jobs(id,episodeId,status,step,createdAt) VALUES(?,?,'queued','queued',?)", jobId, episodeId, now());
-  jobTargets.set(jobId, langs);
+  run("INSERT INTO caption_jobs(id,episodeId,status,step,targets,createdAt) VALUES(?,?,'queued','queued',?,?)", jobId, episodeId, JSON.stringify(langs), now());
   upsertTrack(episodeId, 'orig', 'asr', 'queued', null);
   for (const lang of langs) if (lang !== 'orig') upsertTrack(episodeId, lang, 'mt', 'queued', null);
   kickWorker();
   return jobId;
+}
+
+/** Boot recovery: jobs/tracks left 'processing' by a dead process are re-queued. */
+function recoverOnStartup() {
+  run("UPDATE caption_jobs SET status='queued', step='queued' WHERE status='processing'");
+  run("UPDATE caption_tracks SET status='queued' WHERE status='processing'");
+  kickWorker();
 }
 
 function kickWorker() {
@@ -230,7 +338,9 @@ async function processJob(jobId) {
   const job = get('SELECT * FROM caption_jobs WHERE id=?', jobId);
   if (!job) return;
   const episode = get('SELECT * FROM episodes WHERE id=?', job.episodeId);
-  const targets = jobTargets.get(jobId) || settings.getSetting('caption_target_languages');
+  let targets = null;
+  try { targets = job.targets ? JSON.parse(job.targets) : null; } catch { targets = null; }
+  if (!Array.isArray(targets) || !targets.length) targets = settings.getSetting('caption_target_languages');
   try {
     if (!episode) throw new Error('Episode not found');
     run("UPDATE caption_jobs SET status='processing', step='asr' WHERE id=?", jobId);
@@ -249,14 +359,17 @@ async function processJob(jobId) {
     const msg = e && e.message ? e.message : String(e);
     try {
       run("UPDATE caption_jobs SET status='failed', step='failed', error=?, finishedAt=? WHERE id=?", msg, now(), jobId);
+      // A failed REGENERATION must not destroy previously working captions:
+      // tracks that still hold an older VTT go back to 'ready'; only tracks
+      // with no usable VTT are marked 'failed'.
+      run("UPDATE caption_tracks SET status='ready' WHERE episodeId=? AND status IN ('queued','processing') AND vtt IS NOT NULL AND vtt<>''", job.episodeId);
       run("UPDATE caption_tracks SET status='failed' WHERE episodeId=? AND status IN ('queued','processing')", job.episodeId);
     } catch { /* never throw uncaught from the worker */ }
-  } finally {
-    jobTargets.delete(jobId);
   }
 }
 
 module.exports = {
-  renderVtt, demoAsrSegments, generateDemoTracksSync,
-  enqueueCaptionJob, processJob, kickWorker, readyLanguages, upsertTrack,
+  renderVtt, cleanSegments, demoAsrSegments, generateDemoTracksSync,
+  enqueueCaptionJob, processJob, kickWorker, recoverOnStartup, readyLanguages, upsertTrack,
+  sanitizeTargets, LANG_RE, assertPublicHttpUrl,
 };

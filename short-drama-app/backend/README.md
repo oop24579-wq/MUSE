@@ -230,3 +230,78 @@ sections covering all section types, reward tasks, Phase 2 missions, demo captio
 2 episodes of the first series, dubs on the dubbed series). Catalog seed runs on first boot only.
 Sample videos: public Google sample MP4s (`storage.googleapis.com/gtv-videos-bucket/sample/...`);
 covers: `picsum.photos/seed/<slug>/600/800`.
+
+## Security audit (2026-11-22, independent adversarial review)
+
+`test/security-probes.mjs` boots the server on a test port with a fresh temp DB
+(dev auth on) and executes 54 real attacks, recording BLOCKED or CONFIRMED.
+Latest run: **54 probes — 49 BLOCKED, 0 CONFIRMED, 2 ACCEPTED-RISK, 3 INFO**
+(full log: `test/SECURITY_RUN.txt`; the 57-test suite still passes 57/57).
+
+**Confirmed + fixed (all probes now BLOCKED):**
+- **E6 — referral Sybil farming (Medium).** 12 fresh guest accounts applying one
+  referrer's code paid 12×50 coins. Fix: `referral_daily_reward_cap` setting
+  (default 10/day, UTC day), enforced in `POST /auth/referral` with 429
+  `REFERRAL_DAILY_CAP` (`src/routes.js`, `src/settings.js`).
+- **AD3 — settings type confusion + prototype keys (Medium).** `PATCH /admin/settings`
+  accepted `welcome_coin_bonus: 1e20` (overflows SQLite INTEGER/coin math) and a
+  `constructor` key (a row was created via the prototype chain). Fix: `Object.hasOwn`
+  instead of `in` in `src/settings.js` (`updateSettings`, `getSettings`); all admin
+  ints capped at ≤1e9; `caption_target_languages` capped at 10 with a language-code
+  pattern.
+- **AD6 — admin coin-grant NaN (Medium).** `parseInt('abc')` → `NaN` corrupted the
+  balance to NULL. Fix: `adminInt` validation in `src/routes.js` (finite integer,
+  |amount| ≤ 1e9); admin `/users/:id/vip` returns 404 for a missing user.
+- **AD8 — event multiplier overflow (Medium).** Multiplier 1e308 made check-in payouts
+  `Infinity`. Fix: multiplier capped at ≤100 on event POST/PATCH.
+- **AD7 — negative coins in missions/reward-tasks (Low).** Fix: numeric validation
+  (target 1..100000, coins 0..1000000, sortOrder −100000..100000).
+- **C1/C2 — SSRF via episode videoUrl (High).** The caption worker fetched any URL,
+  including loopback/private addresses (verified: it hit the 127.0.0.1 listener).
+  Fix: `assertPublicHttpUrl` in `src/captions.js` — http(s) only, blocks localhost,
+  loopback, RFC1918, link-local (incl. 169.254.169.254 cloud metadata), CGNAT and
+  multicast, validates DNS-resolved addresses, and re-validates every redirect hop
+  (manual redirect following, ≤3 hops). TOCTOU note: the DNS answer is checked at
+  validation time; a hostile DNS could still race the fetch — defense-in-depth.
+- **C6 — caption target-language flooding (Low).** 60 targets would create 60 tracks
+  + MT calls. Fix: admin generate endpoint rejects >10 or malformed targets (400);
+  `sanitizeTargets` dedupes/validates/caps in `enqueueCaptionJob`.
+- **IN1/IN5 — 500s on malformed input (Low).** JSON `null` body → 500; malformed
+  percent-encoding path → 500. Fix: `readBody` normalizes non-object JSON to `{}`;
+  `URIError` → 400 `BAD_PATH` (`src/server.js`).
+- **IN3 — oversized-body 413 never reached the client (Low).** `req.destroy()` closed
+  the socket before the 413 was written. Fix: stop accumulating past the 5MB cap
+  without destroying the socket.
+- **Admin token timing (Low).** `X-Admin-Token` compared with `===`. Fix:
+  constant-time `crypto.timingSafeEqual` with a length guard (`adminTokenMatches`).
+
+**Attack classes verified fully blocked (no fix needed):** JWT forgery (alg=none,
+wrong secret, tampered payload, expired, deleted-user tokens, type confusion),
+refresh-token reuse + family revocation, dev-auth games, cross-user
+library/history/notifications/coins (IDOR), locked/VIP playback + captions gating,
+unlock replay, all double-claim races (check-in, wheel, chest, mission,
+watch-time — exactly one payout each), ad-reward amount tampering, relink of a
+non-guest victim / loops / ghost merges, six admin-token variants, admin routes
+outside the `/admin` prefix, SQL injection in text fields, stored XSS in the
+dashboard (all data flows through `esc()`; verified by source audit + render),
+path traversal on `/admin` static files, prototype pollution (`__proto__`), huge
+bodies, malformed JSON, unicode/NUL bytes, `WHISPER_CMD` shell injection (execFile,
+no shell — marker file never created), `file://` videoUrls, VTT cue injection.
+
+**Accepted risks (documented, not "fixed"):**
+- **E9 — watch-time forgery on unknown-duration episodes.** Client-asserted
+  positions are honor-system; a forged post accrued 16,666 min, but the claim
+  paid only the daily cap (100). Mitigation: server-side duration checks when the
+  catalog has real durations; the cap bounds the damage.
+- **RL1 — no rate limiting.** 100 guest accounts created in ~200ms. Mass account
+  creation is the Sybil enabler (now capped per-referrer per-day for referrals).
+  A server-side limiter was deliberately NOT added (it would break the test suite
+  and shared-IP app traffic). Production mitigation: Firebase App Check +
+  reverse-proxy rate limiting.
+- **Dev-auth mode, honor-system ad rewards, unsigned playback URLs** — documented
+  in the project audit; production mode refuses default secrets (verified: exit 1
+  + FATAL) and `/auth/firebase` returns 501 without Firebase verification.
+
+**INFO (not vulnerabilities):** `%` LIKE wildcard returns the whole public catalog;
+non-JSON content-type bodies are parsed tolerantly; the 500-path now returns a
+clean 400 with a generic message (no stack/SQL leakage).

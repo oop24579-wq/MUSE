@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -23,6 +25,22 @@ class ThemeProvider extends ChangeNotifier {
       AppTheme.kColorPreset = preset;
     }
     _loadThemeMode();
+    // This provider is created in main() before AppBootstrap loads
+    // GET /config, so the read above usually sees the not-yet-loaded
+    // default (6). Re-apply the remote preset once the config arrives.
+    unawaited(_applyRemotePresetWhenReady());
+  }
+
+  Future<void> _applyRemotePresetWhenReady() async {
+    for (var i = 0; i < 30 && !AppConfigService.instance.isLoaded; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    if (!AppConfigService.instance.isLoaded) return;
+    final preset = AppConfigService.instance.defaultThemePreset;
+    if (preset >= 1 && preset <= 7 && preset != AppTheme.kColorPreset) {
+      AppTheme.kColorPreset = preset;
+      notifyListeners();
+    }
   }
   
   /// Load saved theme mode from shared preferences

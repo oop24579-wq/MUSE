@@ -10,7 +10,7 @@ class RewardTaskTile extends StatelessWidget {
   const RewardTaskTile({super.key, required this.task, this.onAction});
 
   final RewardTaskModel task;
-  final VoidCallback? onAction;
+  final Future<void> Function()? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +97,7 @@ class _PressableRewardButton extends StatefulWidget {
   const _PressableRewardButton({required this.coins, this.onTap});
 
   final int coins;
-  final VoidCallback? onTap;
+  final Future<void> Function()? onTap;
 
   @override
   State<_PressableRewardButton> createState() => _PressableRewardButtonState();
@@ -105,9 +105,20 @@ class _PressableRewardButton extends StatefulWidget {
 
 class _PressableRewardButtonState extends State<_PressableRewardButton> {
   bool _pressed = false;
+  bool _busy = false;
 
   void _setPressed(bool value) {
     if (mounted) setState(() => _pressed = value);
+  }
+
+  Future<void> _handleTap() async {
+    if (_busy || widget.onTap == null) return;
+    setState(() => _busy = true);
+    try {
+      await widget.onTap!();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -116,7 +127,7 @@ class _PressableRewardButtonState extends State<_PressableRewardButton> {
       onTapDown: (_) => _setPressed(true),
       onTapUp: (_) => _setPressed(false),
       onTapCancel: () => _setPressed(false),
-      onTap: widget.onTap,
+      onTap: _busy ? null : _handleTap,
       child: AnimatedScale(
         scale: _pressed ? 0.92 : 1.0,
         duration: const Duration(milliseconds: 120),

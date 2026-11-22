@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/test_flags.dart';
 import '../../models/drama/episode_model.dart';
 import '../../models/drama/series_model.dart';
+import '../../services/app_config_service.dart';
 import '../../services/firebase/remote_config_service.dart';
 import '../../services/marketing/marketing_event_names.dart';
 import '../../services/user_provider.dart';
@@ -39,8 +40,17 @@ class DramaEntitlementService {
   static final DramaEntitlementService instance = DramaEntitlementService._();
 
   PremiumPlaybackMode get playbackMode {
-    final raw =
-        RemoteConfigService.instance.premiumPlaybackMode.trim().toLowerCase();
+    // The backend is authoritative (it enforces this mode with 403s on
+    // /playback): prefer the value from GET /config once loaded, and only
+    // fall back to the Firebase Remote Config string before that.
+    final backendRaw = AppConfigService.instance.isLoaded
+        ? AppConfigService.instance.premiumPlaybackMode
+        : '';
+    final raw = (backendRaw.isNotEmpty
+            ? backendRaw
+            : RemoteConfigService.instance.premiumPlaybackMode)
+        .trim()
+        .toLowerCase();
     return switch (raw) {
       'all' || 'all_playback' => PremiumPlaybackMode.allPlayback,
       'premium' ||

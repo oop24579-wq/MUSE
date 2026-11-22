@@ -839,10 +839,13 @@ $('appSettingsForm').addEventListener('submit', async (e) => {
 
 /* ---------- Transactions ---------- */
 let txOffset = 0; const TX_LIMIT = 50;
+// Every type grantCoins() can write (routes.js) — the filter must offer all of them,
+// not just the types that happen to appear on the first page of results.
+const TX_TYPES = ['admin_adjust','ad_reward','checkin','chest','episode_unlock','mission','referral','relink_merge','reward_task','watch_time','welcome_bonus','wheel','wheel_spin_cost'];
 async function loadTransactions() {
   const type = $('txType').value;
   const r = await get('/transactions?limit=' + TX_LIMIT + '&offset=' + txOffset + (type ? '&type=' + encodeURIComponent(type) : ''));
-  if (!$('txType').dataset.loaded) { const types = [...new Set((r.items || []).map((t) => t.type))]; types.forEach((t) => { const o = document.createElement('option'); o.value = t; o.textContent = t; $('txType').appendChild(o); }); $('txType').dataset.loaded = '1'; if (type) $('txType').value = type; }
+  if (!$('txType').dataset.loaded) { const have = new Set([...$('txType').options].map((o) => o.value)); const types = [...new Set([...TX_TYPES, ...(r.items || []).map((t) => t.type)])].filter((t) => t && !have.has(t)); types.forEach((t) => { const o = document.createElement('option'); o.value = t; o.textContent = t; $('txType').appendChild(o); }); $('txType').dataset.loaded = '1'; if (type) $('txType').value = type; }
   $('txRows').innerHTML = (r.items || []).map((t) => `<tr><td class="small muted">${esc(t.createdAt)}</td><td>${esc(t.userName || t.userEmail || '')}<div class="muted small">${esc(t.userEmail || '')}</div></td>
     <td><span class="badge">${esc(t.type)}</span></td><td><strong style="color:${t.amount >= 0 ? 'var(--ok)' : 'var(--danger)'}">${t.amount >= 0 ? '+' : ''}${esc(t.amount)}</strong></td><td>${esc(t.balanceAfter)}</td><td class="small muted">${esc(t.refId || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No transactions.</td></tr>';
   $('txTotal').textContent = r.total + ' total';
@@ -1005,13 +1008,19 @@ function trackChip(ep, lang) {
   const t = (ep.tracks || []).find((x) => x.lang === lang);
   if (!t) return `<span class="chip miss">${esc(lang)} · missing</span>`;
   const cls = chipFor(t.status);
-  const delBtn = cls === 'ok' ? ` <button type="button" data-del-track="${esc(t.id)}" title="Delete ${esc(lang)} track">×</button>` : '';
+  const delBtn = ` <button type="button" data-del-track="${esc(t.id)}" title="Delete ${esc(lang)} track">×</button>`;
   return `<span class="chip ${cls}">${esc(lang)} · ${esc(t.status || '')}${t.source ? ' (' + esc(t.source) + ')' : ''}${delBtn}</span>`;
 }
 async function loadCaptionsMatrix() {
-  const r = await get('/captions'); const episodes = (r && r.episodes) || []; const jobs = (r && r.jobs) || [];
+  const [r, epsR] = await Promise.all([get('/captions'), get('/episodes')]);
+  const jobs = (r && r.jobs) || [];
+  // GET /captions only returns episodes that ALREADY have tracks (routes.js joins caption_tracks);
+  // merge in every episode from GET /episodes so first-time generation is reachable for all of them.
+  const byEp = new Map(((r && r.episodes) || []).map((ep) => [ep.episodeId, ep]));
+  (epsR.items || []).forEach((e) => { if (!byEp.has(e.id)) byEp.set(e.id, { episodeId: e.id, seriesId: e.seriesId, episodeNumber: e.episodeNumber, title: e.title, tracks: [] }); });
+  const episodes = [...byEp.values()];
   $('capRows').innerHTML = episodes.map((ep) => {
-    const langs = [...new Set(['orig','ar','en', ...(ep.tracks || []).map((t) => t.lang)])];
+    const langs = [...new Set(['orig', ...capTargets, ...(ep.tracks || []).map((t) => t.lang)])];
     return `<tr><td><code>${esc(String(ep.seriesId || '').slice(0, 8))}</code></td><td>${esc(ep.episodeNumber)}</td>
     <td><strong>${esc(ep.title || '')}</strong></td><td>${langs.map((l) => trackChip(ep, l)).join(' ')}</td>
     <td><button class="btn small" data-gen-cap="${esc(ep.episodeId)}">Generate</button></td></tr>`; }).join('') || '<tr><td colspan="5" class="muted">No episodes found.</td></tr>';

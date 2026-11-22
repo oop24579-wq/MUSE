@@ -273,12 +273,22 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
           onTap: () async {
             final add = !isFav;
             setState(() => _favOverride = add);
-            await DramaService.instance.toggleFavorite(s.id, add);
-            if (mounted) {
-              ref.invalidate(myListProvider);
-              showTopToastSuccess(
-                  context, add ? 'Added to My List' : 'Removed from My List');
+            final ok = await DramaService.instance.toggleFavorite(s.id, add);
+            if (!mounted) return;
+            // toggleFavorite returns the requested state on success, so a
+            // failed ADD comes back false and is distinguishable (a
+            // successful REMOVE also returns false). Unlike _toggleLike,
+            // this handler used to ignore the result entirely: the heart
+            // stayed filled and a success toast showed even when the API
+            // call had failed. Roll the add path back on failure.
+            if (add && !ok) {
+              setState(() => _favOverride = isFav);
+              showTopToastError(context, 'Could not update My List');
+              return;
             }
+            ref.invalidate(myListProvider);
+            showTopToastSuccess(
+                context, add ? 'Added to My List' : 'Removed from My List');
           },
         ),
         _action(
@@ -324,6 +334,8 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
   }
 
   Future<void> _shareSeries(SeriesModel s) async {
+    // Credit share missions on the server (fire-and-forget).
+    DramaService.instance.shareSeries(s.id);
     final parts = <String>[
       'Watch "${s.title}" on HERO DRAMA',
       if (s.tagline != null && s.tagline!.isNotEmpty) s.tagline!,
