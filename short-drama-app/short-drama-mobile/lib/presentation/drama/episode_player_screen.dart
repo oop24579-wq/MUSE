@@ -671,10 +671,6 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     }
   }
 
-  void _playPrevious() {
-    if (_index > 0) _goToEpisode(_index - 1);
-  }
-
   void _goToEpisode(int index, {bool viaSwipe = false}) {
     if (index == _index || index < 0 || index >= _episodes.length) return;
     _record();
