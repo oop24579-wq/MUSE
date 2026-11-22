@@ -489,12 +489,62 @@ class DramaService {
         }
       }
 
+      // Phase 2 sections — every block is optional; a Phase-1-shaped payload
+      // (or a partially built backend) just leaves the defaults in place.
+      var wheel = const WheelState();
+      final wheelRaw = data['wheel'];
+      if (wheelRaw is Map) {
+        wheel = WheelState.fromJson(Map<String, dynamic>.from(wheelRaw));
+      }
+
+      final chests = <ChestState>[];
+      final chestsRaw = data['chests'];
+      if (chestsRaw is List) {
+        for (final c in chestsRaw) {
+          if (c is! Map) continue;
+          chests.add(ChestState.fromJson(Map<String, dynamic>.from(c)));
+        }
+      }
+
+      var watchTime = const WatchTimeState();
+      final watchTimeRaw = data['watchTime'];
+      if (watchTimeRaw is Map) {
+        watchTime =
+            WatchTimeState.fromJson(Map<String, dynamic>.from(watchTimeRaw));
+      }
+
+      final missions = <DailyMission>[];
+      final missionsRaw = data['missions'];
+      if (missionsRaw is List) {
+        for (final m in missionsRaw) {
+          if (m is! Map) continue;
+          missions.add(DailyMission.fromJson(Map<String, dynamic>.from(m)));
+        }
+      }
+
+      ActiveEventState? activeEvent;
+      final eventRaw = data['activeEvent'];
+      if (eventRaw is Map) {
+        activeEvent =
+            ActiveEventState.fromJson(Map<String, dynamic>.from(eventRaw));
+      }
+
       return RewardsState(
         coinBalance: (data['coinBalance'] as num?)?.toInt() ?? 0,
         claimedToday: (data['claimedToday'] as bool?) ?? false,
         currentDay: (data['currentDay'] as num?)?.toInt() ?? 1,
         days: days,
         tasks: tasks,
+        wheel: wheel,
+        chests: chests,
+        watchTime: watchTime,
+        missions: missions,
+        currentStreak: (data['currentStreak'] as num?)?.toInt() ?? 0,
+        xp: (data['xp'] as num?)?.toInt() ?? 0,
+        level: (data['level'] as num?)?.toInt() ?? 1,
+        nextLevelXp: (data['nextLevelXp'] as num?)?.toInt() ?? 100,
+        activeEvent: activeEvent,
+        referralCode: (data['referralCode'] as String?) ?? '',
       );
     } catch (_) {
       return const RewardsState();
@@ -532,6 +582,76 @@ class DramaService {
       }
     } catch (_) {}
     return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phase 2 economy: wheel, chests, watch-time, missions, referrals, shares
+  // ---------------------------------------------------------------------------
+
+  /// Spin the rewards wheel. The server decides the outcome — the returned
+  /// [WheelSpinResult.segmentIndex] is where the client animation must land.
+  /// Returns null on failure (no spins left, insufficient coins, network).
+  Future<WheelSpinResult?> spinWheel() async {
+    try {
+      final data = await _api.post('/rewards/wheel/spin');
+      if (data['success'] == true) {
+        return WheelSpinResult.fromJson(data);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Claim an unlocked treasure chest. Returns coins awarded, or null.
+  Future<int?> claimChest(String id) async {
+    try {
+      final data = await _api.post('/rewards/chests/$id/claim');
+      if (data['success'] == true) {
+        return (data['coins'] as num?)?.toInt();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Claim coins earned from today's watch time. Returns coins, or null.
+  Future<int?> claimWatchTime() async {
+    try {
+      final data = await _api.post('/rewards/watch-time/claim');
+      if (data['success'] == true) {
+        return (data['coins'] as num?)?.toInt();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Claim a completed daily mission. Returns coins awarded, or null.
+  Future<int?> claimMission(String slug) async {
+    try {
+      final data = await _api.post('/rewards/missions/$slug/claim');
+      if (data['success'] == true) {
+        return (data['coins'] as num?)?.toInt();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Apply someone else's referral code. Returns the bonus coins, or null.
+  Future<int?> applyReferral(String code) async {
+    final trimmed = code.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final data = await _api.post('/auth/referral', data: {'code': trimmed});
+      if (data['success'] == true) {
+        return (data['coins'] as num?)?.toInt();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Fire-and-forget share ping so the server can credit share missions.
+  Future<void> shareSeries(String seriesId) async {
+    try {
+      await _api.post('/content/share', data: {'seriesId': seriesId});
+    } catch (_) {/* best-effort */}
   }
 
   /// Attempt to unlock an episode with coins. Returns the unlock result map.

@@ -1,4 +1,4 @@
-Server booted on http://127.0.0.1:41583 with temp DB /tmp/dramanow-test-42Gz3Z/app.db
+Server booted on http://127.0.0.1:34665 with temp DB /tmp/dramanow-test-B6p31C/app.db
 PASS 1. health/root responds
 PASS 2. dev firebase auth creates user + welcome coin bonus (30)
 PASS 3. refresh flow: new tokens issued; old refresh token rejected
@@ -29,6 +29,18 @@ PASS 27. reward tasks admin CRUD: create -> visible in GET /rewards -> delete ->
 PASS 28. GET /admin/notifications includes the broadcast from case 19
 PASS 29. GET /admin/transactions includes the coin-grant transaction from case 13
 PASS 30. premium_playback_mode=all_playback -> free playback 403 for non-VIP; back to disabled -> 200; original restored
+PASS 31. GET /config shape (features/player/visual/economy) + PATCH player_pip=false reflects
+PASS 32. wheel: free spin shape, free spins exhaust at setting=1, paid spin deducts cost, insufficient -> 402
+PASS 33. chests: claim before unlock -> 403; watch 3 distinct episodes -> claim pays 15; second -> 409
+PASS 34. watch-time: >=10 min accrual -> claim pays 10; second claim pays 0; daily cap respected
+PASS 35. missions: watch_3_episodes progress 3 after 3 episodes; claim pays 20 once; second -> 409
+PASS 36. referral: B uses A code -> both +50; reuse -> 409; self-code -> 400
+PASS 37. event multiplier x2 (admin-created, active now) doubles checkin; deactivated after
+PASS 38. captions: admin generate (demo) -> job done -> tracks ready orig+ar+en; list has NO videoUrl; raw VTT served
+PASS 39. playback includes captionLanguages [orig,ar,en] and qualities array of 4
+PASS 40. admin DELETE caption track -> gone from list; captions_enabled=false -> playback captionLanguages []
+PASS 41. auto-generate: admin-create episode with videoUrl -> caption job appears for it
+PASS 42. maintenance: app endpoints 503 while GET /config still responds 200
 
-SUMMARY: total=30 passed=30 failed=0
+SUMMARY: total=42 passed=42 failed=0
 RESULT: ALL PASS

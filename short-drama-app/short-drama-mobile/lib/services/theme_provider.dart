@@ -1,15 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../theme/app_theme.dart';
+import 'app_config_service.dart';
+
 /// Theme provider to manage app theme state
 class ThemeProvider extends ChangeNotifier {
   static const String _themeKey = 'theme_mode';
   ThemeMode _themeMode = ThemeMode.dark;
-  
+
   ThemeMode get themeMode => _themeMode;
   bool get isDarkMode => _themeMode == ThemeMode.dark;
-  
+
   ThemeProvider() {
+    // Apply the remote-config color preset before MaterialApp reads
+    // AppTheme.darkTheme / lightTheme (this provider is created above
+    // MaterialApp in main.dart, and its instance is what the app's
+    // Consumer2 touches first). Guarded to the valid 1..7 preset range;
+    // anything else keeps the built-in default (6 = Drama Crimson).
+    final preset = AppConfigService.instance.defaultThemePreset;
+    if (preset >= 1 && preset <= 7) {
+      AppTheme.kColorPreset = preset;
+    }
     _loadThemeMode();
   }
   

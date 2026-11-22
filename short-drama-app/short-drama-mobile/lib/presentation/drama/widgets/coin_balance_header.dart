@@ -34,11 +34,53 @@ class CoinGlyph extends StatelessWidget {
 }
 
 /// Large coin-balance banner shown at the top of the Rewards tab.
-class CoinBalanceHeader extends StatelessWidget {
+///
+/// The number counts up (or down) with an ease-out tween whenever [balance]
+/// changes, so a claim visibly lands in the balance. Public API is unchanged
+/// (`balance`, `label`) so existing call sites keep working.
+class CoinBalanceHeader extends StatefulWidget {
   const CoinBalanceHeader({super.key, required this.balance, this.label = 'Your coins'});
 
   final int balance;
   final String label;
+
+  @override
+  State<CoinBalanceHeader> createState() => _CoinBalanceHeaderState();
+}
+
+class _CoinBalanceHeaderState extends State<CoinBalanceHeader>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 650),
+  );
+  late Animation<int> _count;
+  int _from = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _from = widget.balance;
+    _count = AlwaysStoppedAnimation<int>(widget.balance);
+  }
+
+  @override
+  void didUpdateWidget(CoinBalanceHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.balance != widget.balance) {
+      _from = oldWidget.balance;
+      _count = IntTween(begin: _from, end: widget.balance).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+      );
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +90,7 @@ class CoinBalanceHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            label,
+            widget.label,
             style: TextStyle(
               color: const Color(0xFFFFCC80),
               fontSize: 10.sp,
@@ -65,13 +107,16 @@ class CoinBalanceHeader extends StatelessWidget {
                 fit: BoxFit.contain,
               ),
               SizedBox(width: 2.w),
-              Text(
-                '$balance',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24.sp,
-                  fontWeight: FontWeight.w900,
-                  height: 1,
+              AnimatedBuilder(
+                animation: _count,
+                builder: (context, _) => Text(
+                  '${_count.value}',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24.sp,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
                 ),
               ),
             ],

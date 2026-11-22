@@ -87,6 +87,197 @@ class CheckinDay {
   });
 }
 
+/// Spin-the-wheel state from `GET /rewards` (`wheel` object).
+class WheelState {
+  final bool enabled;
+  final int spinsLeft;
+  final int freeSpinsPerDay;
+  final List<int> segments;
+  final int extraSpinCost;
+
+  const WheelState({
+    this.enabled = false,
+    this.spinsLeft = 0,
+    this.freeSpinsPerDay = 0,
+    this.segments = const [],
+    this.extraSpinCost = 0,
+  });
+
+  factory WheelState.fromJson(Map<String, dynamic> json) {
+    final rawSegments = json['segments'];
+    return WheelState(
+      enabled: (json['enabled'] as bool?) ?? false,
+      spinsLeft: (json['spinsLeft'] as num?)?.toInt() ?? 0,
+      freeSpinsPerDay: (json['freeSpinsPerDay'] as num?)?.toInt() ?? 0,
+      segments: rawSegments is List
+          ? rawSegments
+              .whereType<num>()
+              .map((e) => e.toInt())
+              .toList(growable: false)
+          : const [],
+      extraSpinCost: (json['extraSpinCost'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// Result of `POST /rewards/wheel/spin`.
+class WheelSpinResult {
+  final bool success;
+  final int segmentIndex;
+  final int coins;
+  final int balance;
+  final int spinsLeft;
+
+  const WheelSpinResult({
+    required this.success,
+    required this.segmentIndex,
+    required this.coins,
+    required this.balance,
+    required this.spinsLeft,
+  });
+
+  factory WheelSpinResult.fromJson(Map<String, dynamic> json) {
+    return WheelSpinResult(
+      success: (json['success'] as bool?) ?? false,
+      segmentIndex: (json['segmentIndex'] as num?)?.toInt() ?? 0,
+      coins: (json['coins'] as num?)?.toInt() ?? 0,
+      balance: (json['balance'] as num?)?.toInt() ?? 0,
+      spinsLeft: (json['spinsLeft'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// One milestone treasure chest from `GET /rewards` (`chests` list).
+class ChestState {
+  final String id;
+  final int threshold; // episodes to watch before it unlocks
+  final int coins;
+  final bool claimed;
+  final bool unlocked;
+
+  const ChestState({
+    required this.id,
+    this.threshold = 0,
+    this.coins = 0,
+    this.claimed = false,
+    this.unlocked = false,
+  });
+
+  factory ChestState.fromJson(Map<String, dynamic> json) {
+    return ChestState(
+      id: (json['id'] ?? '') as String,
+      threshold: (json['threshold'] as num?)?.toInt() ?? 0,
+      coins: (json['coins'] as num?)?.toInt() ?? 0,
+      claimed: (json['claimed'] as bool?) ?? false,
+      unlocked: (json['unlocked'] as bool?) ?? false,
+    );
+  }
+}
+
+/// Watch-time rewards from `GET /rewards` (`watchTime` object).
+class WatchTimeState {
+  final bool enabled;
+  final int minutesToday;
+  final int coinsPerBlock;
+  final int blockMinutes;
+  final int claimableCoins;
+  final int claimedCoinsToday;
+  final int dailyCapCoins;
+
+  const WatchTimeState({
+    this.enabled = false,
+    this.minutesToday = 0,
+    this.coinsPerBlock = 0,
+    this.blockMinutes = 0,
+    this.claimableCoins = 0,
+    this.claimedCoinsToday = 0,
+    this.dailyCapCoins = 0,
+  });
+
+  /// Minutes already counted toward the next (not yet claimable) block.
+  int get minutesIntoCurrentBlock =>
+      blockMinutes > 0 ? minutesToday % blockMinutes : 0;
+
+  /// 0..1 progress toward completing the next block.
+  double get blockProgress => blockMinutes > 0
+      ? (minutesIntoCurrentBlock / blockMinutes).clamp(0.0, 1.0)
+      : 0.0;
+
+  factory WatchTimeState.fromJson(Map<String, dynamic> json) {
+    return WatchTimeState(
+      enabled: (json['enabled'] as bool?) ?? false,
+      minutesToday: (json['minutesToday'] as num?)?.toInt() ?? 0,
+      coinsPerBlock: (json['coinsPerBlock'] as num?)?.toInt() ?? 0,
+      blockMinutes: (json['blockMinutes'] as num?)?.toInt() ?? 0,
+      claimableCoins: (json['claimableCoins'] as num?)?.toInt() ?? 0,
+      claimedCoinsToday: (json['claimedCoinsToday'] as num?)?.toInt() ?? 0,
+      dailyCapCoins: (json['dailyCapCoins'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// A daily mission from `GET /rewards` (`missions` list).
+class DailyMission {
+  final String slug;
+  final String title;
+  final String? description;
+  final int coins;
+  final int progress;
+  final int target;
+  final bool completed;
+  final bool claimed;
+
+  const DailyMission({
+    required this.slug,
+    required this.title,
+    this.description,
+    this.coins = 0,
+    this.progress = 0,
+    this.target = 1,
+    this.completed = false,
+    this.claimed = false,
+  });
+
+  double get progressFraction =>
+      target > 0 ? (progress / target).clamp(0.0, 1.0) : 0.0;
+
+  factory DailyMission.fromJson(Map<String, dynamic> json) {
+    return DailyMission(
+      slug: (json['slug'] ?? '') as String,
+      title: (json['title'] ?? '') as String,
+      description: json['description'] as String?,
+      coins: (json['coins'] as num?)?.toInt() ?? 0,
+      progress: (json['progress'] as num?)?.toInt() ?? 0,
+      target: (json['target'] as num?)?.toInt() ?? 1,
+      completed: (json['completed'] as bool?) ?? false,
+      claimed: (json['claimed'] as bool?) ?? false,
+    );
+  }
+}
+
+/// A running rewards multiplier event from `GET /rewards` (`activeEvent`).
+class ActiveEventState {
+  final String name;
+  final double multiplier;
+  final DateTime? endsAt;
+
+  const ActiveEventState({
+    required this.name,
+    this.multiplier = 1,
+    this.endsAt,
+  });
+
+  factory ActiveEventState.fromJson(Map<String, dynamic> json) {
+    return ActiveEventState(
+      name: (json['name'] ?? '') as String,
+      multiplier: (json['multiplier'] as num?)?.toDouble() ?? 1,
+      endsAt: json['endsAt'] != null
+          ? DateTime.tryParse(json['endsAt'].toString())
+          : null,
+    );
+  }
+}
+
 /// Aggregated rewards state for the Rewards tab.
 class RewardsState {
   final int coinBalance;
@@ -95,11 +286,38 @@ class RewardsState {
   final List<CheckinDay> days;
   final List<RewardTaskModel> tasks;
 
+  // Phase 2 additions (all defaulted so existing construction sites and the
+  // Phase-1 payload shape keep working unchanged).
+  final WheelState wheel;
+  final List<ChestState> chests;
+  final WatchTimeState watchTime;
+  final List<DailyMission> missions;
+  final int currentStreak;
+  final int xp;
+  final int level;
+  final int nextLevelXp;
+  final ActiveEventState? activeEvent;
+  final String referralCode;
+
   const RewardsState({
     this.coinBalance = 0,
     this.claimedToday = false,
     this.currentDay = 1,
     this.days = const [],
     this.tasks = const [],
+    this.wheel = const WheelState(),
+    this.chests = const [],
+    this.watchTime = const WatchTimeState(),
+    this.missions = const [],
+    this.currentStreak = 0,
+    this.xp = 0,
+    this.level = 1,
+    this.nextLevelXp = 100,
+    this.activeEvent,
+    this.referralCode = '',
   });
+
+  /// 0..1 progress of [xp] toward [nextLevelXp] (for the level ring).
+  double get levelProgress =>
+      nextLevelXp > 0 ? (xp / nextLevelXp).clamp(0.0, 1.0) : 0.0;
 }

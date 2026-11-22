@@ -12,6 +12,13 @@ const { get, run } = require('./db');
 const CHECKIN_DEFAULT = [20, 50, 35, 30, 35, 20, 50]; // kDailyCheckinRewards
 const intEnv = (name, dflt) => { const v = parseInt(process.env[name] || '', 10); return Number.isFinite(v) ? v : dflt; };
 
+const PLAYER_FLAGS = [
+  'player_swipe_next_episode', 'player_double_tap_seek', 'player_long_press_2x',
+  'player_edge_brightness_volume', 'player_speed_menu', 'player_quality_selector',
+  'player_auto_next', 'player_binge_mode', 'player_pip', 'player_scrub_chapters',
+  'player_skip_intro', 'player_lock_controls', 'player_sleep_timer', 'player_share_moment',
+];
+
 const DEFAULTS = {
   maintenance_mode: false,
   premium_playback_mode: 'premium_content', // remote_config_initial.json default
@@ -21,8 +28,56 @@ const DEFAULTS = {
   ad_reward_amount: intEnv('AD_REWARD_AMOUNT', 20), // remote_config_service.dart: rewarded ad coins default 20
   ad_daily_cap: intEnv('AD_DAILY_CAP', 5),
   checkin_amounts: CHECKIN_DEFAULT,
+  // ---- Phase 2: addictive coin economy ----
+  wheel_enabled: true,
+  wheel_segments: [5, 10, 15, 20, 30, 50, 100, 0],
+  wheel_weights: [20, 18, 15, 14, 12, 10, 6, 5],
+  wheel_free_spins_per_day: 3,
+  wheel_extra_spin_cost: 20,
+  chests_enabled: true,
+  chest_milestones: [
+    { threshold: 3, coins: 15 }, { threshold: 7, coins: 30 },
+    { threshold: 12, coins: 50 }, { threshold: 20, coins: 100 },
+  ],
+  watch_time_enabled: true,
+  watch_time_coins_per_block: 10,
+  watch_time_block_minutes: 10,
+  watch_time_daily_cap_coins: 100,
+  missions_enabled: true,
+  referrals_enabled: true,
+  referral_bonus_referrer: 50,
+  referral_bonus_referee: 50,
+  // ---- Phase 2: player feature flags ----
+  ...Object.fromEntries(PLAYER_FLAGS.map((k) => [k, true])),
+  skip_intro_window_seconds: 90,
+  skip_intro_to_seconds: 75,
+  auto_next_countdown_seconds: 5,
+  // ---- Phase 2: visual ----
+  default_theme_preset: 6, // int 1..7
+  confetti_enabled: true,
+  haptics_enabled: true,
+  accent_color_override: '', // '' or #RRGGBB
+  // ---- Phase 2: captions & translation ----
+  captions_enabled: true,
+  captions_auto_generate: true,
+  caption_target_languages: ['ar', 'en'],
+  asr_provider: 'demo', // demo|openai|local-whisper
+  mt_provider: 'demo', // demo|deepl|google
 };
 const PREMIUM_MODES = ['disabled', 'premium_content', 'all_playback'];
+const BOOL_KEYS = new Set([
+  'maintenance_mode', 'ads_enabled', 'wheel_enabled', 'chests_enabled',
+  'watch_time_enabled', 'missions_enabled', 'referrals_enabled',
+  'confetti_enabled', 'haptics_enabled', 'captions_enabled', 'captions_auto_generate',
+  ...PLAYER_FLAGS,
+]);
+const INT_KEYS = new Set([
+  'welcome_coin_bonus', 'episode_unlock_coin_cost', 'ad_reward_amount', 'ad_daily_cap',
+  'wheel_free_spins_per_day', 'wheel_extra_spin_cost',
+  'watch_time_coins_per_block', 'watch_time_block_minutes', 'watch_time_daily_cap_coins',
+  'referral_bonus_referrer', 'referral_bonus_referee',
+  'skip_intro_window_seconds', 'skip_intro_to_seconds', 'auto_next_countdown_seconds',
+]);
 
 function ensureSettings() {
   for (const [k, v] of Object.entries(DEFAULTS)) {
@@ -47,16 +102,43 @@ function updateSettings(patch) {
   const clean = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!(k in DEFAULTS)) return { error: `Unknown setting: ${k}` };
-    if (k === 'maintenance_mode' || k === 'ads_enabled') {
+    if (BOOL_KEYS.has(k)) {
       if (typeof v !== 'boolean') return { error: `${k} must be a boolean` };
       clean[k] = v;
     } else if (k === 'premium_playback_mode') {
       if (!PREMIUM_MODES.includes(v)) return { error: `premium_playback_mode must be one of ${PREMIUM_MODES.join('|')}` };
       clean[k] = v;
+    } else if (k === 'asr_provider') {
+      if (!['demo', 'openai', 'local-whisper'].includes(v)) return { error: 'asr_provider must be one of demo|openai|local-whisper' };
+      clean[k] = v;
+    } else if (k === 'mt_provider') {
+      if (!['demo', 'deepl', 'google'].includes(v)) return { error: 'mt_provider must be one of demo|deepl|google' };
+      clean[k] = v;
     } else if (k === 'checkin_amounts') {
       if (!Array.isArray(v) || v.length !== 7 || v.some((n) => !Number.isInteger(n) || n < 0)) return { error: 'checkin_amounts must be an array of 7 non-negative integers' };
       clean[k] = v;
-    } else { // numeric settings
+    } else if (k === 'wheel_segments' || k === 'wheel_weights') {
+      if (!Array.isArray(v) || !v.length || v.some((n) => !Number.isInteger(n) || n < 0)) return { error: `${k} must be a non-empty array of non-negative integers` };
+      clean[k] = v;
+    } else if (k === 'chest_milestones') {
+      const bad = !Array.isArray(v) || v.some((ms) => !ms || typeof ms !== 'object' || !Number.isInteger(ms.threshold) || ms.threshold <= 0 || !Number.isInteger(ms.coins) || ms.coins < 0);
+      if (bad) return { error: 'chest_milestones must be an array of {threshold: positive int, coins: non-negative int}' };
+      clean[k] = v.map((ms) => ({ threshold: ms.threshold, coins: ms.coins }));
+    } else if (k === 'caption_target_languages') {
+      if (!Array.isArray(v) || v.some((s) => typeof s !== 'string' || !s)) return { error: 'caption_target_languages must be an array of language code strings' };
+      clean[k] = v;
+    } else if (k === 'default_theme_preset') {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 1 || n > 7) return { error: 'default_theme_preset must be an integer 1..7' };
+      clean[k] = n;
+    } else if (k === 'accent_color_override') {
+      if (typeof v !== 'string' || (v !== '' && !/^#[0-9a-fA-F]{6}$/.test(v))) return { error: "accent_color_override must be '' or #RRGGBB" };
+      clean[k] = v;
+    } else if (INT_KEYS.has(k)) {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 0) return { error: `${k} must be a non-negative integer` };
+      clean[k] = n;
+    } else { // numeric settings (fallback)
       const n = Number(v);
       if (!Number.isInteger(n) || n < 0) return { error: `${k} must be a non-negative integer` };
       clean[k] = n;
@@ -68,4 +150,4 @@ function updateSettings(patch) {
   return { settings: getSettings() };
 }
 
-module.exports = { DEFAULTS, PREMIUM_MODES, ensureSettings, getSettings, getSetting, updateSettings };
+module.exports = { DEFAULTS, PREMIUM_MODES, PLAYER_FLAGS, ensureSettings, getSettings, getSetting, updateSettings };

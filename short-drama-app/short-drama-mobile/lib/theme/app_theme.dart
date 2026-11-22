@@ -7,11 +7,14 @@ import 'package:google_fonts/google_fonts.dart';
 class AppTheme {
   AppTheme._();
 
-  /// ── CHANGE THIS (1–7) TO SWITCH COLOR PRESET. Hot restart required. ──
+  /// ── ACTIVE COLOR PRESET (1–7). Hot restart required after a change. ──
   /// 1 = Ember Aurora    2 = Emerald Pulse   3 = Sunset Vinyl
   /// 4 = Midnight Gold   5 = Neon Coral      6 = Drama Crimson
   /// 7 = Bronze Luxury
-  static const int kColorPreset = 6;
+  /// Mutable (was `const`) so remote config can pick the preset at startup:
+  /// ThemeProvider assigns `AppConfigService.defaultThemePreset` here before
+  /// the first theme is built. The default stays 6 (Drama Crimson).
+  static int kColorPreset = 6;
 
   static _PresetColors get _c => switch (kColorPreset) {
         1 => _PresetColors.emberAurora,

@@ -66,6 +66,24 @@ main h2{margin:0 0 16px;font-size:22px}
 #login form{text-align:left;display:grid;gap:12px}
 .picker-item{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:6px}
 .dub-row{display:grid;grid-template-columns:120px 1fr auto;gap:8px;margin-bottom:8px}
+.switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.switch .track{position:absolute;inset:0;background:var(--panel2);border:1px solid var(--border);border-radius:999px;transition:.2s}
+.switch .track:before{content:'';position:absolute;width:18px;height:18px;left:2px;top:2px;background:var(--muted);border-radius:50%;transition:.2s}
+.switch input:checked + .track{background:var(--accent-grad);border-color:transparent}
+.switch input:checked + .track:before{transform:translateX(20px);background:#fff}
+.flag-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.flag-row .spacer{flex:1}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border);background:var(--panel2);margin:1px 2px 1px 0}
+.chip.ok{border-color:var(--ok);color:var(--ok)}
+.chip.warn{border-color:var(--warn);color:var(--warn)}
+.chip.err{border-color:var(--danger);color:var(--danger)}
+.chip.miss{color:var(--muted)}
+.chip button{background:none;border:0;color:inherit;padding:0;font-size:14px;line-height:1;cursor:pointer}
+.swatch{width:44px;height:44px;border-radius:10px;border:2px solid var(--border);padding:0;color:#fff;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.swatch.sel{border-color:#fff;outline:2px solid var(--accent)}
+.note{background:#2a2300;border:1px solid var(--warn);color:#ffe9a8;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.5}
+.mrow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end}
 </style>
 </head>
 <body>
@@ -98,6 +116,10 @@ main h2{margin:0 0 16px;font-size:22px}
       <button data-section="rewards">Rewards &amp; Economy</button>
       <button data-section="notifications">Notifications</button>
       <button data-section="settings">App Settings</button>
+      <button data-section="engagement">Engagement Lab</button>
+      <button data-section="flags">Feature Flags</button>
+      <button data-section="visual">Visual &amp; Theme</button>
+      <button data-section="captions">Captions &amp; Translation</button>
       <button data-section="transactions">Transactions</button>
     </nav>
     <div class="spacer"></div>
@@ -319,6 +341,150 @@ main h2{margin:0 0 16px;font-size:22px}
       </div>
     </section>
 
+    <!-- ENGAGEMENT LAB -->
+    <section id="sec-engagement" class="hidden">
+      <h2>Engagement Lab</h2>
+      <div class="card" style="max-width:760px">
+        <h3 style="margin-top:0">Lucky Wheel</h3>
+        <form id="wheelForm" style="display:grid;gap:12px">
+          <div class="check" style="padding:0"><input type="checkbox" id="lab_wheel_enabled"><label for="lab_wheel_enabled">Wheel enabled</label></div>
+          <div><label>Segments (comma-separated coin amounts, 0 = no prize)</label><input id="lab_wheel_segments" placeholder="5,10,15,20,30,50,100,0"></div>
+          <div><label>Weights (comma-separated, optional — leave blank to keep current)</label><input id="lab_wheel_weights" placeholder="e.g. 30,25,15,10,8,5,2,5"></div>
+          <div class="form-grid">
+            <div><label>Free Spins / Day</label><input id="lab_wheel_free" type="number" min="0"></div>
+            <div><label>Extra Spin Cost (coins)</label><input id="lab_wheel_extra" type="number" min="0"></div>
+          </div>
+          <div><button class="btn" type="submit">Save Wheel</button></div>
+        </form>
+      </div>
+      <div class="card" style="max-width:760px">
+        <h3 style="margin-top:0">Treasure Chests</h3>
+        <form id="chestForm" style="display:grid;gap:12px">
+          <div class="check" style="padding:0"><input type="checkbox" id="lab_chests_enabled"><label for="lab_chests_enabled">Chests enabled</label></div>
+          <div><label>Milestones (watch threshold → coins)</label><div id="chestRows"></div>
+          <button class="btn secondary small" type="button" id="addChest">+ Add milestone</button></div>
+          <div><button class="btn" type="submit">Save Chests</button></div>
+        </form>
+      </div>
+      <div class="card" style="max-width:760px">
+        <h3 style="margin-top:0">Watch-Time Rewards</h3>
+        <form id="watchForm" style="display:grid;gap:12px">
+          <div class="check" style="padding:0"><input type="checkbox" id="lab_watch_enabled"><label for="lab_watch_enabled">Watch-time rewards enabled</label></div>
+          <div class="form-grid">
+            <div><label>Coins Per Block</label><input id="lab_watch_coins" type="number" min="0"></div>
+            <div><label>Block Minutes</label><input id="lab_watch_minutes" type="number" min="1"></div>
+            <div><label>Daily Cap (coins)</label><input id="lab_watch_cap" type="number" min="0"></div>
+          </div>
+          <div><button class="btn" type="submit">Save Watch-Time</button></div>
+        </form>
+      </div>
+      <div class="card" style="max-width:760px">
+        <h3 style="margin-top:0">Referrals</h3>
+        <form id="refForm" style="display:grid;gap:12px">
+          <div class="check" style="padding:0"><input type="checkbox" id="lab_ref_enabled"><label for="lab_ref_enabled">Referrals enabled</label></div>
+          <div class="form-grid">
+            <div><label>Referrer Bonus (coins)</label><input id="lab_ref_referrer" type="number" min="0"></div>
+            <div><label>Referee Bonus (coins)</label><input id="lab_ref_referee" type="number" min="0"></div>
+          </div>
+          <div><button class="btn" type="submit">Save Referrals</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Missions</h3>
+        <div class="check" style="padding:0 0 12px"><input type="checkbox" id="lab_missions_enabled"><label for="lab_missions_enabled">Missions enabled (saves immediately)</label></div>
+        <h4 id="missionFormTitle" style="margin:0 0 10px">New Mission</h4>
+        <form id="missionForm"><input type="hidden" id="m_origSlug">
+          <div class="form-grid">
+            <div><label>Slug *</label><input id="m_slug" required placeholder="watch-5-episodes"></div>
+            <div><label>Title *</label><input id="m_title" required></div>
+            <div><label>Metric</label><select id="m_metric">
+              <option value="watch_episodes">watch_episodes</option><option value="watch_minutes">watch_minutes</option>
+              <option value="likes">likes</option><option value="shares">shares</option><option value="checkin">checkin</option></select></div>
+            <div><label>Target</label><input id="m_target" type="number" value="1"></div>
+            <div><label>Coins</label><input id="m_coins" type="number" value="0"></div>
+            <div><label>Sort Order</label><input id="m_sortOrder" type="number" value="0"></div>
+            <div class="wide"><label>Description</label><input id="m_description"></div>
+            <div class="check"><input type="checkbox" id="m_active" checked><label for="m_active">Active</label></div>
+          </div>
+          <div class="row" style="margin-top:12px"><button class="btn" type="submit">Save Mission</button><button class="btn secondary" type="button" id="missionReset">Clear</button></div>
+        </form>
+        <div style="overflow-x:auto;margin-top:14px"><table><thead><tr><th>Slug</th><th>Title</th><th>Metric</th><th>Target</th><th>Coins</th><th>Active</th><th></th></tr></thead><tbody id="missionRows"></tbody></table></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Events (coin multipliers)</h3>
+        <h4 id="eventFormTitle" style="margin:0 0 10px">New Event</h4>
+        <form id="eventForm"><input type="hidden" id="ev_id">
+          <div class="form-grid">
+            <div><label>Name *</label><input id="ev_name" required placeholder="Weekend Double Coins"></div>
+            <div><label>Multiplier</label><input id="ev_multiplier" type="number" step="0.1" min="0" value="2"></div>
+            <div><label>Starts At</label><input id="ev_starts" type="datetime-local"></div>
+            <div><label>Ends At</label><input id="ev_ends" type="datetime-local"></div>
+            <div class="check"><input type="checkbox" id="ev_active" checked><label for="ev_active">Active</label></div>
+          </div>
+          <div class="row" style="margin-top:12px"><button class="btn" type="submit">Save Event</button><button class="btn secondary" type="button" id="eventReset">Clear</button></div>
+        </form>
+        <div style="overflow-x:auto;margin-top:14px"><table><thead><tr><th>Name</th><th>Multiplier</th><th>Starts</th><th>Ends</th><th>Active</th><th></th></tr></thead><tbody id="eventRows"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- FEATURE FLAGS -->
+    <section id="sec-flags" class="hidden">
+      <h2>Feature Flags</h2>
+      <p class="muted small" style="margin-top:-8px">Toggles save immediately via App Settings.</p>
+      <div class="card" style="max-width:760px"><h3 style="margin-top:0">Player</h3><div id="flagsPlayer"></div></div>
+      <div class="card" style="max-width:760px"><h3 style="margin-top:0">Economy &amp; Captions</h3><div id="flagsEconomy"></div></div>
+    </section>
+
+    <!-- VISUAL & THEME -->
+    <section id="sec-visual" class="hidden">
+      <h2>Visual &amp; Theme</h2>
+      <div class="card" style="max-width:640px">
+        <form id="visualForm" style="display:grid;gap:16px">
+          <div><label>Default Theme Preset (1–7)</label><div class="row" id="themeSwatches"></div></div>
+          <div class="check" style="padding:0"><input type="checkbox" id="vt_confetti"><label for="vt_confetti"><strong>Confetti</strong> — celebrate coin wins &amp; rewards</label></div>
+          <div class="check" style="padding:0"><input type="checkbox" id="vt_haptics"><label for="vt_haptics"><strong>Haptics</strong> — vibration feedback in the player</label></div>
+          <div><label>Accent Color Override (empty = theme default)</label>
+            <div class="row"><input id="vt_accent_text" placeholder="#RRGGBB" style="max-width:200px"><input id="vt_accent_color" type="color" style="width:56px;height:38px;padding:2px"></div></div>
+          <div class="form-grid">
+            <div><label>Auto-Next Countdown (seconds)</label><input id="vt_auto_next" type="number" min="0"></div>
+            <div><label>Skip-Intro Window (seconds)</label><input id="vt_skip_window" type="number" min="0"></div>
+            <div><label>Skip-Intro To (seconds)</label><input id="vt_skip_to" type="number" min="0"></div>
+          </div>
+          <div><button class="btn" type="submit">Save Visual Settings</button></div>
+          <div id="visualResult" class="small"></div>
+        </form>
+      </div>
+    </section>
+
+    <!-- CAPTIONS & TRANSLATION -->
+    <section id="sec-captions" class="hidden">
+      <h2>Captions &amp; Translation</h2>
+      <div class="card" style="max-width:760px">
+        <h3 style="margin-top:0">Providers</h3>
+        <div class="note" style="margin-bottom:14px">Real ASR/MT requires the provider API key in the server environment (OPENAI_API_KEY / DEEPL_API_KEY / GOOGLE_TRANSLATE_API_KEY) — keys are never entered here. Demo mode generates placeholder captions so the system can be tested end-to-end.</div>
+        <form id="capForm" style="display:grid;gap:12px">
+          <div class="form-grid">
+            <div><label>ASR Provider (speech → text)</label><select id="cap_asr">
+              <option value="demo">demo</option><option value="openai">openai</option><option value="local-whisper">local-whisper</option></select></div>
+            <div><label>MT Provider (translation)</label><select id="cap_mt">
+              <option value="demo">demo</option><option value="deepl">deepl</option><option value="google">google</option></select></div>
+          </div>
+          <div><label>Target Languages (comma-separated codes)</label><input id="cap_langs" placeholder="ar, en"></div>
+          <div class="check" style="padding:0"><input type="checkbox" id="cap_enabled"><label for="cap_enabled">Captions enabled</label></div>
+          <div class="check" style="padding:0"><input type="checkbox" id="cap_auto"><label for="cap_auto">Auto-generate captions for new episodes</label></div>
+          <div><button class="btn" type="submit">Save Caption Settings</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <div class="row"><h3 style="margin:0">Episode Captions</h3><span class="spacer"></span><button class="btn secondary small" id="capReload">Refresh</button></div>
+        <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Series</th><th>#</th><th>Episode</th><th>Tracks</th><th></th></tr></thead><tbody id="capRows"></tbody></table></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Generation Jobs</h3>
+        <div style="overflow-x:auto"><table><thead><tr><th>Episode</th><th>Status</th><th>Step</th><th>Error</th><th>Created</th><th>Finished</th></tr></thead><tbody id="capJobRows"></tbody></table></div>
+      </div>
+    </section>
+
     <!-- TRANSACTIONS -->
     <section id="sec-transactions" class="hidden">
       <h2>Coin Transactions</h2>
@@ -375,8 +541,8 @@ $('loginForm').addEventListener('submit', async (e) => {
 $('logoutBtn').addEventListener('click', () => { showLogin(''); $('tokenInput').value = ''; });
 
 /* navigation */
-const loaders = { overview: loadStats, genres: loadGenres, series: loadSeriesSection, episodes: loadEpisodesSection, home: loadHome, users: loadUsers, rewards: loadRewards, notifications: loadNotifications, settings: loadAppSettings, transactions: loadTransactions };
-const SECTIONS = ['overview','genres','series','episodes','home','users','rewards','notifications','settings','transactions'];
+const loaders = { overview: loadStats, genres: loadGenres, series: loadSeriesSection, episodes: loadEpisodesSection, home: loadHome, users: loadUsers, rewards: loadRewards, notifications: loadNotifications, settings: loadAppSettings, engagement: loadEngagement, flags: loadFlags, visual: loadVisual, captions: loadCaptionsSection, transactions: loadTransactions };
+const SECTIONS = ['overview','genres','series','episodes','home','users','rewards','notifications','settings','engagement','flags','visual','captions','transactions'];
 function loadSection(name) {
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.section === name));
   SECTIONS.forEach((s) => $('sec-' + s).classList.toggle('hidden', s !== name));
@@ -687,6 +853,178 @@ $('txReload').addEventListener('click', () => { txOffset = 0; loadTransactions()
 $('txType').addEventListener('change', () => { txOffset = 0; loadTransactions().catch((e) => toast(e.message, true)); });
 $('txPrev').addEventListener('click', () => { txOffset = Math.max(0, txOffset - TX_LIMIT); loadTransactions().catch((e) => toast(e.message, true)); });
 $('txNext').addEventListener('click', () => { txOffset += TX_LIMIT; loadTransactions().catch((e) => toast(e.message, true)); });
+
+/* ---------- shared helpers (Phase 2) ---------- */
+const parseCsv = (v) => String(v || '').split(',').map((t) => t.trim()).filter(Boolean);
+const parseIntCsv = (v) => parseCsv(v).map((t) => parseInt(t, 10)).filter((n) => !isNaN(n));
+const itemsOf = (r, key) => Array.isArray(r) ? r : ((r && (r.items || (key && r[key]))) || []);
+async function patchSettings(body, okMsg) { await patch('/settings', body); if (okMsg) toast(okMsg); }
+function toLocalInput(iso) { if (!iso) return ''; const d = new Date(iso); if (isNaN(d)) return ''; return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
+function chipFor(status) { const s = String(status || '').toLowerCase(); if (['ready','done','completed','complete','success','succeeded'].includes(s)) return 'ok'; if (['failed','error'].includes(s)) return 'err'; return 'warn'; }
+
+/* ---------- Engagement Lab ---------- */
+function chestRow(threshold, coins) { const d = document.createElement('div'); d.className = 'mrow'; d.innerHTML = `<div><label>Threshold</label><input type="number" min="0" value="${esc(threshold ?? '')}" data-chest-threshold placeholder="e.g. 10 episodes"></div><div><label>Coins</label><input type="number" min="0" value="${esc(coins ?? '')}" data-chest-coins></div><button type="button" class="btn danger small">Remove</button>`; d.querySelector('button').addEventListener('click', () => d.remove()); return d; }
+$('addChest').addEventListener('click', () => $('chestRows').appendChild(chestRow('', '')));
+function collectChests() { return [...$('chestRows').querySelectorAll('.mrow')].map((r) => ({ threshold: parseInt(r.querySelector('[data-chest-threshold]').value, 10), coins: parseInt(r.querySelector('[data-chest-coins]').value, 10) })).filter((m) => !isNaN(m.threshold) && !isNaN(m.coins)); }
+async function loadEngagement() {
+  const r = await get('/settings'); const s = r.settings || {};
+  $('lab_wheel_enabled').checked = !!s.wheel_enabled;
+  $('lab_wheel_segments').value = (s.wheel_segments || []).join(',');
+  $('lab_wheel_weights').value = '';
+  $('lab_wheel_weights').placeholder = (s.wheel_weights && s.wheel_weights.length) ? 'current: ' + s.wheel_weights.join(',') + ' — leave blank to keep' : 'e.g. 30,25,15,10,8,5,2,5';
+  $('lab_wheel_free').value = s.wheel_free_spins_per_day ?? '';
+  $('lab_wheel_extra').value = s.wheel_extra_spin_cost ?? '';
+  $('lab_chests_enabled').checked = !!s.chests_enabled;
+  $('chestRows').innerHTML = ''; (s.chest_milestones || []).forEach((m) => $('chestRows').appendChild(chestRow(m.threshold, m.coins)));
+  $('lab_watch_enabled').checked = !!s.watch_time_enabled;
+  $('lab_watch_coins').value = s.watch_time_coins_per_block ?? ''; $('lab_watch_minutes').value = s.watch_time_block_minutes ?? ''; $('lab_watch_cap').value = s.watch_time_daily_cap_coins ?? '';
+  $('lab_ref_enabled').checked = !!s.referrals_enabled;
+  $('lab_ref_referrer').value = s.referral_bonus_referrer ?? ''; $('lab_ref_referee').value = s.referral_bonus_referee ?? '';
+  $('lab_missions_enabled').checked = !!s.missions_enabled;
+  await Promise.all([loadMissions(), loadEvents()]);
+}
+$('wheelForm').addEventListener('submit', async (e) => { e.preventDefault();
+  const body = { wheel_enabled: $('lab_wheel_enabled').checked, wheel_segments: parseIntCsv($('lab_wheel_segments').value), wheel_free_spins_per_day: num('lab_wheel_free'), wheel_extra_spin_cost: num('lab_wheel_extra') };
+  const w = parseIntCsv($('lab_wheel_weights').value); if (w.length) body.wheel_weights = w;
+  Object.keys(body).forEach((k) => body[k] === undefined && delete body[k]);
+  try { await patchSettings(body, 'Wheel settings saved'); } catch (err) { toast(err.message, true); } });
+$('chestForm').addEventListener('submit', async (e) => { e.preventDefault();
+  try { await patchSettings({ chests_enabled: $('lab_chests_enabled').checked, chest_milestones: collectChests() }, 'Chest settings saved'); } catch (err) { toast(err.message, true); } });
+$('watchForm').addEventListener('submit', async (e) => { e.preventDefault();
+  const body = { watch_time_enabled: $('lab_watch_enabled').checked, watch_time_coins_per_block: num('lab_watch_coins'), watch_time_block_minutes: num('lab_watch_minutes'), watch_time_daily_cap_coins: num('lab_watch_cap') };
+  Object.keys(body).forEach((k) => body[k] === undefined && delete body[k]);
+  try { await patchSettings(body, 'Watch-time settings saved'); } catch (err) { toast(err.message, true); } });
+$('refForm').addEventListener('submit', async (e) => { e.preventDefault();
+  const body = { referrals_enabled: $('lab_ref_enabled').checked, referral_bonus_referrer: num('lab_ref_referrer'), referral_bonus_referee: num('lab_ref_referee') };
+  Object.keys(body).forEach((k) => body[k] === undefined && delete body[k]);
+  try { await patchSettings(body, 'Referral settings saved'); } catch (err) { toast(err.message, true); } });
+$('lab_missions_enabled').addEventListener('change', async (e) => { try { await patchSettings({ missions_enabled: e.target.checked }, 'Missions ' + (e.target.checked ? 'enabled' : 'disabled')); } catch (err) { e.target.checked = !e.target.checked; toast(err.message, true); } });
+
+/* Missions CRUD */
+let missionCache = [];
+async function loadMissions() {
+  const r = await get('/missions'); missionCache = itemsOf(r, 'missions');
+  $('missionRows').innerHTML = missionCache.map((m) => `<tr><td><code>${esc(m.slug)}</code></td><td><strong>${esc(m.title)}</strong><div class="muted small">${esc(m.description || '')}</div></td>
+    <td>${esc(m.metric)}</td><td>${esc(m.target)}</td><td>${esc(m.coins)}</td>
+    <td>${m.active ? '<span class="badge free">Active</span>' : '<span class="badge">Off</span>'}</td>
+    <td class="row"><button class="btn secondary small" data-edit-mission="${esc(m.slug)}">Edit</button><button class="btn danger small" data-del-mission="${esc(m.slug)}">Delete</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">No missions yet.</td></tr>';
+}
+function resetMissionForm() { $('missionForm').reset(); $('m_origSlug').value = ''; $('m_slug').disabled = false; $('m_active').checked = true; $('missionFormTitle').textContent = 'New Mission'; }
+$('missionReset').addEventListener('click', resetMissionForm);
+$('missionForm').addEventListener('submit', async (e) => { e.preventDefault();
+  const body = { slug: str('m_slug'), title: str('m_title'), description: str('m_description') || null, metric: $('m_metric').value, target: num('m_target') || 1, coins: num('m_coins') || 0, sortOrder: num('m_sortOrder') || 0, active: $('m_active').checked };
+  try { if ($('m_origSlug').value) { delete body.slug; await patch('/missions/' + encodeURIComponent($('m_origSlug').value), body); toast('Mission updated'); } else { await post('/missions', body); toast('Mission created'); } resetMissionForm(); loadMissions(); }
+  catch (err) { toast(err.message, true); } });
+$('missionRows').addEventListener('click', async (e) => {
+  const ed = e.target.closest('[data-edit-mission]'), dl = e.target.closest('[data-del-mission]');
+  if (ed) { const m = missionCache.find((x) => x.slug === ed.dataset.editMission); if (!m) return;
+    $('m_origSlug').value = m.slug; $('m_slug').value = m.slug; $('m_slug').disabled = true; $('m_title').value = m.title || ''; $('m_description').value = m.description || ''; $('m_metric').value = m.metric || 'watch_episodes'; $('m_target').value = m.target ?? 1; $('m_coins').value = m.coins ?? 0; $('m_sortOrder').value = m.sortOrder ?? 0; $('m_active').checked = !!m.active; $('missionFormTitle').textContent = 'Edit Mission'; window.scrollTo({top:0,behavior:'smooth'}); }
+  if (dl) { if (!confirm('Delete mission ' + dl.dataset.delMission + '?')) return; try { await del('/missions/' + encodeURIComponent(dl.dataset.delMission)); toast('Mission deleted'); loadMissions(); } catch (err) { toast(err.message, true); } }
+});
+
+/* Events CRUD */
+let eventCache = [];
+async function loadEvents() {
+  const r = await get('/events'); eventCache = itemsOf(r, 'events');
+  $('eventRows').innerHTML = eventCache.map((ev) => `<tr><td><strong>${esc(ev.name)}</strong></td><td>×${esc(ev.multiplier)}</td>
+    <td class="small muted">${esc(ev.startsAt || '')}</td><td class="small muted">${esc(ev.endsAt || '')}</td>
+    <td>${ev.active ? '<span class="badge free">Active</span>' : '<span class="badge">Off</span>'}</td>
+    <td class="row"><button class="btn secondary small" data-edit-event="${esc(ev.id)}">Edit</button><button class="btn danger small" data-del-event="${esc(ev.id)}">Delete</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">No events yet.</td></tr>';
+}
+function resetEventForm() { $('eventForm').reset(); $('ev_id').value = ''; $('ev_multiplier').value = 2; $('ev_active').checked = true; $('eventFormTitle').textContent = 'New Event'; }
+$('eventReset').addEventListener('click', resetEventForm);
+$('eventForm').addEventListener('submit', async (e) => { e.preventDefault();
+  const body = { name: str('ev_name'), multiplier: num('ev_multiplier'), startsAt: $('ev_starts').value ? new Date($('ev_starts').value).toISOString() : null, endsAt: $('ev_ends').value ? new Date($('ev_ends').value).toISOString() : null, active: $('ev_active').checked };
+  Object.keys(body).forEach((k) => body[k] === undefined && delete body[k]);
+  try { if ($('ev_id').value) { await patch('/events/' + encodeURIComponent($('ev_id').value), body); toast('Event updated'); } else { await post('/events', body); toast('Event created'); } resetEventForm(); loadEvents(); }
+  catch (err) { toast(err.message, true); } });
+$('eventRows').addEventListener('click', async (e) => {
+  const ed = e.target.closest('[data-edit-event]'), dl = e.target.closest('[data-del-event]');
+  if (ed) { const ev = eventCache.find((x) => String(x.id) === ed.dataset.editEvent); if (!ev) return;
+    $('ev_id').value = ev.id; $('ev_name').value = ev.name || ''; $('ev_multiplier').value = ev.multiplier ?? 1; $('ev_starts').value = toLocalInput(ev.startsAt); $('ev_ends').value = toLocalInput(ev.endsAt); $('ev_active').checked = !!ev.active; $('eventFormTitle').textContent = 'Edit Event'; window.scrollTo({top:0,behavior:'smooth'}); }
+  if (dl) { if (!confirm('Delete this event?')) return; try { await del('/events/' + encodeURIComponent(dl.dataset.delEvent)); toast('Event deleted'); loadEvents(); } catch (err) { toast(err.message, true); } }
+});
+
+/* ---------- Feature Flags ---------- */
+const PLAYER_FLAGS = [
+  ['player_swipe_next_episode','Swipe for next episode'], ['player_double_tap_seek','Double-tap seek ±10s'], ['player_long_press_2x','Long-press 2× speed'],
+  ['player_edge_brightness_volume','Edge brightness/volume'], ['player_speed_menu','Speed menu'], ['player_quality_selector','Quality selector'],
+  ['player_auto_next','Auto-next countdown'], ['player_binge_mode','Binge mode'], ['player_pip','Picture-in-Picture'], ['player_scrub_chapters','Scrub chapters'],
+  ['player_skip_intro','Skip intro button'], ['player_lock_controls','Lock controls'], ['player_sleep_timer','Sleep timer'], ['player_share_moment','Share moment']];
+const ECO_FLAGS = [
+  ['wheel_enabled','Lucky wheel'], ['chests_enabled','Treasure chests'], ['missions_enabled','Missions'],
+  ['referrals_enabled','Referrals'], ['watch_time_enabled','Watch-time rewards'], ['captions_enabled','Captions']];
+function flagRow([key, label]) { return `<div class="flag-row"><span>${esc(label)}</span><span class="spacer"></span><span class="muted small"><code>${esc(key)}</code></span><label class="switch"><input type="checkbox" data-flag="${esc(key)}"><span class="track"></span></label></div>`; }
+$('flagsPlayer').innerHTML = PLAYER_FLAGS.map(flagRow).join('');
+$('flagsEconomy').innerHTML = ECO_FLAGS.map(flagRow).join('');
+async function loadFlags() {
+  const r = await get('/settings'); const s = r.settings || {};
+  document.querySelectorAll('[data-flag]').forEach((el) => { el.checked = !!s[el.dataset.flag]; });
+}
+async function onFlagChange(e) { const el = e.target.closest('[data-flag]'); if (!el) return;
+  try { await patchSettings({ [el.dataset.flag]: el.checked }, (el.checked ? 'Enabled: ' : 'Disabled: ') + el.dataset.flag); } catch (err) { el.checked = !el.checked; toast(err.message, true); } }
+$('flagsPlayer').addEventListener('change', onFlagChange);
+$('flagsEconomy').addEventListener('change', onFlagChange);
+
+/* ---------- Visual & Theme ---------- */
+const THEME_GRADIENTS = ['linear-gradient(135deg,#d90452,#ff2e7e)','linear-gradient(135deg,#6a11cb,#2575fc)','linear-gradient(135deg,#f7971e,#ffd200)','linear-gradient(135deg,#11998e,#38ef7d)','linear-gradient(135deg,#8e2de2,#4a00e0)','linear-gradient(135deg,#fc4a1a,#f7b733)','linear-gradient(135deg,#232526,#414345)'];
+let visualThemePreset = 1;
+function renderSwatches() { $('themeSwatches').innerHTML = THEME_GRADIENTS.map((g, i) => `<button type="button" class="swatch ${visualThemePreset === i + 1 ? 'sel' : ''}" data-theme="${i + 1}" style="background:${g}" title="Preset ${i + 1}">${i + 1}</button>`).join(''); }
+$('themeSwatches').addEventListener('click', (e) => { const b = e.target.closest('[data-theme]'); if (!b) return; visualThemePreset = parseInt(b.dataset.theme, 10); renderSwatches(); });
+$('vt_accent_text').addEventListener('input', () => { const v = str('vt_accent_text'); if (/^#[0-9a-fA-F]{6}$/.test(v)) $('vt_accent_color').value = v; });
+$('vt_accent_color').addEventListener('input', () => { $('vt_accent_text').value = $('vt_accent_color').value; });
+async function loadVisual() {
+  const r = await get('/settings'); const s = r.settings || {};
+  visualThemePreset = Math.min(7, Math.max(1, parseInt(s.default_theme_preset, 10) || 1)); renderSwatches();
+  $('vt_confetti').checked = !!s.confetti_enabled; $('vt_haptics').checked = !!s.haptics_enabled;
+  $('vt_accent_text').value = s.accent_color_override || ''; if (/^#[0-9a-fA-F]{6}$/.test(s.accent_color_override || '')) $('vt_accent_color').value = s.accent_color_override;
+  $('vt_auto_next').value = s.auto_next_countdown_seconds ?? ''; $('vt_skip_window').value = s.skip_intro_window_seconds ?? ''; $('vt_skip_to').value = s.skip_intro_to_seconds ?? '';
+}
+$('visualForm').addEventListener('submit', async (e) => { e.preventDefault();
+  const accent = str('vt_accent_text'); if (accent && !/^#[0-9a-fA-F]{6}$/.test(accent)) { toast('Accent color must be empty or #RRGGBB', true); return; }
+  const body = { default_theme_preset: visualThemePreset, confetti_enabled: $('vt_confetti').checked, haptics_enabled: $('vt_haptics').checked, accent_color_override: accent, auto_next_countdown_seconds: num('vt_auto_next'), skip_intro_window_seconds: num('vt_skip_window'), skip_intro_to_seconds: num('vt_skip_to') };
+  Object.keys(body).forEach((k) => body[k] === undefined && delete body[k]);
+  try { await patch('/settings', body); $('visualResult').textContent = '✓ Visual settings saved.'; $('visualResult').style.color = 'var(--ok)'; toast('Visual settings saved'); }
+  catch (err) { $('visualResult').textContent = 'Failed: ' + err.message; $('visualResult').style.color = 'var(--danger)'; } });
+
+/* ---------- Captions & Translation ---------- */
+let capTargets = ['ar','en'];
+async function loadCaptionsSection() {
+  const r = await get('/settings'); const s = r.settings || {};
+  $('cap_asr').value = s.asr_provider || 'demo'; $('cap_mt').value = s.mt_provider || 'demo';
+  capTargets = (s.caption_target_languages && s.caption_target_languages.length) ? s.caption_target_languages : ['ar','en'];
+  $('cap_langs').value = capTargets.join(', ');
+  $('cap_enabled').checked = !!s.captions_enabled; $('cap_auto').checked = !!s.captions_auto_generate;
+  await loadCaptionsMatrix();
+}
+$('capForm').addEventListener('submit', async (e) => { e.preventDefault();
+  capTargets = parseCsv($('cap_langs').value).map((l) => l.toLowerCase());
+  try { await patchSettings({ asr_provider: $('cap_asr').value, mt_provider: $('cap_mt').value, caption_target_languages: capTargets, captions_enabled: $('cap_enabled').checked, captions_auto_generate: $('cap_auto').checked }, 'Caption settings saved'); }
+  catch (err) { toast(err.message, true); } });
+function trackChip(ep, lang) {
+  const t = (ep.tracks || []).find((x) => x.lang === lang);
+  if (!t) return `<span class="chip miss">${esc(lang)} · missing</span>`;
+  const cls = chipFor(t.status);
+  const delBtn = cls === 'ok' ? ` <button type="button" data-del-track="${esc(t.id)}" title="Delete ${esc(lang)} track">×</button>` : '';
+  return `<span class="chip ${cls}">${esc(lang)} · ${esc(t.status || '')}${t.source ? ' (' + esc(t.source) + ')' : ''}${delBtn}</span>`;
+}
+async function loadCaptionsMatrix() {
+  const r = await get('/captions'); const episodes = (r && r.episodes) || []; const jobs = (r && r.jobs) || [];
+  $('capRows').innerHTML = episodes.map((ep) => {
+    const langs = [...new Set(['orig','ar','en', ...(ep.tracks || []).map((t) => t.lang)])];
+    return `<tr><td><code>${esc(String(ep.seriesId || '').slice(0, 8))}</code></td><td>${esc(ep.episodeNumber)}</td>
+    <td><strong>${esc(ep.title || '')}</strong></td><td>${langs.map((l) => trackChip(ep, l)).join(' ')}</td>
+    <td><button class="btn small" data-gen-cap="${esc(ep.episodeId)}">Generate</button></td></tr>`; }).join('') || '<tr><td colspan="5" class="muted">No episodes found.</td></tr>';
+  $('capJobRows').innerHTML = jobs.map((j) => `<tr><td><code>${esc(String(j.episodeId || '').slice(0, 8))}</code></td>
+    <td><span class="chip ${chipFor(j.status)}">${esc(j.status || '')}</span></td><td>${esc(j.step || '')}</td>
+    <td class="small" style="color:var(--danger)">${esc(j.error || '')}</td><td class="small muted">${esc(j.createdAt || '')}</td><td class="small muted">${esc(j.finishedAt || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No jobs yet.</td></tr>';
+}
+$('capReload').addEventListener('click', () => loadCaptionsMatrix().then(() => toast('Captions refreshed')).catch((e) => toast(e.message, true)));
+$('capRows').addEventListener('click', async (e) => {
+  const gen = e.target.closest('[data-gen-cap]'), dt = e.target.closest('[data-del-track]');
+  if (gen) { try { const r = await post('/episodes/' + encodeURIComponent(gen.dataset.genCap) + '/captions/generate', { targets: capTargets }); toast('Caption job queued: ' + (r.jobId || '')); loadCaptionsMatrix(); } catch (err) { toast(err.message, true); } }
+  if (dt) { if (!confirm('Delete this caption track?')) return; try { await del('/captions/' + encodeURIComponent(dt.dataset.delTrack)); toast('Caption track deleted'); loadCaptionsMatrix(); } catch (err) { toast(err.message, true); } }
+});
 
 /* boot */
 if (token()) { get('/stats').then(() => { showApp(); loadSection('overview'); }).catch(() => showLogin('')); } else showLogin('');

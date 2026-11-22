@@ -1,6 +1,7 @@
 'use strict';
 const { all, get, run } = require('./db');
 const { uid } = require('./auth');
+const captions = require('./captions');
 const UNLOCK_COST = parseInt(process.env.EPISODE_UNLOCK_COIN_COST || '30', 10);
 const VIDEOS = [
   'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
@@ -51,7 +52,21 @@ const TASKS = [
   ['series_watch_25', 'Watch 25 dramas', 'Start 25 different series', 200, 'watch_episodes', 12, 25],
   ['series_collect_5', 'Collect 5 dramas', 'Add 5 series to My List', 50, 'collect_series', 13, 5],
 ];
+const MISSIONS = [
+  // slug, title, description, metric, target, coins, sortOrder
+  ['watch_3_episodes', 'Watch 3 episodes', 'Watch 3 different episodes today', 'watch_episodes', 3, 20, 1],
+  ['watch_15_minutes', 'Watch 15 minutes', 'Watch for 15 minutes today', 'watch_minutes', 15, 25, 2],
+  ['like_3_series', 'Like 3 series', 'Like 3 series today', 'likes', 3, 15, 3],
+  ['share_1_series', 'Share a series', 'Share a series today', 'shares', 1, 15, 4],
+  ['daily_checkin', 'Daily check-in', 'Check in today', 'checkin', 1, 10, 5],
+];
+function seedMissions() {
+  // Seed missions only if the missions table is empty.
+  if (get('SELECT COUNT(*) c FROM missions').c > 0) return;
+  MISSIONS.forEach((ms) => run('INSERT INTO missions(slug,title,description,metric,target,coins,sortOrder,active) VALUES(?,?,?,?,?,?,?,1)', ...ms));
+}
 function seed() {
+  seedMissions();
   if (get("SELECT value FROM meta WHERE key='seeded'")) return;
   const now = new Date().toISOString();
   GENRES.forEach((g, i) => run('INSERT INTO genres(id,slug,name,description,colorHex,sortOrder) VALUES(?,?,?,?,?,?)', g[0], g[1], g[2], g[3], g[4], i + 1));
@@ -101,6 +116,10 @@ function seed() {
     sec[5].forEach((sid, j) => run('INSERT INTO home_section_items(sectionId,seriesId,sortOrder) VALUES(?,?,?)', sec[0], sid, j + 1));
   });
   TASKS.forEach((t) => run('INSERT INTO reward_tasks(slug,title,description,coins,actionType,sortOrder,target) VALUES(?,?,?,?,?,?,?)', ...t));
+  // Phase 2 captions seed: run the demo pipeline synchronously for the first 2
+  // episodes of the first series so ready orig+ar+en tracks exist out of the box.
+  const firstSeriesId = 'series-' + SERIES[0][0];
+  [1, 2].forEach((n) => captions.generateDemoTracksSync(`${firstSeriesId}-ep${n}`));
   run("INSERT INTO meta(key,value) VALUES('seeded','1')");
   console.log(`[seed] genres=${GENRES.length} series=${SERIES.length} episodes=${SERIES.length * 10} tasks=${TASKS.length} checkin=${CHECKIN.join(',')}`);
 }

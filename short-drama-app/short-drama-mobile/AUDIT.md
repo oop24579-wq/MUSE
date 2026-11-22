@@ -163,3 +163,41 @@ App rebranded from "DramaNow" to **HERO DRAMA**. Scope: `short-drama-mobile/` on
 - `web/manifest.json` `description` ("DramaNow — Live radio and podcasts worldwide.") and `web/index.html` meta `description` ("AI Music Maker — Create songs & music videos with AI.") — both are stale full taglines from earlier templates, not bare brand names; left for the owner to rewrite rather than guessing new copy. Flagged as follow-ups.
 - `README.md` — documentation prose referring to the "DramaNow web API" backend; not app UI or config.
 - All package/class identifiers, bundle IDs (`com.shortdrama.watch`), URL schemes, and Firebase/project identifiers — untouched.
+
+---
+
+## Phase 2 (2026-11-22) — player luxury, engagement visuals, captions client
+
+Scope additions: luxury video player, rewards/engagement UI, app-config client,
+caption playback. Verification re-run by the coordinator after all Phase 2 work:
+
+- **Dart files: 187** (was 171), **import/export directives scanned: 1007**.
+- **Broken imports: 0.** (The audit script flags one line —
+  `lib/l10n/app_localizations.dart:31` — which is a doc-comment usage example,
+  `/// import 'l10n/app_localizations.dart';`, not a real directive. Verified by hand.)
+- **Brace/paren/bracket balance: all 187 files balanced, 0 unbalanced.**
+- **Backend test suite re-run by the coordinator: 42/42 ALL PASS**
+  (`backend/test/LAST_RUN.txt`) — the 30 Phase 1 cases untouched plus 12 new
+  Phase 2 cases (config, wheel, chests, watch-time, missions, referrals, event
+  multiplier, captions pipeline, maintenance + config exemption).
+
+New app files: `lib/services/app_config_service.dart`,
+`lib/models/drama/playback_model.dart`, `lib/services/drama/playback_service.dart`,
+`lib/presentation/drama/widgets/player/` (seek ripple, edge HUD, platform
+service, auto-next overlay, chapter progress bar, lock overlay, caption overlay
+with a pure-Dart WebVTT parser), `lib/presentation/drama/widgets/wheel_widget.dart`,
+`chest_row.dart`, `missions_section.dart`, `streak_level_header.dart`,
+`lib/services/haptics_service.dart`, `lib/widgets/confetti_burst.dart`.
+`lib/theme/app_theme.dart`: `kColorPreset` is now a mutable static, set from
+`/config` by `ThemeProvider` (guarded 1..7).
+
+Known Phase 2 scaffolds (honest list, also in `docs/VISUAL_FEATURES_50.md`):
+- The `hero_drama/media_controls` MethodChannel has **no native Android/iOS
+  implementation** — system brightness/volume and PiP need native code; the
+  Dart side degrades gracefully (dim overlay, player volume, "not supported" toast).
+- The accent-colour override from `/config` is not applied to the app
+  ColorSchemes yet (no single safe override point inside the preset palettes).
+- Ranking `rankDelta` is served by the API but the ranking tile does not
+  render movement arrows yet.
+- Still static-only verification: no Flutter SDK in this environment, so no
+  `flutter analyze`/build was run for Phase 2 either.

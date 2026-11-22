@@ -105,6 +105,21 @@ below is editable live, without redeploying anything:
     (every playback, even free episodes, requires VIP).
   - **Ads enabled** flag, welcome bonus, unlock cost, ad rewards, check-in
     amounts (same store as Rewards & Economy).
+- **Engagement Lab** *(Phase 2)* — the retention economy: spin-wheel segments/weights,
+  free spins/day and paid-spin cost; treasure-chest milestones (episodes-watched →
+  coins); watch-time reward rate/block/cap; referral bonuses; **daily missions**
+  CRUD (watch/like/share/check-in metrics); **limited-time events** CRUD
+  (reward multiplier + schedule).
+- **Feature Flags** *(Phase 2)* — one live toggle per player-luxury feature
+  (swipe nav, double-tap seek, long-press 2×, edge controls, speed/quality,
+  auto-next, binge, PiP, chapters, skip-intro, lock, sleep timer, share moment,
+  captions) plus wheel/chests/missions/referrals/watch-time master switches.
+- **Visual & Theme** *(Phase 2)* — default colour preset (1–7), confetti and
+  haptics on/off, accent-colour override, auto-next countdown seconds, and the
+  skip-intro window/skip-to timings.
+- **Captions & Translation** *(Phase 2)* — ASR/MT provider selectors, target
+  languages, auto-generate toggle, a per-episode caption-track matrix with
+  Generate/delete, and the caption job list (see the captions section below).
 - **Transactions** — paginated, filterable coin-transaction audit log.
 
 Admin API: everything lives under `/api/v1/admin/*`, guarded by the
@@ -135,9 +150,41 @@ Built from scratch to the app's exact contract:
 3. **Seed content** — 7 genres, 8 series × 10 episodes (public sample MP4s,
    one VIP-only series, one series with Spanish/Portuguese dubs), cast, all
    7 home-section types, reward tasks using the app's real slugs.
-4. **Test suite** — 30 end-to-end cases against a real booted server
+4. **Test suite** — 42 end-to-end cases against a real booted server
    (auth, entitlement, economy, settings effects, maintenance mode, admin
-   CRUD): **30/30 passing** (`backend/test/LAST_RUN.txt`).
+   CRUD): **42/42 passing** (`backend/test/LAST_RUN.txt`).
+
+---
+
+## Phase 2 — engagement, player luxury, captions
+
+- **Addictive coin economy** (all values tunable in the Engagement Lab):
+  spin wheel with free/paid spins, treasure chests for episodes watched,
+  watch-time rewards with a daily cap, auto-tracked daily missions, XP &
+  levels, check-in streaks with level/streak bonuses, referrals (both sides
+  paid), and limited-time multiplier events. Every grant is server-computed,
+  idempotent, daily-capped and logged in `coin_transactions` with a reason
+  code (`wheel`, `chest`, `watch_time`, `mission`, `referral`, …).
+- **Public app config** — `GET /api/v1/config` (no auth, works even in
+  maintenance mode) serves the feature flags, player timings, visual config
+  and economy values the app reads at startup. Firebase Remote Config still
+  owns secrets/keys; everything behavioural lives in the dashboard.
+- **Luxury player** — swipe episode navigation, double-tap seek, long-press
+  2×, edge brightness/volume HUDs, speed + quality menus, auto-next countdown
+  ring, binge mode, chapter progress bar, skip-intro, lock controls, sleep
+  timer, resume banner — each individually toggleable from Feature Flags.
+  The 50-item visual inventory with honest statuses is in
+  [docs/VISUAL_FEATURES_50.md](docs/VISUAL_FEATURES_50.md).
+- **Auto-captions & translation** — like Facebook's system: the backend
+  listens to each episode's audio (ASR), translates the transcript (MT) and
+  serves timed WebVTT tracks; viewers pick Off / Original / العربية / English
+  in the player. No per-video subtitle uploads. Providers are pluggable via
+  settings (`asr_provider`, `mt_provider`); the built-in **demo** providers
+  make the whole pipeline testable with zero keys (demo ASR invents plausible
+  text, demo MT only prefixes a language tag) — plug a real
+  `OPENAI_API_KEY` / `DEEPL_API_KEY` / `GOOGLE_TRANSLATE_API_KEY` /
+  `WHISPER_CMD` into the server environment for production. Details in
+  [backend/README.md](backend/README.md).
 5. **App fixes + rebrand** — two broken imports fixed; app rebranded to
    **HERO DRAMA** (Android/iOS/web names, all 12 locales, share texts) with
    the official logo as the launcher-icon source. Details in

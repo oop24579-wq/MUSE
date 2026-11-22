@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
+import 'package:drama_now/services/app_config_service.dart';
 import 'package:drama_now/services/auth/auth_service.dart';
 import 'package:drama_now/services/firebase/firebase_service.dart';
 import 'package:drama_now/services/firebase/remote_config_service.dart';
@@ -37,6 +38,8 @@ class AppBootstrap {
     }
 
     if (rc.isBackendConfigReady) {
+      // Remote app config (feature flags etc.) — never blocks/breaks startup.
+      unawaited(AppConfigService.instance.load());
       try {
         await AuthService.instance.initialize();
         await AuthService.instance.ensureAuthenticated();

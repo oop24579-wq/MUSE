@@ -88,9 +88,56 @@ CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS broadcasts(
   id TEXT PRIMARY KEY, title TEXT NOT NULL, body TEXT, type TEXT DEFAULT 'system',
   sentCount INTEGER DEFAULT 0, createdAt TEXT NOT NULL);
+-- Phase 2: addictive coin economy
+CREATE TABLE IF NOT EXISTS wheel_spins(
+  userId TEXT NOT NULL, spinDate TEXT NOT NULL, freeUsed INTEGER DEFAULT 0, totalSpins INTEGER DEFAULT 0,
+  PRIMARY KEY(userId, spinDate));
+CREATE TABLE IF NOT EXISTS chest_claims(
+  userId TEXT NOT NULL, chestDate TEXT NOT NULL, threshold INTEGER NOT NULL, coins INTEGER NOT NULL,
+  claimedAt TEXT NOT NULL, PRIMARY KEY(userId, chestDate, threshold));
+CREATE TABLE IF NOT EXISTS watch_time_daily(
+  userId TEXT NOT NULL, watchDate TEXT NOT NULL, seconds INTEGER DEFAULT 0, blocksClaimed INTEGER DEFAULT 0,
+  PRIMARY KEY(userId, watchDate));
+CREATE TABLE IF NOT EXISTS watch_events(
+  userId TEXT NOT NULL, episodeId TEXT NOT NULL, eventDate TEXT NOT NULL,
+  PRIMARY KEY(userId, episodeId, eventDate));
+CREATE TABLE IF NOT EXISTS user_daily_events(
+  userId TEXT NOT NULL, eventDate TEXT NOT NULL, metric TEXT NOT NULL, count INTEGER DEFAULT 0,
+  PRIMARY KEY(userId, eventDate, metric));
+CREATE TABLE IF NOT EXISTS missions(
+  slug TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT, metric TEXT NOT NULL,
+  target INTEGER DEFAULT 1, coins INTEGER DEFAULT 0, sortOrder INTEGER DEFAULT 0, active INTEGER DEFAULT 1);
+CREATE TABLE IF NOT EXISTS mission_claims(
+  userId TEXT NOT NULL, slug TEXT NOT NULL, claimDate TEXT NOT NULL,
+  PRIMARY KEY(userId, slug, claimDate));
+CREATE TABLE IF NOT EXISTS events(
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, multiplier REAL DEFAULT 1, startsAt TEXT, endsAt TEXT,
+  active INTEGER DEFAULT 1, createdAt TEXT NOT NULL);
+-- Phase 2: captions & translation
+CREATE TABLE IF NOT EXISTS caption_tracks(
+  id TEXT PRIMARY KEY, episodeId TEXT NOT NULL, lang TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'asr', status TEXT NOT NULL DEFAULT 'queued', vtt TEXT,
+  createdAt TEXT NOT NULL, UNIQUE(episodeId, lang));
+CREATE TABLE IF NOT EXISTS caption_jobs(
+  id TEXT PRIMARY KEY, episodeId TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued',
+  step TEXT, error TEXT, createdAt TEXT NOT NULL, finishedAt TEXT);
 `);
 // Migrations for DBs created before these columns existed.
 try { db.exec('ALTER TABLE reward_tasks ADD COLUMN active INTEGER DEFAULT 1'); } catch { /* already present */ }
+try { db.exec('ALTER TABLE users ADD COLUMN xp INTEGER DEFAULT 0'); } catch { /* already present */ }
+try { db.exec('ALTER TABLE users ADD COLUMN referralCode TEXT'); } catch { /* already present */ }
+try { db.exec('ALTER TABLE users ADD COLUMN referredBy TEXT'); } catch { /* already present */ }
+// Generate referral codes for users that do not have one yet:
+// 'HD' + 6 chars from a hash of the user id (deterministic, stable).
+{
+  const crypto = require('node:crypto');
+  const rows = db.prepare('SELECT id FROM users WHERE referralCode IS NULL').all();
+  const upd = db.prepare('UPDATE users SET referralCode=? WHERE id=?');
+  for (const r of rows) {
+    const code = 'HD' + crypto.createHash('sha256').update(String(r.id)).digest('hex').slice(0, 6).toUpperCase();
+    upd.run(code, r.id);
+  }
+}
 const all = (sql, ...p) => db.prepare(sql).all(...p);
 const get = (sql, ...p) => db.prepare(sql).get(...p);
 const run = (sql, ...p) => db.prepare(sql).run(...p);

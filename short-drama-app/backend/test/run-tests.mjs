@@ -82,7 +82,7 @@ async function req(method, urlPath, { token, admin, adminToken, body } = {}) {
   let json = null;
   const text = await res.text();
   try { json = JSON.parse(text); } catch { /* keep null */ }
-  return { status: res.status, json, text };
+  return { status: res.status, json, text, headers: res.headers };
 }
 
 async function waitForHealth() {
@@ -546,6 +546,288 @@ try {
     }
     const restored = await getSettings();
     assertEq(restored.premium_playback_mode, origSettings.premium_playback_mode, 'premium_playback_mode restored to original');
+  });
+
+  // ================= PHASE 2: config / economy / captions =================
+  const freshUser = async (tag) => {
+    const a = await req('POST', '/auth/firebase', { body: { idToken: `phase2-${tag}-token` } });
+    assertEq(a.status, 200, `fresh user ${tag} auth`);
+    return a.json.data;
+  };
+  const balanceOf = async (token) => (await req('GET', '/me/coins', { token })).json.data.balance;
+  const seriesEpisodes = async (token, sid) => (await req('GET', `/series/${sid}/episodes`, { token })).json.data.episodes;
+  const postWatch = async (token, sid, ep, positionSeconds, durationSeconds = 1000) => {
+    const r = await req('POST', '/me/watch-history', { token, body: { seriesId: sid, episodeId: ep.id, episodeNumber: ep.episodeNumber, positionSeconds, durationSeconds, completed: false } });
+    assertEq(r.status, 200, 'watch-history post in phase2');
+    return r;
+  };
+
+  // 31. GET /config shape + settings PATCH reflects
+  await testCase(31, 'GET /config shape (features/player/visual/economy) + PATCH player_pip=false reflects', async () => {
+    const r = await req('GET', '/config');
+    assertEq(r.status, 200, 'config status (no auth)');
+    const c = r.json.data;
+    assertEq(c.maintenanceMode, false, 'config maintenanceMode');
+    assert(c.premiumPlaybackMode, 'config premiumPlaybackMode present');
+    for (const k of ['swipe_next_episode', 'double_tap_seek', 'long_press_2x', 'edge_brightness_volume', 'speed_menu', 'quality_selector', 'auto_next', 'binge_mode', 'pip', 'scrub_chapters', 'skip_intro', 'lock_controls', 'sleep_timer', 'share_moment', 'captions', 'wheel', 'chests', 'missions', 'referrals', 'watch_time', 'ads'])
+      assertEq(typeof c.features[k], 'boolean', `config features.${k} is boolean`);
+    assertEq(c.player.skipIntroWindowSeconds, 90, 'skipIntroWindowSeconds');
+    assertEq(c.player.skipIntroToSeconds, 75, 'skipIntroToSeconds');
+    assertEq(c.player.autoNextCountdownSeconds, 5, 'autoNextCountdownSeconds');
+    assertEq(c.visual.defaultThemePreset, 6, 'defaultThemePreset');
+    assertEq(c.visual.confettiEnabled, true, 'confettiEnabled');
+    assertEq(c.economy.episodeUnlockCoinCost, 30, 'config episodeUnlockCoinCost');
+    assertEq(c.economy.wheelFreeSpinsPerDay, 3, 'config wheelFreeSpinsPerDay');
+    try {
+      await patchSettings({ player_pip: false });
+      const r2 = await req('GET', '/config');
+      assertEq(r2.json.data.features.pip, false, 'features.pip reflects PATCH');
+    } finally { await patchSettings({ player_pip: true }); }
+  });
+
+  // 32. wheel spin
+  await testCase(32, 'wheel: free spin shape, free spins exhaust at setting=1, paid spin deducts cost, insufficient -> 402', async () => {
+    const u = await freshUser('wheel');
+    const t = u.tokens.accessToken;
+    try {
+      await patchSettings({ wheel_free_spins_per_day: 1 });
+      const rw = await req('GET', '/rewards', { token: t });
+      assertEq(rw.json.data.wheel.spinsLeft, 1, 'wheel spinsLeft starts at patched free/day');
+      assert(Array.isArray(rw.json.data.wheel.segments) && rw.json.data.wheel.segments.length === 8, 'wheel segments in /rewards');
+      const b0 = await balanceOf(t);
+      const spin1 = await req('POST', '/rewards/wheel/spin', { token: t, body: {} });
+      assertEq(spin1.status, 200, `free spin status (body ${spin1.text})`);
+      assert(spin1.json.data.success === true && Number.isInteger(spin1.json.data.segmentIndex), 'spin shape success+segmentIndex');
+      assertEq(spin1.json.data.spinsLeft, 0, 'free spins exhausted after 1 (setting=1)');
+      assertEq(await balanceOf(t), b0 + spin1.json.data.coins, 'balance = before + free spin winnings');
+      const b1 = await balanceOf(t);
+      const spin2 = await req('POST', '/rewards/wheel/spin', { token: t, body: {} });
+      assertEq(spin2.status, 200, `paid spin status (body ${spin2.text})`);
+      assertEq(await balanceOf(t), b1 - 20 + spin2.json.data.coins, 'paid spin deducts wheel_extra_spin_cost 20 then pays winnings');
+      await patchSettings({ wheel_extra_spin_cost: 100000 });
+      const spin3 = await req('POST', '/rewards/wheel/spin', { token: t, body: {} });
+      assertEq(spin3.status, 402, 'insufficient balance for paid spin -> 402');
+      assertEq(spin3.json.error.code, 'INSUFFICIENT_COINS', '402 code INSUFFICIENT_COINS');
+    } finally {
+      await patchSettings({ wheel_free_spins_per_day: 3, wheel_extra_spin_cost: 20 });
+    }
+  });
+
+  // 33. chests
+  await testCase(33, 'chests: claim before unlock -> 403; watch 3 distinct episodes -> claim pays 15; second -> 409', async () => {
+    const u = await freshUser('chest');
+    const t = u.tokens.accessToken;
+    const early = await req('POST', '/rewards/chests/chest_3/claim', { token: t, body: {} });
+    assertEq(early.status, 403, 'chest claim before unlock -> 403');
+    assertEq(early.json.error.code, 'CHEST_LOCKED', 'CHEST_LOCKED code');
+    const eps = await seriesEpisodes(t, seriesId);
+    for (let i = 0; i < 3; i++) await postWatch(t, seriesId, eps[i], 60);
+    const rw = await req('GET', '/rewards', { token: t });
+    const chest = rw.json.data.chests.find((c) => c.id === 'chest_3');
+    assert(chest && chest.unlocked === true && chest.claimed === false, 'chest_3 unlocked after 3 episodes');
+    const b0 = await balanceOf(t);
+    const claim = await req('POST', '/rewards/chests/chest_3/claim', { token: t, body: {} });
+    assertEq(claim.status, 200, `chest claim status (body ${claim.text})`);
+    assertEq(claim.json.data.coins, 15, 'chest_3 pays fixed 15');
+    assertEq(await balanceOf(t), b0 + 15, 'balance increased by chest coins');
+    const again = await req('POST', '/rewards/chests/chest_3/claim', { token: t, body: {} });
+    assertEq(again.status, 409, 'second chest claim -> 409');
+  });
+
+  // 34. watch-time claim + daily cap
+  await testCase(34, 'watch-time: >=10 min accrual -> claim pays 10; second claim pays 0; daily cap respected', async () => {
+    const u = await freshUser('watchtime');
+    const t = u.tokens.accessToken;
+    const eps = await seriesEpisodes(t, seriesId);
+    await postWatch(t, seriesId, eps[0], 600, 600);
+    const rw = await req('GET', '/rewards', { token: t });
+    assert(rw.json.data.watchTime.minutesToday >= 10, `minutesToday >= 10 (got ${rw.json.data.watchTime.minutesToday})`);
+    assertEq(rw.json.data.watchTime.claimableCoins, 10, 'claimable = 1 block x 10 coins');
+    const b0 = await balanceOf(t);
+    const claim = await req('POST', '/rewards/watch-time/claim', { token: t, body: {} });
+    assertEq(claim.status, 200, 'watch-time claim status');
+    assertEq(claim.json.data.coins, 10, 'watch-time claim pays 10');
+    assertEq(await balanceOf(t), b0 + 10, 'balance increased by watch-time coins');
+    const second = await req('POST', '/rewards/watch-time/claim', { token: t, body: {} });
+    assertEq(second.status, 200, 'second watch-time claim status (ad-style tolerance)');
+    assert(second.json.data.success === false && second.json.data.coins === 0, 'second immediate claim pays 0');
+    // Daily cap: cap=5, fresh user accrues a full block but can only claim 5.
+    try {
+      await patchSettings({ watch_time_daily_cap_coins: 5 });
+      const u2 = await freshUser('watchcap');
+      const t2 = u2.tokens.accessToken;
+      const eps2 = await seriesEpisodes(t2, seriesId);
+      await postWatch(t2, seriesId, eps2[0], 600, 600);
+      const rw2 = await req('GET', '/rewards', { token: t2 });
+      assertEq(rw2.json.data.watchTime.claimableCoins, 5, 'claimable clamped to daily cap 5');
+      const c2 = await req('POST', '/rewards/watch-time/claim', { token: t2, body: {} });
+      assertEq(c2.json.data.coins, 5, 'claim pays capped 5');
+    } finally { await patchSettings({ watch_time_daily_cap_coins: 100 }); }
+  });
+
+  // 35. missions
+  await testCase(35, 'missions: watch_3_episodes progress 3 after 3 episodes; claim pays 20 once; second -> 409', async () => {
+    const u = await freshUser('mission');
+    const t = u.tokens.accessToken;
+    const eps = await seriesEpisodes(t, seriesId);
+    for (let i = 0; i < 3; i++) await postWatch(t, seriesId, eps[i], 30);
+    const rw = await req('GET', '/rewards', { token: t });
+    const ms = rw.json.data.missions.find((x) => x.slug === 'watch_3_episodes');
+    assert(ms, 'watch_3_episodes mission listed');
+    assertEq(ms.progress, 3, 'mission progress = 3');
+    assertEq(ms.completed, true, 'mission completed flag');
+    const b0 = await balanceOf(t);
+    const claim = await req('POST', '/rewards/missions/watch_3_episodes/claim', { token: t, body: {} });
+    assertEq(claim.status, 200, `mission claim status (body ${claim.text})`);
+    assertEq(claim.json.data.coins, 20, 'mission pays 20');
+    assertEq(await balanceOf(t), b0 + 20, 'balance increased by mission coins');
+    const again = await req('POST', '/rewards/missions/watch_3_episodes/claim', { token: t, body: {} });
+    assertEq(again.status, 409, 'second mission claim -> 409');
+  });
+
+  // 36. referrals
+  await testCase(36, 'referral: B uses A code -> both +50; reuse -> 409; self-code -> 400', async () => {
+    const a = await freshUser('ref-a');
+    const meA = await req('GET', '/auth/me', { token: a.tokens.accessToken });
+    const code = meA.json.data.user.referralCode;
+    assert(code && code.startsWith('HD'), `referralCode present on /auth/me (got ${code})`);
+    assert(typeof meA.json.data.user.xp === 'number' && typeof meA.json.data.user.level === 'number', 'user gains xp/level fields');
+    const b = await freshUser('ref-b');
+    const balA0 = await balanceOf(a.tokens.accessToken);
+    const balB0 = await balanceOf(b.tokens.accessToken);
+    const apply = await req('POST', '/auth/referral', { token: b.tokens.accessToken, body: { code } });
+    assertEq(apply.status, 200, `referral apply status (body ${apply.text})`);
+    assertEq(apply.json.data.coins, 50, 'referee bonus 50');
+    assertEq(await balanceOf(b.tokens.accessToken), balB0 + 50, 'referee balance +50');
+    assertEq(await balanceOf(a.tokens.accessToken), balA0 + 50, 'referrer balance +50');
+    const reuse = await req('POST', '/auth/referral', { token: b.tokens.accessToken, body: { code } });
+    assertEq(reuse.status, 409, 'referral reuse -> 409');
+    const c = await freshUser('ref-c');
+    const meC = await req('GET', '/auth/me', { token: c.tokens.accessToken });
+    const self = await req('POST', '/auth/referral', { token: c.tokens.accessToken, body: { code: meC.json.data.user.referralCode } });
+    assertEq(self.status, 400, 'self-code -> 400');
+  });
+
+  // 37. event multiplier on checkin
+  await testCase(37, 'event multiplier x2 (admin-created, active now) doubles checkin; deactivated after', async () => {
+    const s = await getSettings();
+    const base = s.checkin_amounts[0];
+    const nowIso = new Date().toISOString();
+    const ev = await req('POST', '/admin/events', { admin: true, body: { name: 'Test Double Event', multiplier: 2, startsAt: new Date(Date.now() - 60000).toISOString(), endsAt: new Date(Date.now() + 3600000).toISOString(), active: true } });
+    assertEq(ev.status, 201, `event create status (body ${ev.text})`);
+    const evId = ev.json.data.id;
+    try {
+      const u = await freshUser('event');
+      const t = u.tokens.accessToken;
+      const rw = await req('GET', '/rewards', { token: t });
+      assert(rw.json.data.activeEvent && rw.json.data.activeEvent.multiplier === 2, 'activeEvent exposed in /rewards');
+      const ci = await req('POST', '/rewards/checkin', { token: t, body: {} });
+      assertEq(ci.status, 200, 'checkin under event status');
+      // Fresh user: level 1 (+0), streakBeforeToday 0 (+0) -> expected = base * 2.
+      assertEq(ci.json.data.coins, base * 2, `checkin doubled: base ${base} x2 = ${base * 2} (got ${ci.json.data.coins}, now ${nowIso})`);
+    } finally {
+      const off = await req('PATCH', `/admin/events/${evId}`, { admin: true, body: { active: false } });
+      assertEq(off.status, 200, 'event deactivate status');
+    }
+    const u2 = await freshUser('event-off');
+    const rw2 = await req('GET', '/rewards', { token: u2.tokens.accessToken });
+    assertEq(rw2.json.data.activeEvent, null, 'activeEvent null after deactivation');
+  });
+
+  // 38. captions demo job end-to-end
+  let captionEpId = null;
+  await testCase(38, 'captions: admin generate (demo) -> job done -> tracks ready orig+ar+en; list has NO videoUrl; raw VTT served', async () => {
+    captionEpId = freeEp.id;
+    const gen = await req('POST', `/admin/episodes/${captionEpId}/captions/generate`, { admin: true, body: {} });
+    assertEq(gen.status, 201, `caption generate status (body ${gen.text})`);
+    const jobId = gen.json.data.jobId;
+    assert(jobId, 'jobId returned');
+    let job = null;
+    for (let i = 0; i < 75; i++) {
+      const adm = await req('GET', '/admin/captions', { admin: true });
+      job = (adm.json.data.jobs || []).find((j) => j.id === jobId);
+      if (job && (job.status === 'done' || job.status === 'failed')) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    assert(job, 'caption job found in admin list');
+    assertEq(job.status, 'done', `caption job done (error: ${job.error})`);
+    const list = await req('GET', `/episodes/${captionEpId}/captions`, { token: tokens1.accessToken });
+    assertEq(list.status, 200, 'captions list status');
+    const langs = list.json.data.languages.map((l) => l.lang);
+    for (const L of ['orig', 'ar', 'en']) assert(langs.includes(L), `ready track ${L} listed (got ${langs})`);
+    assert(!list.text.includes('videoUrl'), 'captions list response must NOT contain videoUrl anywhere');
+    const raw = await req('GET', `/episodes/${captionEpId}/captions/ar`, { token: tokens1.accessToken });
+    assertEq(raw.status, 200, 'raw caption status');
+    assert((raw.headers.get('content-type') || '').includes('text/vtt'), `raw caption content-type text/vtt (got ${raw.headers.get('content-type')})`);
+    assert(raw.text.startsWith('WEBVTT'), 'VTT first line is WEBVTT');
+    assert(raw.text.includes('-->'), 'VTT contains cue timings');
+  });
+
+  // 39. playback captionLanguages + qualities
+  await testCase(39, 'playback includes captionLanguages [orig,ar,en] and qualities array of 4', async () => {
+    assert(captionEpId, 'caption episode from case 38');
+    const r = await req('GET', `/episodes/${captionEpId}/playback`, { token: tokens1.accessToken });
+    assertEq(r.status, 200, 'playback status');
+    for (const L of ['orig', 'ar', 'en']) assert(r.json.data.captionLanguages.includes(L), `captionLanguages includes ${L} (got ${JSON.stringify(r.json.data.captionLanguages)})`);
+    assert(Array.isArray(r.json.data.qualities) && r.json.data.qualities.length === 4, 'qualities array of 4');
+    assertEq(r.json.data.qualities.map((q) => q.label).join(','), '1080p,720p,480p,360p', 'quality labels');
+    assert(r.json.data.qualities.every((q) => q.url === r.json.data.videoUrl), 'quality urls = resolved videoUrl');
+  });
+
+  // 40. admin DELETE caption track + captions_enabled=false hides languages
+  await testCase(40, 'admin DELETE caption track -> gone from list; captions_enabled=false -> playback captionLanguages []', async () => {
+    assert(captionEpId, 'caption episode from case 38');
+    const adm = await req('GET', '/admin/captions', { admin: true });
+    const epEntry = (adm.json.data.episodes || []).find((e) => e.episodeId === captionEpId);
+    assert(epEntry, 'episode in admin captions');
+    const enTrack = epEntry.tracks.find((tr) => tr.lang === 'en');
+    assert(enTrack, 'en track present before delete');
+    const del = await req('DELETE', `/admin/captions/${enTrack.id}`, { admin: true });
+    assertEq(del.status, 200, 'delete caption track status');
+    const list = await req('GET', `/episodes/${captionEpId}/captions`, { token: tokens1.accessToken });
+    assert(!list.json.data.languages.some((l) => l.lang === 'en'), 'en track gone from list after delete');
+    try {
+      await patchSettings({ captions_enabled: false });
+      const play = await req('GET', `/episodes/${captionEpId}/playback`, { token: tokens1.accessToken });
+      assertEq(play.status, 200, 'playback status with captions disabled');
+      assertEq(play.json.data.captionLanguages.length, 0, 'captionLanguages [] when captions disabled');
+    } finally { await patchSettings({ captions_enabled: true }); }
+  });
+
+  // 41. auto-generate on admin episode create
+  await testCase(41, 'auto-generate: admin-create episode with videoUrl -> caption job appears for it', async () => {
+    const s = await getSettings();
+    assertEq(s.captions_auto_generate, true, 'captions_auto_generate on');
+    assertEq(s.captions_enabled, true, 'captions_enabled on');
+    const ep = await req('POST', '/admin/episodes', { admin: true, body: { seriesId, episodeNumber: 98, title: 'Auto Caption Episode', description: 'An episode created by tests. It should get captions automatically.', videoUrl: 'https://example.com/auto-caption.mp4', isFree: true, coinCost: 0 } });
+    assertEq(ep.status, 201, `episode create status (body ${ep.text})`);
+    const newEpId = ep.json.data.id;
+    try {
+      let found = null;
+      for (let i = 0; i < 75; i++) {
+        const adm = await req('GET', '/admin/captions', { admin: true });
+        found = (adm.json.data.jobs || []).find((j) => j.episodeId === newEpId);
+        if (found) break;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      assert(found, 'caption job appeared for auto-created episode');
+    } finally {
+      await req('DELETE', `/admin/episodes/${newEpId}`, { admin: true });
+    }
+  });
+
+  // 42. maintenance still 503s, /config exempt
+  await testCase(42, 'maintenance: app endpoints 503 while GET /config still responds 200', async () => {
+    try {
+      await patchSettings({ maintenance_mode: true });
+      const cfg = await req('GET', '/config');
+      assertEq(cfg.status, 200, 'GET /config during maintenance');
+      assertEq(cfg.json.data.maintenanceMode, true, 'config reports maintenanceMode true');
+      const cats = await req('GET', '/categories', { token: tokens1.accessToken });
+      assertEq(cats.status, 503, 'GET /categories during maintenance -> 503');
+    } finally { await patchSettings({ maintenance_mode: false }); }
+    const after = await req('GET', '/config');
+    assertEq(after.json.data.maintenanceMode, false, 'maintenance off after restore');
   });
 } catch (e) {
   failed++;

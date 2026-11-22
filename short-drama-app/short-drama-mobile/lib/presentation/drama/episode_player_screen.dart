@@ -1,23 +1,36 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sizer/sizer.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/app_export.dart';
 import '../../models/drama/episode_model.dart';
+import '../../models/drama/playback_model.dart';
 import '../../models/drama/series_model.dart';
 import '../../providers/drama/drama_providers.dart';
+import '../../services/app_config_service.dart';
 import '../../services/drama/drama_entitlement_service.dart';
 import '../../services/drama/drama_service.dart';
+import '../../services/drama/playback_service.dart';
 import '../../services/user_provider.dart';
 import '../../widgets/header_glass_chip.dart';
 import '../../widgets/tile_image.dart';
 import '../../widgets/top_toast.dart';
 import 'widgets/coin_balance_header.dart';
-import 'widgets/episode_tiles.dart';
 import 'widgets/lang_flags.dart';
+import 'widgets/player/auto_next_overlay.dart';
+import 'widgets/player/caption_overlay.dart';
+import 'widgets/player/chapter_progress_bar.dart';
+import 'widgets/player/edge_hud.dart';
+import 'widgets/player/lock_overlay.dart';
+import 'widgets/player/player_platform_service.dart';
+import 'widgets/player/seek_ripple.dart';
 
 class EpisodePlayerScreen extends ConsumerStatefulWidget {
   const EpisodePlayerScreen({
@@ -36,7 +49,8 @@ class EpisodePlayerScreen extends ConsumerStatefulWidget {
       _EpisodePlayerScreenState();
 }
 
-class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
+class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late List<EpisodeModel> _episodes;
   late int _index;
   VideoPlayerController? _controller;
@@ -48,22 +62,156 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
   /// Selected dub language (null = original track).
   String? _selectedLang;
 
+  // --- Phase 2 player state -------------------------------------------------
+  EpisodePlayback? _playback;
+  double _speed = 1.0;
+  String _qualityLabel = 'Auto';
+  bool _bingeOn = false;
+  bool _bgAudioOn = false;
+  bool _controlsLocked = false;
+  bool _show2xBadge = false;
+  double? _speedBeforeLongPress;
+
+  // Seek ripple
+  late final AnimationController _rippleAnim;
+  bool _showRipple = false;
+  bool _rippleForward = true;
+  String _rippleLabel = '+10s';
+  double _doubleTapFraction = 0.5;
+
+  // Swipe toast
+  String? _swipeToast;
+  Timer? _swipeToastTimer;
+
+  // Edge brightness / volume
+  EdgeHudKind? _hudKind;
+  double _hudValue = 0;
+  bool _hudVisible = false;
+  Timer? _hudTimer;
+  double _brightnessLevel = 1.0;
+  double _volumeLevel = 1.0;
+  double _dimOpacity = 0;
+
+  // Vertical drag tracking
+  double _dragStartY = 0;
+  double _dragStartXFraction = 0.5;
+  double _dragTotalDy = 0;
+  double _dragStartEdgeValue = 0;
+  String _dragMode = 'swipe'; // swipe | brightness | volume
+
+  // Auto-next
+  bool _showAutoNext = false;
+  double _autoNextProgress = 1.0;
+  int _autoNextSecondsLeft = 0;
+  Timer? _autoNextTimer;
+  bool _endHandled = false;
+
+  // Sleep timer
+  DateTime? _sleepDeadline;
+  int? _sleepSelectedMinutes;
+  bool _sleepAtEpisodeEnd = false;
+  Timer? _sleepTimer;
+  bool _sleepFading = false;
+
+  // Captions
+  String _captionLang = 'off';
+  List<CaptionCue> _captionCues = const [];
+  String _captionFontSize = 'medium';
+
+  // Resume / watched (from existing watch-history service)
+  final Set<String> _completedEpisodeIds = {};
+  final Map<String, int> _resumeByEpisodeId = {};
+  int? _resumeBannerSeconds;
+  bool _showResumeBanner = false;
+
   EpisodeModel get _current => _episodes[_index];
   bool get _isVip => context.read<UserProvider>().isPro;
+  AppConfigService get _cfg => AppConfigService.instance;
 
   /// Languages offered for this series (original + any dubs).
   List<String?> get _languages => [null, ...widget.series.dubLanguages];
   bool get _hasDubs => widget.series.dubLanguages.isNotEmpty;
 
+  void _haptic() {
+    if (!_cfg.hapticsEnabled) return;
+    HapticFeedback.mediumImpact();
+  }
+
+  double get _captionFontSizePx => switch (_captionFontSize) {
+        'small' => 13.0,
+        'large' => 20.0,
+        _ => 16.0,
+      };
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _episodes = List.of(widget.episodes);
     _index = widget.startIndex.clamp(0, _episodes.length - 1);
+    _rippleAnim = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 550));
+    _rippleAnim.addStatusListener((s) {
+      if (s == AnimationStatus.completed && mounted) {
+        setState(() => _showRipple = false);
+      }
+    });
+    _loadPrefs();
+    _loadHistory();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
+  Future<void> _loadPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _speed = prefs.getDouble('player_speed') ?? 1.0;
+        _bingeOn = prefs.getBool('player_binge') ?? false;
+        _bgAudioOn = prefs.getBool('player_bg_audio') ?? false;
+        _captionLang = prefs.getString('caption_lang') ?? 'off';
+        _captionFontSize = prefs.getString('caption_font_size') ?? 'medium';
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final history = await DramaService.instance.fetchWatchHistory(limit: 100);
+      if (!mounted) return;
+      for (final e in history) {
+        if (e.series.id != widget.series.id) continue;
+        final epId = e.episodeId;
+        if (epId == null) continue;
+        if (e.completed) {
+          _completedEpisodeIds.add(epId);
+        } else if (e.positionSeconds > 0 &&
+            !_resumeByEpisodeId.containsKey(epId)) {
+          _resumeByEpisodeId[epId] = e.positionSeconds;
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Background audio ON = keep playing; OFF = pause when app goes inactive.
+    if (_bgAudioOn) return;
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      final c = _controller;
+      if (c != null && c.value.isInitialized && c.value.isPlaying) {
+        c.pause();
+      }
+    }
+  }
+
   Future<void> _load({Duration? seekTo}) async {
+    _cancelAutoNext();
+    _endHandled = false;
+    _showResumeBanner = false;
+    _resumeBannerSeconds = null;
     _disposeController();
     final episode = _current;
     final access = DramaEntitlementService.instance.accessFor(episode, _isVip);
@@ -75,11 +223,19 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
 
     if (access != EpisodeAccess.playable) return;
 
-    // The stream URL is fetched from a server-side entitlement check (for the
-    // selected language); it is never present in the episode list.
-    final url = await DramaService.instance
+    // Playback payload (default URL + qualities + caption languages), with
+    // the legacy single-URL fetch as fallback.
+    final playback = await PlaybackService.instance
+        .getPlayback(episode.id, lang: _selectedLang);
+    if (!mounted) return;
+    _playback = playback;
+    var url = playback?.videoUrl;
+    url ??= await DramaService.instance
         .getEpisodeVideoUrl(episode.id, lang: _selectedLang);
     if (!mounted) return;
+    if (_qualityLabel != 'Auto' && playback != null) {
+      url = playback.urlForLabel(_qualityLabel) ?? url;
+    }
     if (url == null || url.isEmpty) {
       setState(() {
         _initializing = false;
@@ -88,18 +244,48 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
       return;
     }
 
+    // Resume position (only when no explicit seek was requested).
+    Duration? resumeSeek;
+    if (seekTo == null) {
+      final saved = _resumeByEpisodeId[episode.id];
+      if (saved != null && saved > 10) {
+        resumeSeek = Duration(seconds: saved);
+        _resumeBannerSeconds = saved;
+      }
+    }
+
+    final ok = await _initController(url,
+        seekTo: seekTo ?? resumeSeek, autoPlay: true);
+    if (!ok) return;
+    if (_resumeBannerSeconds != null && mounted) {
+      setState(() => _showResumeBanner = true);
+    }
+    // Auto-apply a stored caption language when this episode offers it.
+    if (_cfg.captionsEnabled &&
+        _captionLang != 'off' &&
+        (playback?.captionLanguages.contains(_captionLang) ?? false)) {
+      unawaited(_applyCaptionLang(_captionLang, persist: false));
+    } else {
+      _captionCues = const [];
+    }
+    DramaService.instance.incrementView('episode', episode.id);
+  }
+
+  Future<bool> _initController(String url,
+      {Duration? seekTo, bool autoPlay = true}) async {
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
     _controller = controller;
     try {
       await controller.initialize();
       controller.setLooping(false);
       controller.addListener(_onTick);
+      await controller.setPlaybackSpeed(_speed);
       if (seekTo != null && seekTo > Duration.zero) {
         await controller.seekTo(seekTo);
       }
-      await controller.play();
+      if (autoPlay) await controller.play();
       if (mounted) setState(() => _initializing = false);
-      DramaService.instance.incrementView('episode', episode.id);
+      return true;
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -107,6 +293,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
           _locked = true;
         });
       }
+      return false;
     }
   }
 
@@ -117,19 +304,188 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
     await _load(seekTo: pos);
   }
 
-  bool _completedRecorded = false;
+  Future<void> _switchQuality(String label) async {
+    if (label == _qualityLabel) return;
+    final playback = _playback;
+    if (playback == null) return;
+    final url =
+        label == 'Auto' ? playback.videoUrl : playback.urlForLabel(label);
+    if (url == null || url.isEmpty) return;
+    final c = _controller;
+    final pos = c?.value.position ?? Duration.zero;
+    final wasPlaying = c?.value.isPlaying ?? true;
+    setState(() {
+      _qualityLabel = label;
+      _initializing = true;
+    });
+    _disposeController();
+    await _initController(url, seekTo: pos, autoPlay: wasPlaying);
+  }
+
+  // --- Captions ---------------------------------------------------------------
+  Future<void> _applyCaptionLang(String lang, {bool persist = true}) async {
+    setState(() => _captionLang = lang);
+    if (persist) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('caption_lang', lang);
+      } catch (_) {}
+    }
+    if (lang == 'off') {
+      if (mounted) setState(() => _captionCues = const []);
+      return;
+    }
+    final vtt =
+        await PlaybackService.instance.fetchCaptionVtt(_current.id, lang);
+    if (!mounted) return;
+    setState(
+        () => _captionCues = vtt == null ? const [] : parseWebVtt(vtt));
+  }
+
+  String? get _activeCaption {
+    if (!_cfg.captionsEnabled || _captionLang == 'off') return null;
+    final c = _controller;
+    if (c == null || !c.value.isInitialized || _captionCues.isEmpty) {
+      return null;
+    }
+    return activeCaptionText(_captionCues, c.value.position);
+  }
+
+  // --- Playback tick / episode end --------------------------------------------
   void _onTick() {
     final c = _controller;
     if (c == null || !c.value.isInitialized) return;
     final pos = c.value.position.inSeconds;
     final dur = c.value.duration.inSeconds;
     final atEnd = dur > 0 && pos >= dur - 1;
-    if (atEnd && !_completedRecorded) {
-      _completedRecorded = true;
+    if (atEnd && !_endHandled) {
+      _endHandled = true;
+      _completedEpisodeIds.add(_current.id);
       _record(completed: true);
+      _handleEpisodeEnd();
+    }
+    if (mounted) setState(() {}); // update scrubber / captions / chips
+  }
+
+  void _handleEpisodeEnd() {
+    if (_sleepAtEpisodeEnd) {
+      _sleepAtEpisodeEnd = false;
+      _controller?.pause();
+      if (mounted) {
+        showTopToastInfo(context, 'Sleep timer: end of episode');
+      }
+      return;
+    }
+    if (_index >= _episodes.length - 1) return;
+    if (_cfg.feature('binge_mode') && _bingeOn) {
+      _playNext();
+      return;
+    }
+    if (_cfg.feature('auto_next')) {
+      _startAutoNext();
+    } else {
       _playNext();
     }
-    if (mounted) setState(() {}); // update scrubber
+  }
+
+  void _startAutoNext() {
+    final total = _cfg.autoNextCountdownSeconds;
+    if (total <= 0) {
+      _playNext();
+      return;
+    }
+    final deadline = DateTime.now().add(Duration(seconds: total));
+    setState(() {
+      _showAutoNext = true;
+      _autoNextSecondsLeft = total;
+      _autoNextProgress = 1.0;
+    });
+    _autoNextTimer?.cancel();
+    _autoNextTimer = Timer.periodic(const Duration(milliseconds: 100), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      final remaining = deadline.difference(DateTime.now());
+      if (remaining <= Duration.zero) {
+        t.cancel();
+        _cancelAutoNext();
+        _playNext();
+        return;
+      }
+      setState(() {
+        _autoNextSecondsLeft = (remaining.inMilliseconds / 1000).ceil();
+        _autoNextProgress =
+            (remaining.inMilliseconds / (total * 1000)).clamp(0.0, 1.0);
+      });
+    });
+  }
+
+  void _cancelAutoNext() {
+    _autoNextTimer?.cancel();
+    _autoNextTimer = null;
+    if (_showAutoNext && mounted) setState(() => _showAutoNext = false);
+    _showAutoNext = false;
+  }
+
+  // --- Sleep timer --------------------------------------------------------------
+  String? get _sleepChipLabel {
+    if (_sleepAtEpisodeEnd) return 'Sleep: end of episode';
+    final d = _sleepDeadline;
+    if (d == null) return null;
+    final remaining = d.difference(DateTime.now());
+    if (remaining.isNegative) return null;
+    final m = remaining.inMinutes;
+    final s = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return 'Sleep: $m:$s';
+  }
+
+  void _setSleepTimer(int? minutes, {bool atEpisodeEnd = false}) {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    setState(() {
+      _sleepAtEpisodeEnd = atEpisodeEnd;
+      _sleepSelectedMinutes = minutes;
+      _sleepDeadline =
+          minutes == null ? null : DateTime.now().add(Duration(minutes: minutes));
+    });
+    if (minutes != null) {
+      _sleepTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+        if (!mounted) {
+          t.cancel();
+          return;
+        }
+        final d = _sleepDeadline;
+        if (d == null || DateTime.now().isAfter(d)) {
+          t.cancel();
+          unawaited(_expireSleepTimer());
+        } else {
+          setState(() {});
+        }
+      });
+    }
+  }
+
+  Future<void> _expireSleepTimer() async {
+    if (_sleepFading) return;
+    _sleepFading = true;
+    setState(() {
+      _sleepDeadline = null;
+      _sleepSelectedMinutes = null;
+    });
+    final c = _controller;
+    if (c != null && c.value.isInitialized) {
+      try {
+        for (var i = 10; i >= 0; i--) {
+          await c.setVolume(i / 10);
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+        }
+        await c.pause();
+        await c.setVolume(1.0);
+      } catch (_) {}
+    }
+    _sleepFading = false;
+    if (mounted) showTopToastInfo(context, 'Sleep timer: playback paused');
   }
 
   Future<void> _record({bool completed = false}) async {
@@ -146,29 +502,39 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
 
   void _playNext() {
     if (_index < _episodes.length - 1) {
-      _completedRecorded = false;
-      setState(() => _index++);
-      _load();
+      _goToEpisode(_index + 1);
+    }
+  }
+
+  void _playPrevious() {
+    if (_index > 0) _goToEpisode(_index - 1);
+  }
+
+  void _goToEpisode(int index, {bool viaSwipe = false}) {
+    if (index == _index || index < 0 || index >= _episodes.length) return;
+    _record();
+    setState(() => _index = index);
+    _load();
+    if (viaSwipe) {
+      _haptic();
+      final ep = _episodes[index];
+      _swipeToastTimer?.cancel();
+      setState(() =>
+          _swipeToast = 'EP ${ep.episodeNumber} · ${ep.displayTitle}');
+      _swipeToastTimer = Timer(const Duration(milliseconds: 1600), () {
+        if (mounted) setState(() => _swipeToast = null);
+      });
     }
   }
 
   void _playAt(int index) {
     if (index == _index) return;
-    _record();
-    _completedRecorded = false;
-    setState(() => _index = index);
-    _load();
+    _goToEpisode(index);
     Navigator.of(context).maybePop(); // close episode sheet if open
   }
 
   /// Drops the cached series detail so every screen showing this series
   /// re-reads its lock state from the API.
-  ///
-  /// The player owns a private copy of the episode list (`List.of` in
-  /// initState), so updating `_episodes` fixes playback here and nothing else:
-  /// the detail screen behind this route keeps serving the episodes that
-  /// `seriesDetailProvider` cached before the purchase, which is why a
-  /// just-unlocked episode looked locked again until the app was restarted.
   void _invalidateSeriesCaches() {
     ref.invalidate(seriesDetailProvider(widget.series.id));
   }
@@ -178,8 +544,6 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
       final nowVip = await DramaEntitlementService.instance
           .presentPaywall(context, trigger: 'drama_episode');
       if (nowVip && mounted) {
-        // VIP unlocks the whole series, so the cached list is stale for every
-        // episode, not just this one.
         _invalidateSeriesCaches();
         _load();
       }
@@ -192,12 +556,6 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
         showTopToastSuccess(context, 'Episode unlocked');
         context.read<UserProvider>().refreshUserInBackground();
       }
-      // Refetch so the episode carries the server's own `isUnlocked`. The
-      // series id is required — fetchEpisode looks the episode up inside its
-      // series list and returns null without one, which used to leave the
-      // stale (still locked) model in place after a successful, already-paid
-      // unlock. Falling back to flipping the flag locally keeps playback
-      // working when the refetch itself fails.
       final fresh = await DramaService.instance
           .fetchEpisode(_current.id, seriesId: widget.series.id);
       if (!mounted) return;
@@ -220,18 +578,164 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoNextTimer?.cancel();
+    _sleepTimer?.cancel();
+    _hudTimer?.cancel();
+    _swipeToastTimer?.cancel();
+    _rippleAnim.dispose();
     _record();
     _disposeController();
     super.dispose();
   }
 
+  // --- Gestures -----------------------------------------------------------------
+  void _onDoubleTapDown(TapDownDetails d, Size size) {
+    _doubleTapFraction =
+        size.width == 0 ? 0.5 : (d.globalPosition.dx / size.width);
+  }
+
+  void _onDoubleTap() {
+    if (!_cfg.feature('double_tap_seek') || _controlsLocked) return;
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    final forward = _doubleTapFraction >= 0.5;
+    final delta = Duration(seconds: forward ? 10 : -10);
+    var target = c.value.position + delta;
+    if (target < Duration.zero) target = Duration.zero;
+    if (target > c.value.duration) target = c.value.duration;
+    c.seekTo(target);
+    _haptic();
+    setState(() {
+      _rippleForward = forward;
+      _rippleLabel = forward ? '+10s' : '−10s';
+      _showRipple = true;
+    });
+    _rippleAnim.forward(from: 0);
+  }
+
+  void _onLongPressStart() {
+    if (!_cfg.feature('long_press_2x') || _controlsLocked) return;
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    _speedBeforeLongPress = _speed;
+    c.setPlaybackSpeed(2.0);
+    setState(() => _show2xBadge = true);
+  }
+
+  void _onLongPressEnd() {
+    if (!_show2xBadge) return;
+    final c = _controller;
+    c?.setPlaybackSpeed(_speedBeforeLongPress ?? _speed);
+    _speedBeforeLongPress = null;
+    setState(() => _show2xBadge = false);
+  }
+
+  void _onVerticalDragStart(DragStartDetails d, Size size) {
+    _dragStartY = d.globalPosition.dy;
+    _dragTotalDy = 0;
+    _dragStartXFraction =
+        size.width == 0 ? 0.5 : (d.globalPosition.dx / size.width);
+    if (_cfg.feature('edge_brightness_volume') &&
+        _dragStartXFraction <= 0.15) {
+      _dragMode = 'volume';
+      _dragStartEdgeValue = _volumeLevel;
+    } else if (_cfg.feature('edge_brightness_volume') &&
+        _dragStartXFraction >= 0.85) {
+      _dragMode = 'brightness';
+      _dragStartEdgeValue = _brightnessLevel;
+    } else {
+      _dragMode = 'swipe';
+    }
+  }
+
+  void _onVerticalDragUpdate(DragUpdateDetails d) {
+    _dragTotalDy = d.globalPosition.dy - _dragStartY;
+    if (_dragMode == 'swipe' || _controlsLocked) return;
+    final value = (_dragStartEdgeValue - _dragTotalDy / 300).clamp(0.0, 1.0);
+    if (_dragMode == 'brightness') {
+      _brightnessLevel = value;
+      unawaited(_applyBrightness(value));
+      _showHud(EdgeHudKind.brightness, value);
+    } else {
+      _volumeLevel = value;
+      unawaited(_applyVolume(value));
+      _showHud(EdgeHudKind.volume, value);
+    }
+  }
+
+  Future<void> _applyBrightness(double value) async {
+    final ok =
+        await PlayerPlatformService.instance.setBrightness(value);
+    if (!ok && mounted) {
+      // Fallback: dim overlay over the video.
+      setState(() => _dimOpacity = (1 - value) * 0.7);
+    } else if (mounted && _dimOpacity != 0) {
+      setState(() => _dimOpacity = 0);
+    }
+  }
+
+  Future<void> _applyVolume(double value) async {
+    final ok = await PlayerPlatformService.instance.setVolume(value);
+    if (!ok) {
+      // Fallback: drive the player's own volume.
+      try {
+        await _controller?.setVolume(value);
+      } catch (_) {}
+    }
+  }
+
+  void _showHud(EdgeHudKind kind, double value) {
+    _hudTimer?.cancel();
+    setState(() {
+      _hudKind = kind;
+      _hudValue = value;
+      _hudVisible = true;
+    });
+    _hudTimer = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) setState(() => _hudVisible = false);
+    });
+  }
+
+  void _onVerticalDragEnd(DragEndDetails d) {
+    if (_dragMode != 'swipe') return;
+    if (!_cfg.feature('swipe_next_episode') || _controlsLocked) return;
+    if (_dragTotalDy <= -60) {
+      if (_index < _episodes.length - 1) {
+        _goToEpisode(_index + 1, viaSwipe: true);
+      }
+    } else if (_dragTotalDy >= 60) {
+      if (_index > 0) _goToEpisode(_index - 1, viaSwipe: true);
+    }
+  }
+
+  Future<void> _enterPip() async {
+    final ok = await PlayerPlatformService.instance.enterPip();
+    if (!ok && mounted) {
+      showTopToastInfo(context, 'PiP not supported here');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = _controller;
+    final size = MediaQuery.of(context).size;
+    final caption = _activeCaption;
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
-        onTap: () => setState(() => _controlsVisible = !_controlsVisible),
+        onTap: () {
+          if (_controlsLocked) return;
+          setState(() => _controlsVisible = !_controlsVisible);
+        },
+        onDoubleTapDown: (d) => _onDoubleTapDown(d, size),
+        onDoubleTap: _onDoubleTap,
+        onLongPressStart: (_) => _onLongPressStart(),
+        onLongPressEnd: (_) => _onLongPressEnd(),
+        onLongPressCancel: _onLongPressEnd,
+        onVerticalDragStart: (d) => _onVerticalDragStart(d, size),
+        onVerticalDragUpdate: _onVerticalDragUpdate,
+        onVerticalDragEnd: _onVerticalDragEnd,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -246,12 +750,186 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
             else
               _PosterBackdrop(url: _current.thumbnailUrl ?? widget.series.posterUrl),
 
+            // Brightness fallback dim overlay
+            if (_dimOpacity > 0)
+              IgnorePointer(
+                child: ColoredBox(
+                    color: Colors.black.withValues(alpha: _dimOpacity)),
+              ),
+
             if (_initializing)
               const Center(child: CircularProgressIndicator(color: Colors.white)),
 
             if (_locked) _lockOverlay(),
 
-            if (_controlsVisible && !_locked) _controls(c),
+            // Double-tap seek ripple
+            if (_showRipple && _cfg.feature('double_tap_seek'))
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Align(
+                    alignment: _rippleForward
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 10.w),
+                      child: SeekRipple(
+                        label: _rippleLabel,
+                        isForward: _rippleForward,
+                        animation: _rippleAnim,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            // 2x badge
+            if (_show2xBadge)
+              Positioned(
+                top: 9.h,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 3.w, vertical: 0.6.h),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Text('2×',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800)),
+                  ),
+                ),
+              ),
+
+            // Swipe toast chip
+            if (_swipeToast != null)
+              Center(
+                child: Container(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.h),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(_swipeToast!,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ),
+
+            // Edge HUD
+            if (_hudVisible && _hudKind != null)
+              EdgeHud(kind: _hudKind!, value: _hudValue),
+
+            // Captions
+            if (caption != null)
+              CaptionOverlay(text: caption, fontSize: _captionFontSizePx),
+
+            if (_controlsVisible && !_locked && !_controlsLocked)
+              _controls(c),
+
+            // Skip intro
+            if (!_locked &&
+                !_controlsLocked &&
+                _cfg.feature('skip_intro') &&
+                c != null &&
+                c.value.isInitialized &&
+                c.value.position.inSeconds <=
+                    _cfg.skipIntroWindowSeconds &&
+                c.value.position.inSeconds < _cfg.skipIntroToSeconds)
+              Positioned(
+                right: 4.w,
+                bottom: 12.h,
+                child: FilledButton(
+                  onPressed: () => c.seekTo(
+                      Duration(seconds: _cfg.skipIntroToSeconds)),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black87,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                  ),
+                  child: const Text('Skip Intro',
+                      style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ),
+
+            // Resume banner
+            if (_showResumeBanner && _resumeBannerSeconds != null)
+              Positioned(
+                top: 11.h,
+                left: 4.w,
+                right: 4.w,
+                child: Center(
+                  child: Container(
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 3.w, vertical: 0.8.h),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.75),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Resume from ${_fmt(Duration(seconds: _resumeBannerSeconds!))}',
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 12),
+                        ),
+                        SizedBox(width: 2.w),
+                        GestureDetector(
+                          onTap: () {
+                            _controller?.seekTo(Duration.zero);
+                            _controller?.play();
+                            setState(() => _showResumeBanner = false);
+                          },
+                          child: const Text('Restart',
+                              style: TextStyle(
+                                  color: Color(0xFFFF4D6D),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800)),
+                        ),
+                        SizedBox(width: 2.w),
+                        GestureDetector(
+                          onTap: () =>
+                              setState(() => _showResumeBanner = false),
+                          child: const Icon(Icons.close_rounded,
+                              color: Colors.white70, size: 16),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+            // Auto-next overlay
+            if (_showAutoNext && _index < _episodes.length - 1)
+              AutoNextOverlay(
+                nextLabel:
+                    'EP ${_episodes[_index + 1].episodeNumber} · ${_episodes[_index + 1].displayTitle}',
+                progress: _autoNextProgress,
+                secondsLeft: _autoNextSecondsLeft,
+                onNext: () {
+                  _cancelAutoNext();
+                  _playNext();
+                },
+                onCancel: _cancelAutoNext,
+              ),
+
+            // Controls lock overlay
+            if (_controlsLocked && _cfg.feature('lock_controls'))
+              LockOverlay(
+                onUnlock: () {
+                  _haptic();
+                  setState(() => _controlsLocked = false);
+                },
+              ),
           ],
         ),
       ),
@@ -316,6 +994,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
   }
 
   Widget _controls(VideoPlayerController? c) {
+    final sleepLabel = _sleepChipLabel;
     return SafeArea(
       child: Stack(
         children: [
@@ -348,9 +1027,71 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
                     ],
                   ),
                 ),
+                if (_cfg.feature('quality_selector') &&
+                    (_playback?.qualities.isNotEmpty ?? false)) ...[
+                  GestureDetector(
+                    onTap: _showQualitySheet,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 2.5.w, vertical: 0.6.h),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(_qualityLabel,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                  SizedBox(width: 2.w),
+                ],
+                if (_cfg.feature('pip'))
+                  HeaderGlassIconButton(
+                    isDark: true,
+                    icon: Icons.picture_in_picture_alt_rounded,
+                    onTap: _enterPip,
+                  ),
+                if (_cfg.feature('pip')) SizedBox(width: 2.w),
+                if (_cfg.feature('lock_controls'))
+                  HeaderGlassIconButton(
+                    isDark: true,
+                    icon: Icons.lock_open_rounded,
+                    onTap: () {
+                      _haptic();
+                      setState(() => _controlsLocked = true);
+                    },
+                  ),
               ],
             ),
           ),
+
+          // Sleep timer chip
+          if (sleepLabel != null)
+            Positioned(
+              top: 6.5.h,
+              right: 4.w,
+              child: Container(
+                padding:
+                    EdgeInsets.symmetric(horizontal: 2.5.w, vertical: 0.5.h),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.bedtime_rounded,
+                        color: Colors.white, size: 13),
+                    SizedBox(width: 1.w),
+                    Text(sleepLabel,
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 11)),
+                  ],
+                ),
+              ),
+            ),
 
           // Center play/pause
           if (c != null && c.value.isInitialized)
@@ -390,10 +1131,27 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
                   onTap: _showEpisodeSheet,
                 ),
                 SizedBox(height: 2.h),
+                if (_cfg.captionsEnabled &&
+                    (_playback?.captionLanguages.isNotEmpty ?? false)) ...[
+                  _RailButton(
+                    icon: Icons.closed_caption_rounded,
+                    label: _captionLang == 'off'
+                        ? 'CC'
+                        : _captionLang.toUpperCase(),
+                    onTap: _showCaptionSheet,
+                  ),
+                  SizedBox(height: 2.h),
+                ],
                 _RailButton(
                   icon: Icons.share_rounded,
                   label: 'Share',
                   onTap: _shareEpisode,
+                ),
+                SizedBox(height: 2.h),
+                _RailButton(
+                  icon: Icons.settings_rounded,
+                  label: 'Settings',
+                  onTap: _showSettingsSheet,
                 ),
                 SizedBox(height: 2.h),
                 _RailButton(
@@ -425,15 +1183,19 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
                   Text(_fmt(c.value.position),
                       style: const TextStyle(color: Colors.white70, fontSize: 10)),
                   Expanded(
-                    child: VideoProgressIndicator(
-                      c,
-                      allowScrubbing: true,
+                    child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 2.w),
-                      colors: const VideoProgressColors(
-                        playedColor: Color(0xFFFF5252),
-                        bufferedColor: Colors.white30,
-                        backgroundColor: Colors.white24,
-                      ),
+                      child: _cfg.feature('scrub_chapters')
+                          ? ChapterProgressBar(controller: c)
+                          : VideoProgressIndicator(
+                              c,
+                              allowScrubbing: true,
+                              colors: const VideoProgressColors(
+                                playedColor: Color(0xFFFF5252),
+                                bufferedColor: Colors.white30,
+                                backgroundColor: Colors.white24,
+                              ),
+                            ),
                     ),
                   ),
                   Text(_fmt(c.value.duration),
@@ -486,14 +1248,314 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
     );
   }
 
+  void _showQualitySheet() {
+    final playback = _playback;
+    if (playback == null) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.backgroundDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(4.w, 3.h, 4.w, 2.h),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Quality',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13.sp,
+                        fontWeight: FontWeight.w800)),
+                SizedBox(height: 2.h),
+                _LangRow(
+                  label: 'Auto',
+                  flag: '',
+                  selected: _qualityLabel == 'Auto',
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _switchQuality('Auto');
+                  },
+                ),
+                for (final q in playback.qualities)
+                  _LangRow(
+                    label: q.label,
+                    flag: '',
+                    selected: _qualityLabel == q.label,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _switchQuality(q.label);
+                    },
+                  ),
+                SizedBox(height: 1.h),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static String _captionLangName(String code) {
+    switch (code) {
+      case 'orig':
+        return 'Original';
+      case 'ar':
+        return 'العربية';
+      case 'en':
+        return 'English';
+      case 'es':
+        return 'Español';
+      case 'pt':
+        return 'Português';
+      default:
+        return code.toUpperCase();
+    }
+  }
+
+  void _showCaptionSheet() {
+    final langs = _playback?.captionLanguages ?? const <String>[];
+    // Order: orig, ar, en first (when present), then the rest as offered.
+    final ordered = <String>[];
+    for (final preferred in const ['orig', 'ar', 'en']) {
+      if (langs.contains(preferred)) ordered.add(preferred);
+    }
+    for (final l in langs) {
+      if (!ordered.contains(l)) ordered.add(l);
+    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.backgroundDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setSheet) {
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(4.w, 3.h, 4.w, 2.h),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Captions',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.w800)),
+                  SizedBox(height: 2.h),
+                  _LangRow(
+                    label: 'Off',
+                    flag: '',
+                    selected: _captionLang == 'off',
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _applyCaptionLang('off');
+                    },
+                  ),
+                  for (final lang in ordered)
+                    _LangRow(
+                      label: _captionLangName(lang),
+                      flag: '',
+                      selected: _captionLang == lang,
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _applyCaptionLang(lang);
+                      },
+                    ),
+                  SizedBox(height: 1.h),
+                  Text('Caption size',
+                      style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11.sp,
+                          fontWeight: FontWeight.w700)),
+                  SizedBox(height: 1.h),
+                  Row(
+                    children: [
+                      for (final size in const ['small', 'medium', 'large'])
+                        Padding(
+                          padding: EdgeInsets.only(right: 2.w),
+                          child: ChoiceChip(
+                            label: Text(
+                                size[0].toUpperCase() + size.substring(1)),
+                            selected: _captionFontSize == size,
+                            onSelected: (_) async {
+                              setSheet(() => _captionFontSize = size);
+                              setState(() => _captionFontSize = size);
+                              try {
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+                                await prefs.setString(
+                                    'caption_font_size', size);
+                              } catch (_) {}
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+                  SizedBox(height: 1.h),
+                ],
+              ),
+            ),
+          );
+        });
+      },
+    );
+  }
+
+  void _showSettingsSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.backgroundDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setSheet) {
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(4.w, 3.h, 4.w, 2.h),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Playback settings',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.w800)),
+                  SizedBox(height: 2.h),
+                  if (_cfg.feature('speed_menu')) ...[
+                    Text('Speed',
+                        style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11.sp,
+                            fontWeight: FontWeight.w700)),
+                    SizedBox(height: 1.h),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final s in const [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
+                          ChoiceChip(
+                            label: Text(s == 1.0 ? '1×' : '${s}×'),
+                            selected: _speed == s,
+                            onSelected: (_) async {
+                              setSheet(() => _speed = s);
+                              setState(() => _speed = s);
+                              await _controller?.setPlaybackSpeed(s);
+                              try {
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+                                await prefs.setDouble('player_speed', s);
+                              } catch (_) {}
+                            },
+                          ),
+                      ],
+                    ),
+                    SizedBox(height: 2.h),
+                  ],
+                  if (_cfg.feature('binge_mode'))
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Binge mode',
+                          style: TextStyle(color: Colors.white)),
+                      subtitle: const Text(
+                          'Play the next episode immediately',
+                          style: TextStyle(color: Colors.white54)),
+                      value: _bingeOn,
+                      onChanged: (v) async {
+                        setSheet(() => _bingeOn = v);
+                        setState(() => _bingeOn = v);
+                        try {
+                          final prefs =
+                              await SharedPreferences.getInstance();
+                          await prefs.setBool('player_binge', v);
+                        } catch (_) {}
+                      },
+                    ),
+                  if (_cfg.feature('pip'))
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Background audio',
+                          style: TextStyle(color: Colors.white)),
+                      subtitle: const Text(
+                          'Keep playing when the app is in background',
+                          style: TextStyle(color: Colors.white54)),
+                      value: _bgAudioOn,
+                      onChanged: (v) async {
+                        setSheet(() => _bgAudioOn = v);
+                        setState(() => _bgAudioOn = v);
+                        try {
+                          final prefs =
+                              await SharedPreferences.getInstance();
+                          await prefs.setBool('player_bg_audio', v);
+                        } catch (_) {}
+                      },
+                    ),
+                  if (_cfg.feature('sleep_timer')) ...[
+                    SizedBox(height: 1.h),
+                    Text('Sleep timer',
+                        style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11.sp,
+                            fontWeight: FontWeight.w700)),
+                    SizedBox(height: 1.h),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Off'),
+                          selected: _sleepDeadline == null &&
+                              !_sleepAtEpisodeEnd,
+                          onSelected: (_) {
+                            _setSleepTimer(null);
+                            setSheet(() {});
+                          },
+                        ),
+                        for (final m in const [15, 30, 60])
+                          ChoiceChip(
+                            label: Text('$m min'),
+                            selected: !_sleepAtEpisodeEnd &&
+                                _sleepSelectedMinutes == m,
+                            onSelected: (_) {
+                              _setSleepTimer(m);
+                              setSheet(() {});
+                            },
+                          ),
+                        ChoiceChip(
+                          label: const Text('End of episode'),
+                          selected: _sleepAtEpisodeEnd,
+                          onSelected: (_) {
+                            _setSleepTimer(null, atEpisodeEnd: true);
+                            setSheet(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                  SizedBox(height: 1.h),
+                ],
+              ),
+            ),
+          );
+        });
+      },
+    );
+  }
+
   Future<void> _shareEpisode() async {
     final ep = _current;
     final label = widget.series.totalSeasons > 1
         ? 'S${ep.seasonNumber} · Episode ${ep.episodeNumber}'
         : 'Episode ${ep.episodeNumber}';
+    final pos = _controller?.value.position ?? Duration.zero;
+    final stamp = _cfg.feature('share_moment') ? ' at ${_fmt(pos)}' : '';
     try {
       await SharePlus.instance.share(ShareParams(
-        text: 'Watch "${widget.series.title}" ($label) on HERO DRAMA',
+        text: 'Watch "${widget.series.title}" ($label)$stamp on HERO DRAMA',
       ));
     } catch (_) {
       if (mounted) showTopToastError(context, 'Could not open share');
@@ -540,13 +1602,11 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
                     ),
                     SizedBox(height: 2.h),
 
-                    // VIP activate banner
                     if (!isVip) ...[
                       _vipBanner(ctx),
                       SizedBox(height: 2.h),
                     ],
 
-                    // Series header
                     Row(
                       children: [
                         ClipRRect(
@@ -600,7 +1660,6 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
                     ),
                     SizedBox(height: 2.h),
 
-                    // Range chips (only when there are many episodes)
                     if (ranges.length > 1) ...[
                       SizedBox(
                         height: 3.5.h,
@@ -637,7 +1696,6 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
                       SizedBox(height: 1.5.h),
                     ],
 
-                    // 6-column episode grid
                     Flexible(
                       child: GridView.builder(
                         shrinkWrap: true,
@@ -651,9 +1709,11 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
                         itemCount: end - rangeStart,
                         itemBuilder: (_, i) {
                           final gi = rangeStart + i;
-                          return EpisodeGridTile(
-                            episode: _episodes[gi],
-                            selected: gi == _index,
+                          final ep = _episodes[gi];
+                          return _PlayerEpisodeTile(
+                            episode: ep,
+                            isCurrent: gi == _index,
+                            watched: _completedEpisodeIds.contains(ep.id),
                             onTap: () => _playAt(gi),
                           );
                         },
@@ -747,6 +1807,98 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen> {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$m:$s';
+  }
+}
+
+/// Episode grid tile for the player's episode sheet: current episode gets an
+/// accent background + equalizer icon, watched episodes a checkmark, locked
+/// episodes a lock badge with their coin cost.
+class _PlayerEpisodeTile extends StatelessWidget {
+  const _PlayerEpisodeTile({
+    required this.episode,
+    required this.isCurrent,
+    required this.watched,
+    this.onTap,
+  });
+
+  final EpisodeModel episode;
+  final bool isCurrent;
+  final bool watched;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final locked = episode.isLocked;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isCurrent
+              ? AppTheme.accentBlue.withValues(alpha: 0.9)
+              : AppTheme.cardDarkBlue,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isCurrent
+                ? AppTheme.accentBlue
+                : Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
+        child: Stack(
+          children: [
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${episode.episodeNumber}',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (locked && episode.coinCost > 0)
+                    Text(
+                      '${episode.coinCost}',
+                      style: const TextStyle(
+                          color: Color(0xFFFFC107), fontSize: 8),
+                    ),
+                ],
+              ),
+            ),
+            if (isCurrent)
+              const Positioned(
+                top: 3,
+                right: 3,
+                child: Icon(Icons.equalizer_rounded,
+                    size: 12, color: Colors.white),
+              )
+            else if (watched)
+              const Positioned(
+                top: 3,
+                right: 3,
+                child: Icon(Icons.check_circle_rounded,
+                    size: 12, color: Colors.greenAccent),
+              ),
+            if (locked)
+              Positioned(
+                top: 3,
+                left: 3,
+                child: Icon(
+                  episode.isVipOnly
+                      ? Icons.workspace_premium_rounded
+                      : Icons.lock_rounded,
+                  size: 12,
+                  color: episode.isVipOnly
+                      ? const Color(0xFFFFC107)
+                      : Colors.white.withValues(alpha: 0.6),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

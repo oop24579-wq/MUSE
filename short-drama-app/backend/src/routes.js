@@ -1,7 +1,9 @@
 'use strict';
+const crypto = require('node:crypto');
 const { all, get, run } = require('./db');
 const auth = require('./auth');
 const settings = require('./settings');
+const captions = require('./captions');
 // Runtime economy values come from the settings store (admin-editable);
 // these helpers read live on every call so PATCH /admin/settings applies instantly.
 const sWelcome = () => settings.getSetting('welcome_coin_bonus');
@@ -22,11 +24,51 @@ function send(res, status, obj) {
   res.end(body);
 }
 // ---- serializers (exact app model fields) ----
+// ---- Phase 2 helpers: XP/levels, streaks, events, missions, daily events ----
+const referralCodeFor = (id) => 'HD' + crypto.createHash('sha256').update(String(id)).digest('hex').slice(0, 6).toUpperCase();
+const xpForLevel = (L) => 100 * (L - 1) * (L - 1);
+function levelFromXp(xp) { let L = 1; while (xpForLevel(L + 1) <= (xp || 0)) L++; return L; }
+function awardXp(userId, n) { if (n) run('UPDATE users SET xp=COALESCE(xp,0)+? WHERE id=?', n, userId); }
+function dateShift(isoDate, days) { const d = new Date(isoDate + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
+function checkinDateSet(userId) { return new Set(all('SELECT claimDate FROM checkins WHERE userId=?', userId).map((r) => r.claimDate)); }
+function streakEnding(userId, endDate) { const set = checkinDateSet(userId); let n = 0; let d = endDate; while (set.has(d)) { n++; d = dateShift(d, -1); } return n; }
+function currentStreak(userId) { const set = checkinDateSet(userId); if (set.has(today())) return streakEnding(userId, today()); return streakEnding(userId, dateShift(today(), -1)); }
+function activeEvent() {
+  const t = now();
+  return get('SELECT * FROM events WHERE active=1 AND startsAt<=? AND endsAt>=? ORDER BY multiplier DESC LIMIT 1', t, t) || null;
+}
+function eventMultiplier() { const e = activeEvent(); return e ? e.multiplier : 1; }
+function bumpDailyEvent(userId, metric, n = 1) {
+  run('INSERT INTO user_daily_events(userId,eventDate,metric,count) VALUES(?,?,?,?) ON CONFLICT(userId,eventDate,metric) DO UPDATE SET count=count+excluded.count', userId, today(), metric, n);
+}
+function dailyEventCount(userId, metric) { const r = get('SELECT count FROM user_daily_events WHERE userId=? AND eventDate=? AND metric=?', userId, today(), metric); return r ? r.count : 0; }
+function missionProgress(userId, mission) {
+  if (mission.metric === 'watch_episodes') return get('SELECT COUNT(DISTINCT episodeId) c FROM watch_events WHERE userId=? AND eventDate=?', userId, today()).c;
+  if (mission.metric === 'watch_minutes') { const r = get('SELECT seconds FROM watch_time_daily WHERE userId=? AND watchDate=?', userId, today()); return r ? Math.floor(r.seconds / 60) : 0; }
+  if (mission.metric === 'likes' || mission.metric === 'shares') return dailyEventCount(userId, mission.metric);
+  if (mission.metric === 'checkin') return get('SELECT 1 x FROM checkins WHERE userId=? AND claimDate=?', userId, today()) ? 1 : 0;
+  return 0;
+}
+function watchTimeState(userId) {
+  const row = get('SELECT * FROM watch_time_daily WHERE userId=? AND watchDate=?', userId, today());
+  const seconds = row ? row.seconds : 0; const blocksClaimed = row ? row.blocksClaimed : 0;
+  const perBlock = settings.getSetting('watch_time_coins_per_block');
+  const blockMinutes = settings.getSetting('watch_time_block_minutes');
+  const cap = settings.getSetting('watch_time_daily_cap_coins');
+  const minutesToday = Math.floor(seconds / 60);
+  const totalBlocks = blockMinutes > 0 ? Math.floor(minutesToday / blockMinutes) : 0;
+  const alreadyPaid = blocksClaimed * perBlock;
+  const claimableCoins = Math.max(0, Math.min(totalBlocks * perBlock - alreadyPaid, cap - alreadyPaid));
+  return { seconds, blocksClaimed, minutesToday, totalBlocks, alreadyPaid, claimableCoins, perBlock, blockMinutes, cap };
+}
+
 function userJson(u) {
+  const xp = u.xp || 0;
   return { id: u.id, firebaseUid: u.firebaseUid, email: u.email, name: u.name, displayName: u.name, image: u.image, photoUrl: u.image,
     deviceId: u.deviceId, isGuest: !!u.isGuest, isAnonymous: !!u.isGuest, isPro: !!u.isPro, isVip: !!u.isPro,
     coinBalance: u.coinBalance, autoplayNext: !!u.autoplayNext, videoQuality: u.videoQuality || 'auto',
     subscriptionExpirationDate: u.subscriptionExpirationDate, platform: u.platform, appVersion: u.appVersion, locale: u.locale,
+    referralCode: u.referralCode || referralCodeFor(u.id), xp, level: levelFromXp(xp),
     createdAt: u.createdAt, updatedAt: u.updatedAt, linkedAt: u.linkedAt || u.updatedAt };
 }
 function genreJson(g) { return { id: g.id, slug: g.slug, name: g.name, description: g.description, iconUrl: g.iconUrl, colorHex: g.colorHex, sortOrder: g.sortOrder }; }
@@ -100,13 +142,60 @@ function rewardsState(user) {
     const eligible = !completed && (isMilestone ? progress >= t.target : true);
     return { slug: t.slug, title: t.title, description: t.description, coins: t.coins, actionType: t.actionType, sortOrder: t.sortOrder, completed, progress, target: t.target, eligible };
   });
-  return { coinBalance: user.coinBalance, claimedToday, currentDay, days, tasks };
+  // ---- Phase 2 extensions (existing fields above are unchanged) ----
+  const fresh = get('SELECT * FROM users WHERE id=?', user.id) || user;
+  const xp = fresh.xp || 0; const level = levelFromXp(xp);
+  const spinRow = get('SELECT * FROM wheel_spins WHERE userId=? AND spinDate=?', user.id, today());
+  const freePerDay = settings.getSetting('wheel_free_spins_per_day');
+  const spinsLeft = Math.max(0, freePerDay - (spinRow ? spinRow.freeUsed : 0));
+  const distinctToday = get('SELECT COUNT(DISTINCT episodeId) c FROM watch_events WHERE userId=? AND eventDate=?', user.id, today()).c;
+  const chests = settings.getSetting('chest_milestones').map((ms) => ({
+    id: 'chest_' + ms.threshold, threshold: ms.threshold, coins: ms.coins,
+    claimed: !!get('SELECT 1 x FROM chest_claims WHERE userId=? AND chestDate=? AND threshold=?', user.id, today(), ms.threshold),
+    unlocked: distinctToday >= ms.threshold,
+  }));
+  const wt = watchTimeState(user.id);
+  const missions = settings.getSetting('missions_enabled')
+    ? all('SELECT * FROM missions WHERE COALESCE(active,1)=1 ORDER BY sortOrder').map((ms) => {
+      const progress = missionProgress(user.id, ms);
+      return { slug: ms.slug, title: ms.title, description: ms.description, coins: ms.coins, progress, target: ms.target,
+        completed: progress >= ms.target,
+        claimed: !!get('SELECT 1 x FROM mission_claims WHERE userId=? AND slug=? AND claimDate=?', user.id, ms.slug, today()) };
+    }) : [];
+  const ev = activeEvent();
+  return { coinBalance: fresh.coinBalance, claimedToday, currentDay, days, tasks,
+    wheel: { enabled: !!settings.getSetting('wheel_enabled'), spinsLeft, freeSpinsPerDay: freePerDay, segments: settings.getSetting('wheel_segments'), extraSpinCost: settings.getSetting('wheel_extra_spin_cost') },
+    chests, watchTime: { enabled: !!settings.getSetting('watch_time_enabled'), minutesToday: wt.minutesToday, coinsPerBlock: wt.perBlock, blockMinutes: wt.blockMinutes, claimableCoins: wt.claimableCoins, claimedCoinsToday: wt.alreadyPaid, dailyCapCoins: wt.cap },
+    missions, currentStreak: currentStreak(user.id), xp, level, nextLevelXp: 100 * level * level,
+    activeEvent: ev ? { name: ev.name, multiplier: ev.multiplier, endsAt: ev.endsAt } : null,
+    referralCode: fresh.referralCode || referralCodeFor(user.id) };
 }
 
 async function handle(req, res, url, body) {
   const p = url.pathname.replace(/^\/api\/v1/, '');
   const q = url.searchParams;
   const limit = Math.min(parseInt(q.get('limit') || '40', 10) || 40, 100);
+  // ---------- PUBLIC APP CONFIG (no auth; EXEMPT from maintenance — the app needs it to know maintenance is on) ----------
+  if (req.method === 'GET' && p === '/config') {
+    const S = settings.getSettings();
+    return ok(res, {
+      maintenanceMode: !!S.maintenance_mode, premiumPlaybackMode: S.premium_playback_mode,
+      features: {
+        swipe_next_episode: !!S.player_swipe_next_episode, double_tap_seek: !!S.player_double_tap_seek,
+        long_press_2x: !!S.player_long_press_2x, edge_brightness_volume: !!S.player_edge_brightness_volume,
+        speed_menu: !!S.player_speed_menu, quality_selector: !!S.player_quality_selector,
+        auto_next: !!S.player_auto_next, binge_mode: !!S.player_binge_mode, pip: !!S.player_pip,
+        scrub_chapters: !!S.player_scrub_chapters, skip_intro: !!S.player_skip_intro,
+        lock_controls: !!S.player_lock_controls, sleep_timer: !!S.player_sleep_timer,
+        share_moment: !!S.player_share_moment, captions: !!S.captions_enabled,
+        wheel: !!S.wheel_enabled, chests: !!S.chests_enabled, missions: !!S.missions_enabled,
+        referrals: !!S.referrals_enabled, watch_time: !!S.watch_time_enabled, ads: !!S.ads_enabled,
+      },
+      player: { skipIntroWindowSeconds: S.skip_intro_window_seconds, skipIntroToSeconds: S.skip_intro_to_seconds, autoNextCountdownSeconds: S.auto_next_countdown_seconds },
+      visual: { defaultThemePreset: S.default_theme_preset, confettiEnabled: !!S.confetti_enabled, hapticsEnabled: !!S.haptics_enabled, accentColorOverride: S.accent_color_override },
+      economy: { episodeUnlockCoinCost: S.episode_unlock_coin_cost, wheelFreeSpinsPerDay: S.wheel_free_spins_per_day },
+    });
+  }
   // ---------- MAINTENANCE MODE (settings store; admin API is a separate handler and stays up) ----------
   if (settings.getSetting('maintenance_mode')) return err(res, 503, 'MAINTENANCE', 'HERO DRAMA is temporarily down for maintenance. Please try again soon!');
   // ---------- AUTH ----------
@@ -117,8 +206,8 @@ async function handle(req, res, url, body) {
     let user = get('SELECT * FROM users WHERE firebaseUid=?', claims.firebaseUid);
     if (!user) {
       const id = auth.uid(); const t = now();
-      run('INSERT INTO users(id,firebaseUid,email,name,image,deviceId,isGuest,coinBalance,createdAt,updatedAt,linkedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-        id, claims.firebaseUid, claims.email, claims.name, claims.picture, body.deviceId || null, claims.email ? 0 : 1, 0, t, t, t);
+      run('INSERT INTO users(id,firebaseUid,email,name,image,deviceId,isGuest,coinBalance,createdAt,updatedAt,linkedAt,referralCode,xp) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        id, claims.firebaseUid, claims.email, claims.name, claims.picture, body.deviceId || null, claims.email ? 0 : 1, 0, t, t, t, referralCodeFor(id), 0);
       const welcome = sWelcome();
       grantCoins(id, welcome, 'welcome_bonus', null);
       run('INSERT INTO notifications(id,userId,type,title,body,createdAt) VALUES(?,?,?,?,?,?)', auth.uid(), id, 'welcome', 'Welcome to HERO DRAMA!', `You received ${welcome} free coins. Start watching now!`, t);
@@ -154,6 +243,20 @@ async function handle(req, res, url, body) {
     return ok(res, { success: true });
   }
   if (req.method === 'GET' && p === '/auth/me') return ok(res, { user: userJson(user) });
+  if (req.method === 'POST' && p === '/auth/referral') {
+    if (!settings.getSetting('referrals_enabled')) return err(res, 403, 'FEATURE_DISABLED', 'Referrals are disabled');
+    if (user.referredBy) return err(res, 409, 'ALREADY_REFERRED', 'A referral code was already applied to this account');
+    const code = String(body.code || '').trim();
+    const ownCode = user.referralCode || referralCodeFor(user.id);
+    if (!code || code === ownCode) return err(res, 400, 'INVALID_CODE', 'Invalid referral code');
+    const referrer = get('SELECT * FROM users WHERE referralCode=?', code);
+    if (!referrer || referrer.id === user.id) return err(res, 400, 'INVALID_CODE', 'Invalid referral code');
+    run('UPDATE users SET referredBy=? WHERE id=?', referrer.id, user.id);
+    grantCoins(referrer.id, settings.getSetting('referral_bonus_referrer'), 'referral', user.id);
+    const refereeBonus = settings.getSetting('referral_bonus_referee');
+    const balance = grantCoins(user.id, refereeBonus, 'referral', referrer.id);
+    return ok(res, { success: true, coins: refereeBonus, balance });
+  }
   if (req.method === 'DELETE' && p === '/auth/account') {
     run('DELETE FROM refresh_tokens WHERE userId=?', user.id); run('DELETE FROM users WHERE id=?', user.id);
     return ok(res, { success: true });
@@ -166,7 +269,24 @@ async function handle(req, res, url, body) {
   if (req.method === 'GET' && p === '/discover') {
     const f = q.get('filter') || 'popular';
     const order = f === 'latest' ? 'releaseYear DESC, createdAt DESC' : f === 'ranking' ? 'rankScore DESC' : 'viewCount DESC';
-    return ok(res, { series: all(`SELECT * FROM series ORDER BY ${order} LIMIT ?`, limit).map(seriesJson) });
+    const rows = all(`SELECT * FROM series ORDER BY ${order} LIMIT ?`, limit);
+    if (f !== 'ranking') return ok(res, { series: rows.map(seriesJson) });
+    // Ranking responses gain rankDelta vs the stored daily snapshot
+    // (prevIndex - currentIndex; positive = moved up). First ever = all 0.
+    const fullOrder = all('SELECT id FROM series ORDER BY rankScore DESC').map((r) => r.id);
+    let snap = null;
+    const snapRow = get("SELECT value FROM meta WHERE key='rank_snapshot'");
+    if (snapRow) { try { snap = JSON.parse(snapRow.value); } catch { snap = null; } }
+    const prevOrder = snap && Array.isArray(snap.order) ? snap.order : [];
+    const series = rows.map((s) => {
+      const cur = fullOrder.indexOf(s.id);
+      const prev = prevOrder.indexOf(s.id);
+      return { ...seriesJson(s), rankDelta: prev >= 0 && cur >= 0 ? prev - cur : 0 };
+    });
+    if (!snap || snap.date !== today()) {
+      run("INSERT INTO meta(key,value) VALUES('rank_snapshot',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", JSON.stringify({ date: today(), order: fullOrder }));
+    }
+    return ok(res, { series });
   }
   if (req.method === 'GET' && p === '/for-you')
     return ok(res, { series: all('SELECT * FROM series ORDER BY rankScore DESC, viewCount DESC LIMIT ?', limit).map(seriesJson) });
@@ -211,7 +331,28 @@ async function handle(req, res, url, body) {
       return err(res, 403, 'EPISODE_LOCKED', 'Unlock this episode with coins first');
     const lang = q.get('lang');
     const dub = lang ? get('SELECT * FROM episode_dubs WHERE episodeId=? AND lang=?', e.id, lang) : null;
-    return ok(res, { videoUrl: dub ? dub.videoUrl : e.videoUrl });
+    const resolvedUrl = dub ? dub.videoUrl : e.videoUrl;
+    // Quality ladder: all entries currently point at the resolved videoUrl/dub URL —
+    // real per-quality transcodes plug in here when a transcoder is added.
+    const qualities = ['1080p', '720p', '480p', '360p'].map((label) => ({ label, url: resolvedUrl }));
+    return ok(res, { videoUrl: resolvedUrl, qualities, captionLanguages: captions.readyLanguages(e.id) });
+  }
+  // ---------- CAPTIONS (raw WebVTT is NOT the JSON envelope — the player fetches it raw) ----------
+  if (req.method === 'GET' && (m = /^\/episodes\/([^/]+)\/captions(?:\/([^/]+))?$/.exec(p))) {
+    const epId = decodeURIComponent(m[1]); const capLang = m[2] ? decodeURIComponent(m[2]) : null;
+    const e = get('SELECT * FROM episodes WHERE id=?', epId);
+    if (!e) return err(res, 404, 'NOT_FOUND', 'Episode not found');
+    if (!capLang) {
+      const languages = settings.getSetting('captions_enabled')
+        ? all("SELECT lang, source, status FROM caption_tracks WHERE episodeId=? AND status='ready' ORDER BY lang", epId).map((t) => ({ lang: t.lang, source: t.source, status: t.status }))
+        : [];
+      return ok(res, { languages });
+    }
+    const track = settings.getSetting('captions_enabled')
+      ? get("SELECT * FROM caption_tracks WHERE episodeId=? AND lang=? AND status='ready'", epId, capLang) : null;
+    if (!track || !track.vtt) return err(res, 404, 'NOT_FOUND', 'Caption track not found');
+    res.writeHead(200, { 'Content-Type': 'text/vtt; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+    return res.end(track.vtt);
   }
   if (req.method === 'POST' && (m = /^\/episodes\/([^/]+)\/unlock$/.exec(p))) {
     const e = get('SELECT * FROM episodes WHERE id=?', decodeURIComponent(m[1]));
@@ -230,7 +371,7 @@ async function handle(req, res, url, body) {
       if (!s) return err(res, 404, 'NOT_FOUND', 'Series not found');
       const want = body[key] !== false;
       run(`INSERT INTO user_series(userId,seriesId,${field}) VALUES(?,?,?) ON CONFLICT(userId,seriesId) DO UPDATE SET ${field}=excluded.${field}`, user.id, s.id, want ? 1 : 0);
-      if (action === 'like') { run('UPDATE series SET likeCount=MAX(0,likeCount+?) WHERE id=?', want ? 1 : -1, s.id); }
+      if (action === 'like') { run('UPDATE series SET likeCount=MAX(0,likeCount+?) WHERE id=?', want ? 1 : -1, s.id); if (want) bumpDailyEvent(user.id, 'likes'); }
       const fresh = get('SELECT * FROM series WHERE id=?', s.id);
       return ok(res, { success: true, likeCount: fresh.likeCount });
     }
@@ -244,9 +385,27 @@ async function handle(req, res, url, body) {
     return ok(res, { history: all('SELECT * FROM watch_history WHERE userId=? AND completed=0 ORDER BY watchedAt DESC LIMIT ?', user.id, limit).map(histJson).filter(Boolean) });
   if (req.method === 'POST' && p === '/me/watch-history') {
     if (!body.seriesId) return err(res, 400, 'VALIDATION', 'seriesId is required');
+    // Phase 2 watch accrual (existing history upsert behavior below is unchanged):
+    // delta = clamp(newPosition - oldPosition, 0, durationSeconds || newPosition),
+    // where oldPosition is the stored position for this same episode (0 for a new one).
+    const prev = get('SELECT * FROM watch_history WHERE userId=? AND seriesId=?', user.id, body.seriesId);
+    const newPos = body.positionSeconds || 0;
+    const oldPos = prev && body.episodeId && prev.episodeId === body.episodeId ? (prev.positionSeconds || 0) : 0;
+    const delta = Math.max(0, Math.min(newPos - oldPos, body.durationSeconds || newPos));
+    if (delta > 0) run('INSERT INTO watch_time_daily(userId,watchDate,seconds,blocksClaimed) VALUES(?,?,?,0) ON CONFLICT(userId,watchDate) DO UPDATE SET seconds=seconds+excluded.seconds', user.id, today(), delta);
+    if (body.episodeId) run('INSERT OR IGNORE INTO watch_events(userId,episodeId,eventDate) VALUES(?,?,?)', user.id, body.episodeId, today());
+    if (body.completed && body.episodeId) {
+      // +5 XP the first time this episode is completed today (per-episode daily marker).
+      const marker = 'completed:' + body.episodeId;
+      if (!dailyEventCount(user.id, marker)) { bumpDailyEvent(user.id, marker); awardXp(user.id, 5); }
+    }
     run(`INSERT INTO watch_history(userId,seriesId,episodeId,episodeNumber,positionSeconds,durationSeconds,completed,watchedAt) VALUES(?,?,?,?,?,?,?,?)
       ON CONFLICT(userId,seriesId) DO UPDATE SET episodeId=excluded.episodeId, episodeNumber=excluded.episodeNumber, positionSeconds=excluded.positionSeconds, durationSeconds=excluded.durationSeconds, completed=excluded.completed, watchedAt=excluded.watchedAt`,
       user.id, body.seriesId, body.episodeId || null, body.episodeNumber || 1, body.positionSeconds || 0, body.durationSeconds || 0, body.completed ? 1 : 0, now());
+    return ok(res, { success: true });
+  }
+  if (req.method === 'POST' && p === '/content/share') {
+    bumpDailyEvent(user.id, 'shares');
     return ok(res, { success: true });
   }
   if (req.method === 'POST' && p === '/content/view') {
@@ -260,10 +419,81 @@ async function handle(req, res, url, body) {
   if (req.method === 'POST' && p === '/rewards/checkin') {
     if (get('SELECT 1 x FROM checkins WHERE userId=? AND claimDate=?', user.id, today())) return ok(res, { success: false, coins: 0 });
     const count = get('SELECT COUNT(*) c FROM checkins WHERE userId=?', user.id).c;
-    const dayIndex = (count % 7) + 1; const coins = sCheckin()[dayIndex - 1];
+    const dayIndex = (count % 7) + 1;
+    // Phase 2 payout: round((base + (level-1)*5 + min(streakBeforeToday,7)*2) * activeEventMultiplier)
+    const streakBeforeToday = streakEnding(user.id, dateShift(today(), -1));
+    const level = levelFromXp(user.xp || 0);
+    const coins = Math.round((sCheckin()[dayIndex - 1] + (level - 1) * 5 + Math.min(streakBeforeToday, 7) * 2) * eventMultiplier());
     run('INSERT INTO checkins(userId,claimDate,dayIndex,coins,createdAt) VALUES(?,?,?,?,?)', user.id, today(), dayIndex, coins, now());
     grantCoins(user.id, coins, 'checkin', String(dayIndex));
+    bumpDailyEvent(user.id, 'checkin');
+    awardXp(user.id, 10);
     return ok(res, { success: true, coins });
+  }
+  // ---------- PHASE 2: WHEEL / CHESTS / WATCH-TIME / MISSIONS ----------
+  if (req.method === 'POST' && p === '/rewards/wheel/spin') {
+    if (!settings.getSetting('wheel_enabled')) return err(res, 403, 'FEATURE_DISABLED', 'The reward wheel is disabled');
+    const freePerDay = settings.getSetting('wheel_free_spins_per_day');
+    const row = get('SELECT * FROM wheel_spins WHERE userId=? AND spinDate=?', user.id, today());
+    const freeUsed = row ? row.freeUsed : 0;
+    let balance = user.coinBalance;
+    if (freeUsed < freePerDay) {
+      run('INSERT INTO wheel_spins(userId,spinDate,freeUsed,totalSpins) VALUES(?,?,1,1) ON CONFLICT(userId,spinDate) DO UPDATE SET freeUsed=freeUsed+1, totalSpins=totalSpins+1', user.id, today());
+    } else {
+      const cost = settings.getSetting('wheel_extra_spin_cost');
+      if (user.coinBalance < cost) return err(res, 402, 'INSUFFICIENT_COINS', `Need ${cost} coins for an extra spin, balance is ${user.coinBalance}`);
+      balance = grantCoins(user.id, -cost, 'wheel_spin_cost', null);
+      run('INSERT INTO wheel_spins(userId,spinDate,freeUsed,totalSpins) VALUES(?,?,0,1) ON CONFLICT(userId,spinDate) DO UPDATE SET totalSpins=totalSpins+1', user.id, today());
+    }
+    const segments = settings.getSetting('wheel_segments');
+    const weights = settings.getSetting('wheel_weights');
+    let segmentIndex = 0;
+    if (Array.isArray(weights) && weights.length === segments.length && weights.reduce((a, b) => a + b, 0) > 0) {
+      let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+      for (let i = 0; i < weights.length; i++) { r -= weights[i]; if (r < 0) { segmentIndex = i; break; } segmentIndex = i; }
+    } else segmentIndex = Math.floor(Math.random() * segments.length);
+    const coins = Math.round((segments[segmentIndex] || 0) * eventMultiplier());
+    if (coins > 0) balance = grantCoins(user.id, coins, 'wheel', String(segmentIndex));
+    else balance = get('SELECT coinBalance FROM users WHERE id=?', user.id).coinBalance;
+    awardXp(user.id, 2);
+    const after = get('SELECT * FROM wheel_spins WHERE userId=? AND spinDate=?', user.id, today());
+    return ok(res, { success: true, segmentIndex, coins, balance, spinsLeft: Math.max(0, freePerDay - (after ? after.freeUsed : 0)) });
+  }
+  if (req.method === 'POST' && (m = /^\/rewards\/chests\/([^/]+)\/claim$/.exec(p))) {
+    if (!settings.getSetting('chests_enabled')) return err(res, 403, 'FEATURE_DISABLED', 'Watch chests are disabled');
+    const cm = /^chest_(\d+)$/.exec(decodeURIComponent(m[1]));
+    const milestone = cm ? settings.getSetting('chest_milestones').find((ms) => ms.threshold === parseInt(cm[1], 10)) : null;
+    if (!milestone) return err(res, 404, 'NOT_FOUND', 'Chest not found');
+    const distinctToday = get('SELECT COUNT(DISTINCT episodeId) c FROM watch_events WHERE userId=? AND eventDate=?', user.id, today()).c;
+    if (distinctToday < milestone.threshold) return err(res, 403, 'CHEST_LOCKED', `Watch ${milestone.threshold} episodes today to unlock this chest`);
+    if (get('SELECT 1 x FROM chest_claims WHERE userId=? AND chestDate=? AND threshold=?', user.id, today(), milestone.threshold))
+      return err(res, 409, 'ALREADY_CLAIMED', 'Chest already claimed today');
+    // Chests pay the FIXED milestone coins — no event multiplier (by design).
+    run('INSERT INTO chest_claims(userId,chestDate,threshold,coins,claimedAt) VALUES(?,?,?,?,?)', user.id, today(), milestone.threshold, milestone.coins, now());
+    const balance = grantCoins(user.id, milestone.coins, 'chest', 'chest_' + milestone.threshold);
+    awardXp(user.id, 5);
+    return ok(res, { success: true, coins: milestone.coins, balance });
+  }
+  if (req.method === 'POST' && p === '/rewards/watch-time/claim') {
+    if (!settings.getSetting('watch_time_enabled')) return err(res, 403, 'FEATURE_DISABLED', 'Watch-time rewards are disabled');
+    const wt = watchTimeState(user.id);
+    // Mirrors /rewards/ad cap semantics: nothing claimable -> 200 {success:false, coins:0}.
+    if (wt.claimableCoins <= 0) return ok(res, { success: false, coins: 0, balance: user.coinBalance });
+    const coins = Math.round(wt.claimableCoins * eventMultiplier());
+    run('UPDATE watch_time_daily SET blocksClaimed=? WHERE userId=? AND watchDate=?', wt.totalBlocks, user.id, today());
+    const balance = grantCoins(user.id, coins, 'watch_time', null);
+    return ok(res, { success: true, coins, balance });
+  }
+  if (req.method === 'POST' && (m = /^\/rewards\/missions\/([^/]+)\/claim$/.exec(p))) {
+    const mission = get('SELECT * FROM missions WHERE slug=?', decodeURIComponent(m[1]));
+    if (!mission || mission.active === 0) return err(res, 404, 'NOT_FOUND', 'Mission not found');
+    if (missionProgress(user.id, mission) < mission.target) return err(res, 403, 'MISSION_INCOMPLETE', 'Mission target not reached yet');
+    if (get('SELECT 1 x FROM mission_claims WHERE userId=? AND slug=? AND claimDate=?', user.id, mission.slug, today()))
+      return err(res, 409, 'ALREADY_CLAIMED', 'Mission already claimed today');
+    run('INSERT INTO mission_claims(userId,slug,claimDate) VALUES(?,?,?)', user.id, mission.slug, today());
+    const balance = grantCoins(user.id, mission.coins, 'mission', mission.slug); // no event multiplier on missions
+    awardXp(user.id, 10);
+    return ok(res, { success: true, coins: mission.coins, balance });
   }
   if (req.method === 'POST' && p === '/rewards/ad') {
     if (!settings.getSetting('ads_enabled')) return ok(res, { success: false, coins: 0, reason: 'ADS_DISABLED' });
@@ -282,6 +512,7 @@ async function handle(req, res, url, body) {
     if (isMilestone && taskProgress(user.id, t) < t.target) return ok(res, { success: false, coins: 0 });
     run('INSERT INTO user_reward_tasks(userId,slug,completedAt) VALUES(?,?,?)', user.id, t.slug, now());
     grantCoins(user.id, t.coins, 'reward_task', t.slug);
+    awardXp(user.id, 5);
     return ok(res, { success: true, coins: t.coins });
   }
   // ---------- NOTIFICATIONS ----------
@@ -316,6 +547,79 @@ function adminHandle(req, res, url, body) {
   if (p === '/settings') {
     if (req.method === 'GET') return ok(res, { settings: settings.getSettings() });
     if (req.method === 'PATCH') { const r = settings.updateSettings(body); if (r.error) return err(res, 400, 'VALIDATION', r.error); return ok(res, { settings: r.settings }); }
+  }
+  // ---------- PHASE 2: MISSIONS CRUD ----------
+  if (p === '/missions' || p.startsWith('/missions/')) {
+    const MISSION_METRICS = ['watch_episodes', 'watch_minutes', 'likes', 'shares', 'checkin'];
+    const missionJson = (ms) => ({ slug: ms.slug, title: ms.title, description: ms.description, metric: ms.metric, target: ms.target, coins: ms.coins, sortOrder: ms.sortOrder, active: ms.active !== 0 });
+    if (req.method === 'GET' && p === '/missions') return ok(res, { items: all('SELECT * FROM missions ORDER BY sortOrder').map(missionJson) });
+    if (req.method === 'POST' && p === '/missions') {
+      if (!body.slug || !body.title) return err(res, 400, 'VALIDATION', 'slug and title are required');
+      if (!MISSION_METRICS.includes(body.metric)) return err(res, 400, 'VALIDATION', `metric must be one of ${MISSION_METRICS.join('|')}`);
+      if (get('SELECT 1 x FROM missions WHERE slug=?', body.slug)) return err(res, 409, 'CONFLICT', 'A mission with this slug already exists');
+      run('INSERT INTO missions(slug,title,description,metric,target,coins,sortOrder,active) VALUES(?,?,?,?,?,?,?,?)', body.slug, body.title, body.description || null, body.metric, parseInt(body.target || '1', 10) || 1, parseInt(body.coins || '0', 10) || 0, parseInt(body.sortOrder || '0', 10) || 0, body.active === false ? 0 : 1);
+      return ok(res, missionJson(get('SELECT * FROM missions WHERE slug=?', body.slug)), 201);
+    }
+    if ((m = /^\/missions\/([^/]+)$/.exec(p))) {
+      const slug = decodeURIComponent(m[1]);
+      const ms = get('SELECT * FROM missions WHERE slug=?', slug);
+      if (!ms) return err(res, 404, 'NOT_FOUND', 'Mission not found');
+      if (req.method === 'PATCH') {
+        if (body.metric !== undefined && !MISSION_METRICS.includes(body.metric)) return err(res, 400, 'VALIDATION', `metric must be one of ${MISSION_METRICS.join('|')}`);
+        const F = ['title', 'description', 'metric', 'target', 'coins', 'sortOrder']; const cols = F.filter((f) => body[f] !== undefined);
+        if (body.active !== undefined) { cols.push('active'); body.active = body.active ? 1 : 0; }
+        if (cols.length) run(`UPDATE missions SET ${cols.map((c) => c + '=?').join(',')} WHERE slug=?`, ...cols.map((c) => body[c]), slug);
+        return ok(res, missionJson(get('SELECT * FROM missions WHERE slug=?', slug)));
+      }
+      if (req.method === 'DELETE') { run('DELETE FROM missions WHERE slug=?', slug); return ok(res, { success: true }); }
+    }
+  }
+  // ---------- PHASE 2: EVENTS CRUD (multiplier windows) ----------
+  if (p === '/events' || p.startsWith('/events/')) {
+    const eventJson = (e) => ({ id: e.id, name: e.name, multiplier: e.multiplier, startsAt: e.startsAt, endsAt: e.endsAt, active: e.active !== 0, createdAt: e.createdAt });
+    if (req.method === 'GET' && p === '/events') return ok(res, { items: all('SELECT * FROM events ORDER BY createdAt DESC').map(eventJson) });
+    if (req.method === 'POST' && p === '/events') {
+      if (!body.name) return err(res, 400, 'VALIDATION', 'name is required');
+      const mult = Number(body.multiplier); if (!Number.isFinite(mult) || mult <= 0) return err(res, 400, 'VALIDATION', 'multiplier must be a positive number');
+      const id = body.id || auth.uid();
+      run('INSERT INTO events(id,name,multiplier,startsAt,endsAt,active,createdAt) VALUES(?,?,?,?,?,?,?)', id, body.name, mult, body.startsAt || null, body.endsAt || null, body.active === false ? 0 : 1, now());
+      return ok(res, eventJson(get('SELECT * FROM events WHERE id=?', id)), 201);
+    }
+    if ((m = /^\/events\/([^/]+)$/.exec(p))) {
+      const id = decodeURIComponent(m[1]);
+      const ev = get('SELECT * FROM events WHERE id=?', id);
+      if (!ev) return err(res, 404, 'NOT_FOUND', 'Event not found');
+      if (req.method === 'PATCH') {
+        if (body.multiplier !== undefined && (!Number.isFinite(Number(body.multiplier)) || Number(body.multiplier) <= 0)) return err(res, 400, 'VALIDATION', 'multiplier must be a positive number');
+        const F = ['name', 'multiplier', 'startsAt', 'endsAt']; const cols = F.filter((f) => body[f] !== undefined);
+        if (body.active !== undefined) { cols.push('active'); body.active = body.active ? 1 : 0; }
+        if (cols.length) run(`UPDATE events SET ${cols.map((c) => c + '=?').join(',')} WHERE id=?`, ...cols.map((c) => body[c]), id);
+        return ok(res, eventJson(get('SELECT * FROM events WHERE id=?', id)));
+      }
+      if (req.method === 'DELETE') { run('DELETE FROM events WHERE id=?', id); return ok(res, { success: true }); }
+    }
+  }
+  // ---------- PHASE 2: CAPTIONS ADMIN ----------
+  if (req.method === 'GET' && p === '/captions') {
+    const eps = all('SELECT ct.episodeId, ct.id trackId, ct.lang, ct.source, ct.status, e.seriesId, e.episodeNumber, e.title FROM caption_tracks ct JOIN episodes e ON e.id=ct.episodeId ORDER BY e.seriesId, e.episodeNumber, ct.lang');
+    const byEp = new Map();
+    for (const r of eps) {
+      if (!byEp.has(r.episodeId)) byEp.set(r.episodeId, { episodeId: r.episodeId, seriesId: r.seriesId, episodeNumber: r.episodeNumber, title: r.title, tracks: [] });
+      byEp.get(r.episodeId).tracks.push({ id: r.trackId, lang: r.lang, source: r.source, status: r.status });
+    }
+    const jobs = all('SELECT * FROM caption_jobs ORDER BY createdAt DESC, rowid DESC LIMIT 50')
+      .map((j) => ({ id: j.id, episodeId: j.episodeId, status: j.status, step: j.step, error: j.error, createdAt: j.createdAt, finishedAt: j.finishedAt }));
+    return ok(res, { episodes: [...byEp.values()], jobs });
+  }
+  if (req.method === 'DELETE' && (m = /^\/captions\/([^/]+)$/.exec(p))) {
+    run('DELETE FROM caption_tracks WHERE id=?', decodeURIComponent(m[1]));
+    return ok(res, { success: true });
+  }
+  if (req.method === 'POST' && (m = /^\/episodes\/([^/]+)\/captions\/generate$/.exec(p))) {
+    const ep = get('SELECT * FROM episodes WHERE id=?', decodeURIComponent(m[1]));
+    if (!ep) return err(res, 404, 'NOT_FOUND', 'Episode not found');
+    const jobId = captions.enqueueCaptionJob(ep.id, Array.isArray(body.targets) ? body.targets : undefined);
+    return ok(res, { jobId }, 201);
   }
   // ---------- TRANSACTIONS LOG ----------
   if (req.method === 'GET' && p === '/transactions') {
@@ -414,7 +718,7 @@ function adminHandle(req, res, url, body) {
   }
   if (p.startsWith('/episodes')) {
     if (req.method === 'GET' && p === '/episodes') { const sid = url.searchParams.get('seriesId'); const rows = sid ? all('SELECT * FROM episodes WHERE seriesId=? ORDER BY episodeNumber', sid) : all('SELECT * FROM episodes ORDER BY seriesId, episodeNumber LIMIT 500'); return ok(res, { items: rows.map((e) => ({ ...e, isFree: !!e.isFree, isVipOnly: !!e.isVipOnly, dubs: all('SELECT lang,videoUrl FROM episode_dubs WHERE episodeId=?', e.id) })) }); }
-    if (req.method === 'POST' && p === '/episodes') { const id = body.id || auth.uid(); run('INSERT INTO episodes(id,seriesId,seasonId,seasonNumber,episodeNumber,title,description,videoUrl,thumbnailUrl,durationSeconds,isFree,coinCost,isVipOnly,publishedAt,sortOrder) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', id, body.seriesId, body.seasonId || null, body.seasonNumber || 1, body.episodeNumber, body.title || null, body.description || null, body.videoUrl || null, body.thumbnailUrl || null, body.durationSeconds || null, body.isFree ? 1 : 0, body.coinCost || 0, body.isVipOnly ? 1 : 0, body.publishedAt || now(), body.sortOrder || body.episodeNumber || 0); (body.dubs || []).forEach((d) => run('INSERT OR REPLACE INTO episode_dubs(id,episodeId,lang,videoUrl) VALUES(?,?,?,?)', auth.uid(), id, d.lang, d.videoUrl)); return ok(res, get('SELECT * FROM episodes WHERE id=?', id), 201); }
+    if (req.method === 'POST' && p === '/episodes') { const id = body.id || auth.uid(); run('INSERT INTO episodes(id,seriesId,seasonId,seasonNumber,episodeNumber,title,description,videoUrl,thumbnailUrl,durationSeconds,isFree,coinCost,isVipOnly,publishedAt,sortOrder) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', id, body.seriesId, body.seasonId || null, body.seasonNumber || 1, body.episodeNumber, body.title || null, body.description || null, body.videoUrl || null, body.thumbnailUrl || null, body.durationSeconds || null, body.isFree ? 1 : 0, body.coinCost || 0, body.isVipOnly ? 1 : 0, body.publishedAt || now(), body.sortOrder || body.episodeNumber || 0); (body.dubs || []).forEach((d) => run('INSERT OR REPLACE INTO episode_dubs(id,episodeId,lang,videoUrl) VALUES(?,?,?,?)', auth.uid(), id, d.lang, d.videoUrl)); if (body.videoUrl && settings.getSetting('captions_auto_generate') && settings.getSetting('captions_enabled')) { try { captions.enqueueCaptionJob(id); } catch (e) { console.error('[captions] auto-generate enqueue failed', e); } } return ok(res, get('SELECT * FROM episodes WHERE id=?', id), 201); }
     if ((m = /^\/episodes\/([^/]+)$/.exec(p))) { const id = decodeURIComponent(m[1]);
       if (req.method === 'PATCH') { const F = ['seriesId', 'seasonId', 'seasonNumber', 'episodeNumber', 'title', 'description', 'videoUrl', 'thumbnailUrl', 'durationSeconds', 'coinCost', 'publishedAt', 'sortOrder']; const cols = F.filter((f) => body[f] !== undefined); if (body.isFree !== undefined) { cols.push('isFree'); body.isFree = body.isFree ? 1 : 0; } if (body.isVipOnly !== undefined) { cols.push('isVipOnly'); body.isVipOnly = body.isVipOnly ? 1 : 0; } if (cols.length) run(`UPDATE episodes SET ${cols.map((c) => c + '=?').join(',')} WHERE id=?`, ...cols.map((c) => body[c]), id); if (Array.isArray(body.dubs)) { run('DELETE FROM episode_dubs WHERE episodeId=?', id); body.dubs.forEach((d) => run('INSERT INTO episode_dubs(id,episodeId,lang,videoUrl) VALUES(?,?,?,?)', auth.uid(), id, d.lang, d.videoUrl)); } return ok(res, get('SELECT * FROM episodes WHERE id=?', id)); }
       if (req.method === 'DELETE') { run('DELETE FROM episodes WHERE id=?', id); return ok(res, { success: true }); } }
@@ -449,7 +753,7 @@ function adminHandle(req, res, url, body) {
   if (req.method === 'DELETE' && (m = /^\/users\/([^/]+)$/.exec(p))) {
     const uidToDelete = decodeURIComponent(m[1]);
     if (!get('SELECT 1 x FROM users WHERE id=?', uidToDelete)) return err(res, 404, 'NOT_FOUND', 'User not found');
-    for (const t of ['refresh_tokens', 'user_devices', 'user_series', 'watch_history', 'episode_unlocks', 'coin_transactions', 'checkins', 'user_reward_tasks', 'ad_rewards', 'notifications'])
+    for (const t of ['refresh_tokens', 'user_devices', 'user_series', 'watch_history', 'episode_unlocks', 'coin_transactions', 'checkins', 'user_reward_tasks', 'ad_rewards', 'notifications', 'wheel_spins', 'chest_claims', 'watch_time_daily', 'watch_events', 'user_daily_events', 'mission_claims'])
       run(`DELETE FROM ${t} WHERE userId=?`, uidToDelete);
     run('DELETE FROM users WHERE id=?', uidToDelete);
     return ok(res, { success: true });
