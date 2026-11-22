@@ -214,7 +214,7 @@ abstract class AppLocalizations {
   /// **'Light mode'**
   String get lightMode;
 
-  /// Settings row and sheet title for earning free songs
+  /// Settings row and sheet title for earning Pro perks
   ///
   /// In en, this message translates to:
   /// **'Get Pro perks'**
@@ -256,13 +256,13 @@ abstract class AppLocalizations {
   /// **'Share'**
   String get rewardShare;
 
-  /// Toast when free song credits are granted
+  /// Toast when free reward credits are granted
   ///
   /// In en, this message translates to:
   /// **'+{count} perk'**
   String rewardCreditsEarned(int count);
 
-  /// Toast when multiple free song credits are granted
+  /// Toast when multiple free reward credits are granted
   ///
   /// In en, this message translates to:
   /// **'+{count} perks'**
@@ -280,7 +280,7 @@ abstract class AppLocalizations {
   /// **'Limit reached for today'**
   String get rewardLimitReached;
 
-  /// Generic free songs reward failure
+  /// Generic Pro perks reward failure
   ///
   /// In en, this message translates to:
   /// **'Could not complete reward. Try again.'**
@@ -391,7 +391,7 @@ abstract class AppLocalizations {
   /// Semantics label for balance info icon
   ///
   /// In en, this message translates to:
-  /// **'Pro listening perks available on your account.'**
+  /// **'Pro drama perks are available on your account.'**
   String get settingsProfileSongBalanceHint;
 
   /// Tappable row opening rewards sheet
@@ -1180,7 +1180,7 @@ abstract class AppLocalizations {
   /// **'Sign Out'**
   String get signOut;
 
-  /// Tab label for song description input
+  /// Tab label for drama description input
   ///
   /// In en, this message translates to:
   /// **'Station search'**
@@ -1192,7 +1192,7 @@ abstract class AppLocalizations {
   /// **'Podcasts'**
   String get lyrics;
 
-  /// Tab label for image to song conversion
+  /// Tab label for image to drama conversion
   ///
   /// In en, this message translates to:
   /// **'By mood'**
@@ -1378,7 +1378,7 @@ abstract class AppLocalizations {
   /// **'Press back again to exit'**
   String get pressAgainToExit;
 
-  /// Section title above public recent songs on Explore
+  /// Section title above public recent dramas on Explore
   ///
   /// In en, this message translates to:
   /// **'New Shows'**
@@ -1396,13 +1396,13 @@ abstract class AppLocalizations {
   /// **'Top Podcasters'**
   String get topArtists;
 
-  /// Section title for trending songs on Explore
+  /// Section title for trending dramas on Explore
   ///
   /// In en, this message translates to:
   /// **'Top Stations'**
   String get topSongs;
 
-  /// Section title for newest public songs on Explore
+  /// Section title for newest public dramas on Explore
   ///
   /// In en, this message translates to:
   /// **'New Episodes'**
@@ -1414,7 +1414,7 @@ abstract class AppLocalizations {
   /// **'{count} plays'**
   String explorePlaysCount(int count);
 
-  /// Placeholder text for song description input
+  /// Placeholder text for drama description input
   ///
   /// In en, this message translates to:
   /// **'Search jazz, news, rock, or talk radio...'**
@@ -1426,7 +1426,7 @@ abstract class AppLocalizations {
   /// **'Search podcasts or episodes...'**
   String get placeholderLyrics;
 
-  /// Placeholder text for image to song input
+  /// Placeholder text for image to drama input
   ///
   /// In en, this message translates to:
   /// **'Describe the station or show mood...'**
@@ -1444,7 +1444,7 @@ abstract class AppLocalizations {
   /// **'By tapping next, you are agreeing to {appName} Terms of Use & Privacy Policy.'**
   String readyToStartLegalText(String appName);
 
-  /// Section title above default song prompt chips
+  /// Section title above default drama prompt chips
   ///
   /// In en, this message translates to:
   /// **'Station ideas'**
@@ -1456,7 +1456,7 @@ abstract class AppLocalizations {
   /// **'Podcast ideas'**
   String get musicVideoIdeasHeading;
 
-  /// Subtitle chip category for generic song prompts
+  /// Subtitle chip category for generic drama prompts
   ///
   /// In en, this message translates to:
   /// **'All genres / trending stations'**
@@ -1480,13 +1480,13 @@ abstract class AppLocalizations {
   /// **'Created by our community'**
   String get communityCollectionsDesc;
 
-  /// Section title for trending songs
+  /// Section title for trending dramas
   ///
   /// In en, this message translates to:
   /// **'Trending'**
   String get trending;
 
-  /// Section title for popular songs column
+  /// Section title for popular dramas column
   ///
   /// In en, this message translates to:
   /// **'Popular This Week'**
@@ -1600,13 +1600,13 @@ abstract class AppLocalizations {
   /// **'Got it'**
   String get paywallHelpGotIt;
 
-  /// Short bullet explainer for free vs Pro song limits and ads on paywall
+  /// Short bullet explainer for free vs Pro drama limits and ads on paywall
   ///
   /// In en, this message translates to:
-  /// **'Pro unlocks ad-free listening, offline podcast downloads, premium radio stations, and high-quality streams.'**
+  /// **'Pro unlocks ad-free watching, offline episode downloads, VIP-only series, and high-quality streams.'**
   String get paywallSongsExplainerBody;
 
-  /// Dismiss button for What are songs? dialog on paywall
+  /// Dismiss button for What are dramas? dialog on paywall
   ///
   /// In en, this message translates to:
   /// **'Thanks 😊'**
@@ -1876,6 +1876,18 @@ abstract class AppLocalizations {
   /// **'Frequently asked questions'**
   String get settingsFaqDialogTitle;
 
+  /// Settings row that replays the one-time player gesture tutorial
+  ///
+  /// In en, this message translates to:
+  /// **'Player tutorial'**
+  String get playerTutorialRow;
+
+  /// Toast after tapping the Player tutorial settings row
+  ///
+  /// In en, this message translates to:
+  /// **'The gesture tutorial will play next time you open the player.'**
+  String get playerTutorialReplayHint;
+
   /// No description provided for @settingsFaqQ1.
   ///
   /// In en, this message translates to:
@@ -1885,7 +1897,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsFaqA1.
   ///
   /// In en, this message translates to:
-  /// **'The Free plan lets you browse radio stations and podcasts, save favorites, and listen with standard streaming quality. Upgrade to Pro for ad-free listening, offline downloads, and premium stations.'**
+  /// **'The Free plan lets you browse short dramas, save favorites, and watch with standard streaming quality. Upgrade to Pro for ad-free watching, offline downloads, and VIP-only series.'**
   String get settingsFaqA1;
 
   /// No description provided for @settingsFaqQ2.
@@ -1897,31 +1909,31 @@ abstract class AppLocalizations {
   /// No description provided for @settingsFaqA2.
   ///
   /// In en, this message translates to:
-  /// **'Pro unlocks ad-free radio and podcasts, offline episode downloads, premium stations, high-quality streams, and unlimited presets and playlists.'**
+  /// **'Pro unlocks ad-free watching, offline episode downloads, VIP-only series, high-quality streams, and unlimited watchlist space.'**
   String get settingsFaqA2;
 
   /// No description provided for @settingsFaqQ3.
   ///
   /// In en, this message translates to:
-  /// **'Can I download podcasts for offline listening?'**
+  /// **'Can I download episodes to watch offline?'**
   String get settingsFaqQ3;
 
   /// No description provided for @settingsFaqA3.
   ///
   /// In en, this message translates to:
-  /// **'Yes. Pro subscribers can download podcast episodes for offline listening on Wi‑Fi or mobile data, depending on your settings.'**
+  /// **'Yes. Pro subscribers can download episodes to watch offline, on Wi-Fi or mobile data, depending on your settings.'**
   String get settingsFaqA3;
 
   /// No description provided for @settingsFaqQ4.
   ///
   /// In en, this message translates to:
-  /// **'Can I listen to live radio worldwide?'**
+  /// **'Can I watch dramas from anywhere?'**
   String get settingsFaqQ4;
 
   /// No description provided for @settingsFaqA4.
   ///
   /// In en, this message translates to:
-  /// **'Yes. Browse 100,000+ live radio stations by genre, country, and language. Save presets and jump back to your favorites anytime.'**
+  /// **'Yes. Browse short dramas by genre and language, save your favorites, and jump back in anytime.'**
   String get settingsFaqA4;
 
   /// No description provided for @settingsFaqQ5.
@@ -1933,7 +1945,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsFaqA5.
   ///
   /// In en, this message translates to:
-  /// **'Free users get standard streaming quality. Pro includes high-quality streams for supported stations and podcasts.'**
+  /// **'Free users get standard streaming quality. Pro includes high-quality streams for supported series and episodes.'**
   String get settingsFaqA5;
 
   /// No description provided for @settingsFaqQ6.
@@ -1975,13 +1987,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsFaqQ9.
   ///
   /// In en, this message translates to:
-  /// **'How do podcast subscriptions work?'**
+  /// **'How does VIP work?'**
   String get settingsFaqQ9;
 
   /// No description provided for @settingsFaqA9.
   ///
   /// In en, this message translates to:
-  /// **'Subscribe to any podcast in one tap. New episodes appear in your library, and you can resume playback exactly where you left off.'**
+  /// **'VIP unlocks every VIP-only series and episode while your subscription is active. New episodes appear in your library, and you can resume exactly where you left off.'**
   String get settingsFaqA9;
 
   /// No description provided for @settingsFaqQ10.
@@ -1993,7 +2005,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsFaqA10.
   ///
   /// In en, this message translates to:
-  /// **'Save radio stations as presets, build playlists, and keep your listening history synced across sessions so you can continue where you stopped.'**
+  /// **'Save series to your list, keep your favorites close, and keep your viewing history synced across sessions so you can continue where you stopped.'**
   String get settingsFaqA10;
 
   /// No description provided for @settingsFaqQ11.
@@ -2005,31 +2017,31 @@ abstract class AppLocalizations {
   /// No description provided for @settingsFaqA11.
   ///
   /// In en, this message translates to:
-  /// **'Some premium stations, offline downloads, ad-free listening, and high-quality streams require Pro. Free users can still explore most radio and podcast content.'**
+  /// **'Some VIP-only series, offline downloads, ad-free watching, and high-quality streams require Pro. Free users can still explore most dramas and episodes.'**
   String get settingsFaqA11;
 
-  /// Title for Pro song credits help dialog
+  /// Title for Pro reward credits help dialog
   ///
   /// In en, this message translates to:
-  /// **'How Pro listening works'**
+  /// **'How Pro works'**
   String get proBudgetHelpTitle;
 
   /// Pro budget help dialog bullet 1
   ///
   /// In en, this message translates to:
-  /// **'Pro removes ads from radio and podcast playback and unlocks premium listening features.'**
+  /// **'Pro removes ads from episode playback and unlocks premium drama features.'**
   String get proBudgetHelpBullet1;
 
   /// Pro budget help dialog bullet 2
   ///
   /// In en, this message translates to:
-  /// **'Your saved stations, presets, and playlists stay synced while you listen across the app.'**
+  /// **'Your watchlist, favorites, and viewing history stay synced across the app.'**
   String get proBudgetHelpBullet2;
 
   /// Pro budget help dialog bullet 3
   ///
   /// In en, this message translates to:
-  /// **'Offline downloads let you save podcast episodes and listen without a connection.'**
+  /// **'Offline downloads let you save episodes and watch without a connection.'**
   String get proBudgetHelpBullet3;
 
   /// Pro budget help dialog bullet 4
@@ -2569,7 +2581,7 @@ abstract class AppLocalizations {
   /// Pro user unified credit balance on top-up sheet
   ///
   /// In en, this message translates to:
-  /// **'Balance: {count} listening credits'**
+  /// **'Balance: {count} coins'**
   String topUpBalanceHint(int count);
 
   /// Per-credit price line on checkout bar
@@ -2671,7 +2683,7 @@ abstract class AppLocalizations {
   /// Toast when long-pressing Pro badge; daily and top-up counts
   ///
   /// In en, this message translates to:
-  /// **'You still have {dailyLeft, plural, one{1 free listen} other{{dailyLeft} free listens}} left today, and {topUpLeft, plural, one{1 bonus listen} other{{topUpLeft} bonus listens}} ready when you need them.'**
+  /// **'You still have {dailyLeft, plural, one{1 free episode} other{{dailyLeft} free episodes}} left today, and {topUpLeft, plural, one{1 bonus episode} other{{topUpLeft} bonus episodes}} ready when you need them.'**
   String proBudgetLongPressToast(int dailyLeft, int topUpLeft);
 
   /// Title for mandatory app update dialog

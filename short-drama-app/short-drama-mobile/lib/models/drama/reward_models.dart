@@ -1,6 +1,8 @@
 /// Coin amounts awarded for each day of the 7-day check-in cycle.
 /// Mirrors the `claim_daily_checkin()` RPC in schema.sql.
-const List<int> kDailyCheckinRewards = [20, 50, 35, 30, 35, 20, 50];
+// Fallback ladder for offline/first paint; the server's /rewards payload is
+// authoritative. Rebalanced 2026-11-22 with the backend (CODE_READINESS item 4).
+const List<int> kDailyCheckinRewards = [10, 20, 15, 15, 20, 10, 30];
 
 /// A starter / recurring reward task (connect email, rate app, …).
 ///

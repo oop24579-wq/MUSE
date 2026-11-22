@@ -6,7 +6,7 @@ class TestFlags {
   /// Set to true to quickly test the pro badge design (green, PRO X/Y, no icon)
   static const bool forceProForTest = false;
 
-  /// Set to true to use sample songs instead of real generation.
+  /// Set to true to use sample dramas instead of real content.
   /// Uses public sample audio URLs which may not always be available.
   static const bool testMode = false;
 

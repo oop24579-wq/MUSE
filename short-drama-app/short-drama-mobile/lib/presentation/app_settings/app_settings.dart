@@ -15,6 +15,7 @@ import '../../services/rating_service.dart';
 import '../../services/legal_url_launcher.dart';
 import '../../services/theme_provider.dart';
 import '../../services/onesignal_service.dart';
+import '../../services/player_tutorial.dart';
 import './widgets/email_auth_bottom_sheet.dart';
 import './widgets/language_selection_bottom_sheet.dart';
 import './widgets/settings_anon_account_row.dart';
@@ -249,6 +250,22 @@ class _AppSettingsState extends State<AppSettings>
                                       await NotificationSettingsBottomSheet
                                           .show(context);
                                       if (mounted) setState(() {});
+                                    },
+                                  ),
+                                  _buildSettingsRow(
+                                    icon: Icons.gesture_rounded,
+                                    title: l10n.playerTutorialRow,
+                                    isDark: isDark,
+                                    textColor: textColor,
+                                    secondaryTextColor: secondaryTextColor,
+                                    onTap: () async {
+                                      await PlayerTutorial.requestReplay();
+                                      if (mounted) {
+                                        showTopToastSuccess(
+                                          context,
+                                          l10n.playerTutorialReplayHint,
+                                        );
+                                      }
                                     },
                                   ),
                                 ],

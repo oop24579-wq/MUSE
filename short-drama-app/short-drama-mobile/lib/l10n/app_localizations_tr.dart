@@ -168,7 +168,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get settingsProfileSongBalanceHint =>
-      'Pro listening perks available on your account.';
+      'Pro drama avantajları hesabınızda kullanılabilir.';
 
   @override
   String get settingsGetFreeSongsRow => 'Get Pro perks';
@@ -845,7 +845,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get paywallSongsExplainerBody =>
-      'Pro unlocks ad-free listening, offline podcast downloads, premium radio stations, and high-quality streams.';
+      'Pro; reklamsız izleme, bölümleri çevrimdışı indirme, VIP\'ye özel diziler ve yüksek kaliteli yayınları açar.';
 
   @override
   String get paywallSongsExplainerThanks => 'Thanks 😊';
@@ -995,18 +995,25 @@ class AppLocalizationsTr extends AppLocalizations {
   String get settingsFaqDialogTitle => 'Frequently asked questions';
 
   @override
+  String get playerTutorialRow => 'Player tutorial';
+
+  @override
+  String get playerTutorialReplayHint =>
+      'The gesture tutorial will play next time you open the player.';
+
+  @override
   String get settingsFaqQ1 => 'What\'s included in the Free plan?';
 
   @override
   String get settingsFaqA1 =>
-      'The Free plan lets you browse radio stations and podcasts, save favorites, and listen with standard streaming quality. Upgrade to Pro for ad-free listening, offline downloads, and premium stations.';
+      'Ücretsiz plan; kısa dramalara göz atmanıza, favorileri kaydetmenize ve standart kalitede izlemenize olanak tanır. Reklamsız izleme, çevrimdışı indirme ve VIP\'ye özel diziler için Pro\'ya yükseltin.';
 
   @override
   String get settingsFaqQ2 => 'What does Pro include?';
 
   @override
   String get settingsFaqA2 =>
-      'Pro unlocks ad-free radio and podcasts, offline episode downloads, premium stations, high-quality streams, and unlimited presets and playlists.';
+      'Pro; reklamsız izleme, bölümleri çevrimdışı indirme, VIP\'ye özel diziler, yüksek kaliteli yayınlar ve sınırsız liste alanı açar.';
 
   @override
   String get settingsFaqQ3 => 'Can I download podcasts for offline listening?';
@@ -1069,22 +1076,22 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get settingsFaqA11 =>
-      'Some premium stations, offline downloads, ad-free listening, and high-quality streams require Pro. Free users can still explore most radio and podcast content.';
+      'Bazı VIP\'ye özel diziler, çevrimdışı indirmeler, reklamsız izleme ve yüksek kaliteli yayınlar Pro gerektirir. Ücretsiz kullanıcılar yine de çoğu drama ve bölümü keşfedebilir.';
 
   @override
-  String get proBudgetHelpTitle => 'How Pro listening works';
+  String get proBudgetHelpTitle => 'Pro nasıl çalışır';
 
   @override
   String get proBudgetHelpBullet1 =>
-      'Pro removes ads from radio and podcast playback and unlocks premium listening features.';
+      'Pro, bölüm oynatımındaki reklamları kaldırır ve premium drama özelliklerini açar.';
 
   @override
   String get proBudgetHelpBullet2 =>
-      'Your saved stations, presets, and playlists stay synced while you listen across the app.';
+      'Listeniz, favorileriniz ve izleme geçmişiniz uygulamada senkronize kalır.';
 
   @override
   String get proBudgetHelpBullet3 =>
-      'Offline downloads let you save podcast episodes and listen without a connection.';
+      'Çevrimdışı indirmeler, bölümleri kaydedip bağlantı olmadan izlemenizi sağlar.';
 
   @override
   String get proBudgetHelpBullet4 =>
@@ -1377,7 +1384,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String topUpBalanceHint(int count) {
-    return 'Balance: $count listening credits';
+    return 'Bakiye: $count jeton';
   }
 
   @override

@@ -166,8 +166,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get settingsProfileInvite => 'Invite';
 
   @override
-  String get settingsProfileSongBalanceHint =>
-      'Pro listening perks available on your account.';
+  String get settingsProfileSongBalanceHint => '계정에서 Pro 드라마 혜택을 사용할 수 있습니다.';
 
   @override
   String get settingsGetFreeSongsRow => 'Get Pro perks';
@@ -844,7 +843,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get paywallSongsExplainerBody =>
-      'Pro unlocks ad-free listening, offline podcast downloads, premium radio stations, and high-quality streams.';
+      'Pro는 광고 없는 시청, 에피소드 오프라인 다운로드, VIP 전용 시리즈, 고화질 스트리밍을 제공합니다.';
 
   @override
   String get paywallSongsExplainerThanks => 'Thanks 😊';
@@ -994,18 +993,25 @@ class AppLocalizationsKo extends AppLocalizations {
   String get settingsFaqDialogTitle => 'Frequently asked questions';
 
   @override
+  String get playerTutorialRow => 'Player tutorial';
+
+  @override
+  String get playerTutorialReplayHint =>
+      'The gesture tutorial will play next time you open the player.';
+
+  @override
   String get settingsFaqQ1 => 'What\'s included in the Free plan?';
 
   @override
   String get settingsFaqA1 =>
-      'The Free plan lets you browse radio stations and podcasts, save favorites, and listen with standard streaming quality. Upgrade to Pro for ad-free listening, offline downloads, and premium stations.';
+      '무료 플랜에서는 숏드라마를 둘러보고, 즐겨찾기를 저장하고, 표준 화질로 시청할 수 있습니다. Pro로 업그레이드하면 광고 없는 시청, 오프라인 다운로드, VIP 전용 시리즈를 이용할 수 있습니다.';
 
   @override
   String get settingsFaqQ2 => 'What does Pro include?';
 
   @override
   String get settingsFaqA2 =>
-      'Pro unlocks ad-free radio and podcasts, offline episode downloads, premium stations, high-quality streams, and unlimited presets and playlists.';
+      'Pro는 광고 없는 시청, 에피소드 오프라인 다운로드, VIP 전용 시리즈, 고화질 스트리밍, 무제한 목록 공간을 제공합니다.';
 
   @override
   String get settingsFaqQ3 => 'Can I download podcasts for offline listening?';
@@ -1068,22 +1074,20 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get settingsFaqA11 =>
-      'Some premium stations, offline downloads, ad-free listening, and high-quality streams require Pro. Free users can still explore most radio and podcast content.';
+      '일부 VIP 전용 시리즈, 오프라인 다운로드, 광고 없는 시청, 고화질 스트리밍은 Pro가 필요합니다. 무료 사용자도 대부분의 드라마와 에피소드를 즐길 수 있습니다.';
 
   @override
-  String get proBudgetHelpTitle => 'How Pro listening works';
+  String get proBudgetHelpTitle => 'Pro 이용 방법';
 
   @override
   String get proBudgetHelpBullet1 =>
-      'Pro removes ads from radio and podcast playback and unlocks premium listening features.';
+      'Pro는 에피소드 재생 중 광고를 제거하고 프리미엄 드라마 기능을 엽니다.';
 
   @override
-  String get proBudgetHelpBullet2 =>
-      'Your saved stations, presets, and playlists stay synced while you listen across the app.';
+  String get proBudgetHelpBullet2 => '내 목록, 즐겨찾기, 시청 기록이 앱에서 동기화됩니다.';
 
   @override
-  String get proBudgetHelpBullet3 =>
-      'Offline downloads let you save podcast episodes and listen without a connection.';
+  String get proBudgetHelpBullet3 => '오프라인 다운로드로 에피소드를 저장해 연결 없이 시청할 수 있습니다.';
 
   @override
   String get proBudgetHelpBullet4 =>
@@ -1376,7 +1380,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String topUpBalanceHint(int count) {
-    return 'Balance: $count listening credits';
+    return '잔액: $count 코인';
   }
 
   @override

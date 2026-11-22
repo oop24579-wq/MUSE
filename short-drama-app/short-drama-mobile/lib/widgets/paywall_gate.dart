@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../services/paywall_frequency.dart';
 import '../services/user_provider.dart';
 import '../presentation/pricing/revenuecat_paywall_view.dart';
 
 /// Gate widget that shows RevenueCat paywall when user is not pro.
 /// Uses UserProvider with RevenueCat cross-check for consistent pro status.
+///
+/// Frequency cap (CODE_READINESS item 7): with the server flag
+/// `paywall_daily_cap` ON (the default), the launch paywall appears at most
+/// once per 24h — repeat cold starts within the window go straight to the
+/// content instead of training the user to resent the gate.
 class PaywallGate extends StatefulWidget {
   final Widget child;
 
@@ -17,6 +23,7 @@ class PaywallGate extends StatefulWidget {
 class _PaywallGateState extends State<PaywallGate> {
   bool? _isPro;
   bool _isLoading = true;
+  bool _capBypassed = false;
 
   @override
   void initState() {
@@ -31,9 +38,18 @@ class _PaywallGateState extends State<PaywallGate> {
       final userProvider =
           Provider.of<UserProvider>(context, listen: false);
       await userProvider.refreshUser(syncProStatus: true);
+      var bypassed = false;
+      if (userProvider.isPro != true) {
+        if (await PaywallFrequency.shouldShowLaunchPaywall()) {
+          await PaywallFrequency.markShown();
+        } else {
+          bypassed = true; // Shown within the last 24h: let them in.
+        }
+      }
       if (mounted) {
         setState(() {
           _isPro = userProvider.isPro;
+          _capBypassed = bypassed;
           _isLoading = false;
         });
       }
@@ -59,6 +75,9 @@ class _PaywallGateState extends State<PaywallGate> {
         ),
       );
     }
+
+    // Frequency-capped for today: straight to content.
+    if (_capBypassed) return widget.child;
 
     // Non-pro: show RevenueCat paywall. When dismissed, navigates back;
     // gate rebuilds and shows paywall again if user still not pro.

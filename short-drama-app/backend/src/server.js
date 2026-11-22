@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { seed } = require('./seed');
 const { handle, adminHandle, err } = require('./routes');
+const ratelimit = require('./ratelimit');
 const captions = require('./captions');
 // Fail fast in production on the well-known dev secrets; warn loudly otherwise.
 for (const [name, dflt] of [['JWT_SECRET', 'dev-only-change-me-jwt-secret'], ['ADMIN_TOKEN', 'dev-admin-token-change-me']]) {
@@ -53,6 +54,18 @@ const server = http.createServer(async (req, res) => {
       }
       res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
       return fs.createReadStream(file).pipe(res);
+    }
+    if (url.pathname.startsWith('/api/v1/')) {
+      // Rate limiting (src/ratelimit.js): stricter bucket for POST /auth/*,
+      // general bucket for the rest of the API. 429 + Retry-After on block.
+      const limiter = ratelimit.limiterFor(req, url.pathname);
+      if (limiter) {
+        const verdict = limiter.check(req.socket.remoteAddress || 'unknown');
+        if (!verdict.allowed) {
+          res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': String(verdict.retryAfterSec), 'Access-Control-Allow-Origin': '*' });
+          return res.end(JSON.stringify({ error: { code: 'RATE_LIMITED', message: 'Too many requests — please slow down and try again later' } }));
+        }
+      }
     }
     if (url.pathname.startsWith('/api/v1/admin/')) { const body = await readBody(req); return adminHandle(req, res, url, body); }
     if (url.pathname.startsWith('/api/v1/')) { const body = await readBody(req); return await handle(req, res, url, body); }

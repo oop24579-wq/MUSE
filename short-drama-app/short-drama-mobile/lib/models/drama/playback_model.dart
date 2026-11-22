@@ -15,6 +15,14 @@ class QualityOption {
   }
 }
 
+/// Whether the quality menu should be offered at all (CODE_READINESS
+/// item 9): only when the playback carries at least two DISTINCT rendition
+/// URLs. A menu whose every entry plays the identical file is dishonest —
+/// while the backend serves a single URL for all labels, the menu hides.
+bool qualityMenuVisible(List<QualityOption> qualities) {
+  return qualities.map((q) => q.url).where((u) => u.isNotEmpty).toSet().length >= 2;
+}
+
 /// Result of `GET /episodes/:id/playback`.
 class EpisodePlayback {
   final String? videoUrl;

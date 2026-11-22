@@ -56,7 +56,7 @@ class _Onboarding1ScaffoldState extends State<Onboarding1Scaffold> {
       const _LegacyOnboardingPageData(
         title: 'Bite-Sized Drama',
         description: 'Addictive stories told in fast, vertical episodes.',
-        imageAsset: 'assets/images/onboarding/onboarding_ai_songs.png',
+        imageAsset: 'assets/images/onboarding/onboarding_welcome.png',
         heroType: OnboardingHeroType.liveRadio,
       ),
       const _LegacyOnboardingPageData(
@@ -69,7 +69,7 @@ class _Onboarding1ScaffoldState extends State<Onboarding1Scaffold> {
       const _LegacyOnboardingPageData(
         title: 'Earn & Unlock',
         description: 'Collect daily coins and unlock premium episodes.',
-        imageAsset: 'assets/images/onboarding/onboarding_ai_music_videos.png',
+        imageAsset: 'assets/images/onboarding/onboarding_welcome.png',
         heroType: OnboardingHeroType.library,
       ),
     ];

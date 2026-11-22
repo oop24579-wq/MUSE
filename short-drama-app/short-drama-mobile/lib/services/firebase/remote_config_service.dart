@@ -278,7 +278,8 @@ class RemoteConfigService {
 
   String get androidStoreUrl => _getString('android_store_url');
 
-  /// Legacy AI Music credits — always empty/disabled in RadioPod.
+  /// Legacy template top-up products — always empty/disabled in HERO DRAMA
+  /// (coin packs are sold through RevenueCat, not Remote Config).
   List<String> get topUpProductIdList => const [];
 
   int get proDailySongLimit => 0;

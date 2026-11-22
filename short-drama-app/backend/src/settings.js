@@ -9,7 +9,11 @@
  */
 const { all, get, run } = require('./db');
 
-const CHECKIN_DEFAULT = [20, 50, 35, 30, 35, 20, 50]; // kDailyCheckinRewards
+// Rebalanced 2026-11-22 (CODE_READINESS item 4): the day-1 deterministic
+// earnable total across ALL sources was ~340 coins vs 240 to clear a whole
+// series, making coins decorative. New ladder + trimmed missions/tasks/
+// chests/wheel land day-1 at ~155 (see docs/CODE_READINESS.md for the math).
+const CHECKIN_DEFAULT = [10, 20, 15, 15, 20, 10, 30]; // kDailyCheckinRewards
 const intEnv = (name, dflt) => { const v = parseInt(process.env[name] || '', 10); return Number.isFinite(v) ? v : dflt; };
 
 const PLAYER_FLAGS = [
@@ -30,14 +34,14 @@ const DEFAULTS = {
   checkin_amounts: CHECKIN_DEFAULT,
   // ---- Phase 2: addictive coin economy ----
   wheel_enabled: true,
-  wheel_segments: [5, 10, 15, 20, 30, 50, 100, 0],
+  wheel_segments: [2, 5, 10, 15, 20, 30, 50, 0], // rebalanced: EV/spin ~13.3 (was ~22.5)
   wheel_weights: [20, 18, 15, 14, 12, 10, 6, 5],
   wheel_free_spins_per_day: 3,
   wheel_extra_spin_cost: 20,
   chests_enabled: true,
   chest_milestones: [
-    { threshold: 3, coins: 15 }, { threshold: 7, coins: 30 },
-    { threshold: 12, coins: 50 }, { threshold: 20, coins: 100 },
+    { threshold: 3, coins: 15 }, { threshold: 7, coins: 10 },
+    { threshold: 12, coins: 20 }, { threshold: 20, coins: 40 },
   ],
   watch_time_enabled: true,
   watch_time_coins_per_block: 10,
@@ -54,6 +58,9 @@ const DEFAULTS = {
   checkin_level_bonus: 5, // extra coins per level above 1 on check-in
   checkin_streak_bonus: 2, // extra coins per streak day on check-in
   checkin_streak_cap: 7, // streak days counted toward the check-in bonus
+  // Launch paywall frequency cap (client reads it from GET /config):
+  // when true, the app shows the cold-start VIP paywall at most once per 24h.
+  paywall_daily_cap: true,
   // ---- Phase 2: player feature flags ----
   ...Object.fromEntries(PLAYER_FLAGS.map((k) => [k, true])),
   skip_intro_window_seconds: 90,
@@ -76,6 +83,7 @@ const BOOL_KEYS = new Set([
   'maintenance_mode', 'ads_enabled', 'wheel_enabled', 'chests_enabled',
   'watch_time_enabled', 'missions_enabled', 'referrals_enabled',
   'confetti_enabled', 'haptics_enabled', 'captions_enabled', 'captions_auto_generate',
+  'paywall_daily_cap',
   ...PLAYER_FLAGS,
 ]);
 const INT_KEYS = new Set([

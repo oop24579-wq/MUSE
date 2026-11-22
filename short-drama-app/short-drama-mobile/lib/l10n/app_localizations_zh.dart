@@ -166,8 +166,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsProfileInvite => 'Invite';
 
   @override
-  String get settingsProfileSongBalanceHint =>
-      'Pro listening perks available on your account.';
+  String get settingsProfileSongBalanceHint => '您的账户可使用 Pro 短剧权益。';
 
   @override
   String get settingsGetFreeSongsRow => 'Get Pro perks';
@@ -843,8 +842,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get paywallHelpGotIt => 'Got it';
 
   @override
-  String get paywallSongsExplainerBody =>
-      'Pro unlocks ad-free listening, offline podcast downloads, premium radio stations, and high-quality streams.';
+  String get paywallSongsExplainerBody => 'Pro 解锁无广告观看、剧集离线下载、VIP 专属剧集和高清播放。';
 
   @override
   String get paywallSongsExplainerThanks => 'Thanks 😊';
@@ -994,18 +992,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsFaqDialogTitle => 'Frequently asked questions';
 
   @override
+  String get playerTutorialRow => 'Player tutorial';
+
+  @override
+  String get playerTutorialReplayHint =>
+      'The gesture tutorial will play next time you open the player.';
+
+  @override
   String get settingsFaqQ1 => 'What\'s included in the Free plan?';
 
   @override
   String get settingsFaqA1 =>
-      'The Free plan lets you browse radio stations and podcasts, save favorites, and listen with standard streaming quality. Upgrade to Pro for ad-free listening, offline downloads, and premium stations.';
+      '免费版可浏览短剧、收藏喜欢的剧集并以标准画质观看。升级 Pro 可享受无广告观看、离线下载和 VIP 专属剧集。';
 
   @override
   String get settingsFaqQ2 => 'What does Pro include?';
 
   @override
-  String get settingsFaqA2 =>
-      'Pro unlocks ad-free radio and podcasts, offline episode downloads, premium stations, high-quality streams, and unlimited presets and playlists.';
+  String get settingsFaqA2 => 'Pro 解锁无广告观看、剧集离线下载、VIP 专属剧集、高清播放和无限片单空间。';
 
   @override
   String get settingsFaqQ3 => 'Can I download podcasts for offline listening?';
@@ -1068,22 +1072,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsFaqA11 =>
-      'Some premium stations, offline downloads, ad-free listening, and high-quality streams require Pro. Free users can still explore most radio and podcast content.';
+      '部分 VIP 专属剧集、离线下载、无广告观看和高清播放需要 Pro。免费用户仍可浏览大多数短剧和剧集。';
 
   @override
-  String get proBudgetHelpTitle => 'How Pro listening works';
+  String get proBudgetHelpTitle => 'Pro 如何运作';
 
   @override
-  String get proBudgetHelpBullet1 =>
-      'Pro removes ads from radio and podcast playback and unlocks premium listening features.';
+  String get proBudgetHelpBullet1 => 'Pro 移除剧集播放中的广告，并解锁高级短剧功能。';
 
   @override
-  String get proBudgetHelpBullet2 =>
-      'Your saved stations, presets, and playlists stay synced while you listen across the app.';
+  String get proBudgetHelpBullet2 => '您的片单、收藏和观看历史会在应用内保持同步。';
 
   @override
-  String get proBudgetHelpBullet3 =>
-      'Offline downloads let you save podcast episodes and listen without a connection.';
+  String get proBudgetHelpBullet3 => '离线下载可让您保存剧集，无需联网即可观看。';
 
   @override
   String get proBudgetHelpBullet4 =>
@@ -1376,7 +1377,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String topUpBalanceHint(int count) {
-    return 'Balance: $count listening credits';
+    return '余额：$count 金币';
   }
 
   @override

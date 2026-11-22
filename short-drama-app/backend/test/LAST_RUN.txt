@@ -1,4 +1,4 @@
-Server booted on http://127.0.0.1:33087 with temp DB /tmp/dramanow-test-nhmqzA/app.db
+Server booted on http://127.0.0.1:40397 with temp DB /tmp/dramanow-test-OQQrr6/app.db
 PASS 1. health/root responds
 PASS 2. dev firebase auth creates user + welcome coin bonus (30)
 PASS 3. refresh flow: new tokens issued; old refresh token rejected
@@ -59,6 +59,3 @@ PASS 57. watch-time: payout never exceeds daily cap, even with a 2x event active
 
 SUMMARY: total=57 passed=57 failed=0
 RESULT: ALL PASS
-
-SECURITY PROBES: see test/SECURITY_RUN.txt — 54 attack probes executed 2026-11-22
-(backend/test/security-probes.mjs): 49 BLOCKED, 0 CONFIRMED, 2 ACCEPTED-RISK, 3 INFO.

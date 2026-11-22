@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../../l10n/app_localizations.dart';
+import '../../../services/paywall_frequency.dart';
 import '../paywall_router.dart';
 import '../shared/paywall_common_widgets.dart';
 import '../shared/paywall_packages.dart';
@@ -57,9 +58,21 @@ class _Paywall6ScaffoldState extends State<Paywall6Scaffold>
     _pulseScale = Tween<double>(begin: 0.975, end: 1.025).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-    _closeTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _closeVisible = true);
-    });
+    // Repeat paywall shows skip the 2s close-button delay entirely
+    // (CODE_READINESS item 7); only the first-ever show keeps it.
+    if (PaywallFrequency.cachedEverShown) {
+      _closeVisible = true;
+    } else {
+      _closeTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _closeVisible = true);
+      });
+      PaywallFrequency.ensureLoaded().then((_) {
+        if (mounted && PaywallFrequency.cachedEverShown) {
+          _closeTimer?.cancel();
+          setState(() => _closeVisible = true);
+        }
+      });
+    }
   }
 
   @override

@@ -47,12 +47,20 @@ function rotateRefresh(oldToken) {
   return issueTokens(row.userId);
 }
 /**
- * TODO(production): verify the Firebase ID token properly — use the Firebase Admin SDK
- * (admin.auth().verifyIdToken) or verify the RS256 signature against Google's public keys
- * (https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com),
- * checking aud == Firebase project id and iss == https://securetoken.google.com/<project>.
- * DEV mode below (FIREBASE_AUTH_DEV=1) accepts ANY non-empty token and must never ship.
+ * Firebase ID-token verification modes (see firebaseAuthMode):
+ *  - 'firebase': REAL RS256 verification against Google's public JWKS
+ *    (src/firebase.js) — active when FIREBASE_PROJECT_ID is set.
+ *  - 'dev': accepts ANY non-empty token (claims decoded without a signature
+ *    check) — only when AUTH_DEV_MODE=1 (or the legacy FIREBASE_AUTH_DEV=1)
+ *    is set explicitly. Must never ship.
+ *  - 'none' (default): /auth/firebase rejects with 501, like production.
  */
+const firebase = require('./firebase');
+function firebaseAuthMode() {
+  if (process.env.FIREBASE_PROJECT_ID) return 'firebase';
+  if (process.env.AUTH_DEV_MODE === '1' || process.env.FIREBASE_AUTH_DEV === '1') return 'dev';
+  return 'none';
+}
 function devDecodeFirebaseToken(idToken) {
   const parts = String(idToken).split('.');
   if (parts.length === 3) {
@@ -65,4 +73,4 @@ function devDecodeFirebaseToken(idToken) {
   }
   return { firebaseUid: 'dev-' + hash(String(idToken)).slice(0, 32), email: null, name: null, picture: null, isAnonymous: true };
 }
-module.exports = { sign, verify, issueTokens, rotateRefresh, devDecodeFirebaseToken, uid, hash };
+module.exports = { sign, verify, issueTokens, rotateRefresh, devDecodeFirebaseToken, firebaseAuthMode, verifyFirebaseIdToken: firebase.verifyFirebaseIdToken, uid, hash };

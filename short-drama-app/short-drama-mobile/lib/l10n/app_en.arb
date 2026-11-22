@@ -76,7 +76,7 @@
   },
   "getFreeSongs": "Get Pro perks",
   "@getFreeSongs": {
-    "description": "Settings row and sheet title for earning free songs"
+    "description": "Settings row and sheet title for earning Pro perks"
   },
   "rewardDailyCheckIn": "Daily Check-in",
   "@rewardDailyCheckIn": {
@@ -114,7 +114,7 @@
   },
   "rewardCreditsEarned": "+{count} perk",
   "@rewardCreditsEarned": {
-    "description": "Toast when free song credits are granted",
+    "description": "Toast when free reward credits are granted",
     "placeholders": {
       "count": {
         "type": "int"
@@ -123,7 +123,7 @@
   },
   "rewardCreditsEarnedPlural": "+{count} perks",
   "@rewardCreditsEarnedPlural": {
-    "description": "Toast when multiple free song credits are granted",
+    "description": "Toast when multiple free reward credits are granted",
     "placeholders": {
       "count": {
         "type": "int"
@@ -140,7 +140,7 @@
   },
   "rewardActionFailed": "Could not complete reward. Try again.",
   "@rewardActionFailed": {
-    "description": "Generic free songs reward failure"
+    "description": "Generic Pro perks reward failure"
   },
   "rewardDailyShareCreation": "Daily Share Creation",
   "@rewardDailyShareCreation": {
@@ -236,7 +236,7 @@
   "@settingsProfileInvite": {
     "description": "Profile card invite button placeholder"
   },
-  "settingsProfileSongBalanceHint": "Pro listening perks available on your account.",
+  "settingsProfileSongBalanceHint": "Pro drama perks are available on your account.",
   "@settingsProfileSongBalanceHint": {
     "description": "Semantics label for balance info icon"
   },
@@ -806,7 +806,7 @@
   },
   "songDescription": "Station search",
   "@songDescription": {
-    "description": "Tab label for song description input"
+    "description": "Tab label for drama description input"
   },
   "lyrics": "Podcasts",
   "@lyrics": {
@@ -814,7 +814,7 @@
   },
   "imageToSong": "By mood",
   "@imageToSong": {
-    "description": "Tab label for image to song conversion"
+    "description": "Tab label for image to drama conversion"
   },
   "selectGenre": "Select Genre",
   "@selectGenre": {
@@ -938,7 +938,7 @@
   },
   "exploreRecentPublicTitle": "New Shows",
   "@exploreRecentPublicTitle": {
-    "description": "Section title above public recent songs on Explore"
+    "description": "Section title above public recent dramas on Explore"
   },
   "hotPlaylists": "Hot Playlists",
   "@hotPlaylists": {
@@ -950,11 +950,11 @@
   },
   "topSongs": "Top Stations",
   "@topSongs": {
-    "description": "Section title for trending songs on Explore"
+    "description": "Section title for trending dramas on Explore"
   },
   "newReleases": "New Episodes",
   "@newReleases": {
-    "description": "Section title for newest public songs on Explore"
+    "description": "Section title for newest public dramas on Explore"
   },
   "explorePlaysCount": "{count} plays",
   "@explorePlaysCount": {
@@ -967,7 +967,7 @@
   },
   "placeholderSongDescription": "Search jazz, news, rock, or talk radio...",
   "@placeholderSongDescription": {
-    "description": "Placeholder text for song description input"
+    "description": "Placeholder text for drama description input"
   },
   "placeholderLyrics": "Search podcasts or episodes...",
   "@placeholderLyrics": {
@@ -975,7 +975,7 @@
   },
   "placeholderImageToSong": "Describe the station or show mood...",
   "@placeholderImageToSong": {
-    "description": "Placeholder text for image to song input"
+    "description": "Placeholder text for image to drama input"
   },
   "readyToStartHeadline": "Live radio & podcasts worldwide",
   "@readyToStartHeadline": {
@@ -992,7 +992,7 @@
   },
   "songIdeasHeading": "Station ideas",
   "@songIdeasHeading": {
-    "description": "Section title above default song prompt chips"
+    "description": "Section title above default drama prompt chips"
   },
   "musicVideoIdeasHeading": "Podcast ideas",
   "@musicVideoIdeasHeading": {
@@ -1000,7 +1000,7 @@
   },
   "songIdeasCategoryAllGenres": "All genres / trending stations",
   "@songIdeasCategoryAllGenres": {
-    "description": "Subtitle chip category for generic song prompts"
+    "description": "Subtitle chip category for generic drama prompts"
   },
   "songIdeasCategoryTrending": "Trending shows",
   "@songIdeasCategoryTrending": {
@@ -1016,11 +1016,11 @@
   },
   "trending": "Trending",
   "@trending": {
-    "description": "Section title for trending songs"
+    "description": "Section title for trending dramas"
   },
   "popularThisWeek": "Popular This Week",
   "@popularThisWeek": {
-    "description": "Section title for popular songs column"
+    "description": "Section title for popular dramas column"
   },
   "paywallUnlockLine1": "Unlock",
   "@paywallUnlockLine1": {
@@ -1080,13 +1080,13 @@
   "@paywallHelpGotIt": {
     "description": "Dismiss button for Pro help dialog"
   },
-  "paywallSongsExplainerBody": "Pro unlocks ad-free listening, offline podcast downloads, premium radio stations, and high-quality streams.",
+  "paywallSongsExplainerBody": "Pro unlocks ad-free watching, offline episode downloads, VIP-only series, and high-quality streams.",
   "@paywallSongsExplainerBody": {
-    "description": "Short bullet explainer for free vs Pro song limits and ads on paywall"
+    "description": "Short bullet explainer for free vs Pro drama limits and ads on paywall"
   },
   "paywallSongsExplainerThanks": "Thanks 😊",
   "@paywallSongsExplainerThanks": {
-    "description": "Dismiss button for What are songs? dialog on paywall"
+    "description": "Dismiss button for What are dramas? dialog on paywall"
   },
   "paywallPlanYearly": "Yearly",
   "paywallPlanMonthly": "Monthly",
@@ -1172,41 +1172,49 @@
   "createYourOwnVoice": "Create Your Preset",
   "noSavedVoices": "Your saved presets will appear here",
   "settingsFaqDialogTitle": "Frequently asked questions",
+  "playerTutorialRow": "Player tutorial",
+  "@playerTutorialRow": {
+    "description": "Settings row that replays the one-time player gesture tutorial"
+  },
+  "playerTutorialReplayHint": "The gesture tutorial will play next time you open the player.",
+  "@playerTutorialReplayHint": {
+    "description": "Toast after tapping the Player tutorial settings row"
+  },
   "settingsFaqQ1": "What's included in the Free plan?",
-  "settingsFaqA1": "The Free plan lets you browse radio stations and podcasts, save favorites, and listen with standard streaming quality. Upgrade to Pro for ad-free listening, offline downloads, and premium stations.",
+  "settingsFaqA1": "The Free plan lets you browse short dramas, save favorites, and watch with standard streaming quality. Upgrade to Pro for ad-free watching, offline downloads, and VIP-only series.",
   "settingsFaqQ2": "What does Pro include?",
-  "settingsFaqA2": "Pro unlocks ad-free radio and podcasts, offline episode downloads, premium stations, high-quality streams, and unlimited presets and playlists.",
-  "settingsFaqQ3": "Can I download podcasts for offline listening?",
-  "settingsFaqA3": "Yes. Pro subscribers can download podcast episodes for offline listening on Wi‑Fi or mobile data, depending on your settings.",
-  "settingsFaqQ4": "Can I listen to live radio worldwide?",
-  "settingsFaqA4": "Yes. Browse 100,000+ live radio stations by genre, country, and language. Save presets and jump back to your favorites anytime.",
+  "settingsFaqA2": "Pro unlocks ad-free watching, offline episode downloads, VIP-only series, high-quality streams, and unlimited watchlist space.",
+  "settingsFaqQ3": "Can I download episodes to watch offline?",
+  "settingsFaqA3": "Yes. Pro subscribers can download episodes to watch offline, on Wi-Fi or mobile data, depending on your settings.",
+  "settingsFaqQ4": "Can I watch dramas from anywhere?",
+  "settingsFaqA4": "Yes. Browse short dramas by genre and language, save your favorites, and jump back in anytime.",
   "settingsFaqQ5": "What audio quality is available?",
-  "settingsFaqA5": "Free users get standard streaming quality. Pro includes high-quality streams for supported stations and podcasts.",
+  "settingsFaqA5": "Free users get standard streaming quality. Pro includes high-quality streams for supported series and episodes.",
   "settingsFaqQ6": "Can I cancel anytime?",
   "settingsFaqA6": "Yes. You can cancel your subscription whenever you want. You'll keep Pro access until the end of your current billing period.",
   "settingsFaqQ7": "Do you offer refunds?",
   "settingsFaqA7": "If you run into an issue, contact us and we'll help. Refund eligibility can vary depending on usage and billing; we'll review requests case-by-case.",
   "settingsFaqQ8": "Can I switch plans later?",
   "settingsFaqA8": "Yes. You can upgrade or downgrade at any time. Changes take effect immediately or at the next billing cycle depending on the plan change.",
-  "settingsFaqQ9": "How do podcast subscriptions work?",
-  "settingsFaqA9": "Subscribe to any podcast in one tap. New episodes appear in your library, and you can resume playback exactly where you left off.",
+  "settingsFaqQ9": "How does VIP work?",
+  "settingsFaqA9": "VIP unlocks every VIP-only series and episode while your subscription is active. New episodes appear in your library, and you can resume exactly where you left off.",
   "settingsFaqQ10": "How do playlists and presets work?",
-  "settingsFaqA10": "Save radio stations as presets, build playlists, and keep your listening history synced across sessions so you can continue where you stopped.",
+  "settingsFaqA10": "Save series to your list, keep your favorites close, and keep your viewing history synced across sessions so you can continue where you stopped.",
   "settingsFaqQ11": "Which content is Pro-only?",
-  "settingsFaqA11": "Some premium stations, offline downloads, ad-free listening, and high-quality streams require Pro. Free users can still explore most radio and podcast content.",
-  "proBudgetHelpTitle": "How Pro listening works",
+  "settingsFaqA11": "Some VIP-only series, offline downloads, ad-free watching, and high-quality streams require Pro. Free users can still explore most dramas and episodes.",
+  "proBudgetHelpTitle": "How Pro works",
   "@proBudgetHelpTitle": {
-    "description": "Title for Pro song credits help dialog"
+    "description": "Title for Pro reward credits help dialog"
   },
-  "proBudgetHelpBullet1": "Pro removes ads from radio and podcast playback and unlocks premium listening features.",
+  "proBudgetHelpBullet1": "Pro removes ads from episode playback and unlocks premium drama features.",
   "@proBudgetHelpBullet1": {
     "description": "Pro budget help dialog bullet 1"
   },
-  "proBudgetHelpBullet2": "Your saved stations, presets, and playlists stay synced while you listen across the app.",
+  "proBudgetHelpBullet2": "Your watchlist, favorites, and viewing history stay synced across the app.",
   "@proBudgetHelpBullet2": {
     "description": "Pro budget help dialog bullet 2"
   },
-  "proBudgetHelpBullet3": "Offline downloads let you save podcast episodes and listen without a connection.",
+  "proBudgetHelpBullet3": "Offline downloads let you save episodes and watch without a connection.",
   "@proBudgetHelpBullet3": {
     "description": "Pro budget help dialog bullet 3"
   },
@@ -1391,7 +1399,7 @@
   "@topUpSheetTitle": {
     "description": "Unified top-up paywall sheet title"
   },
-  "topUpBalanceHint": "Balance: {count} listening credits",
+  "topUpBalanceHint": "Balance: {count} coins",
   "@topUpBalanceHint": {
     "description": "Pro user unified credit balance on top-up sheet",
     "placeholders": {
@@ -1445,7 +1453,7 @@
     }
   },
   "topUpSignInRequired": "Please sign in to purchase top-ups.",
-  "proBudgetLongPressToast": "You still have {dailyLeft, plural, one{1 free listen} other{{dailyLeft} free listens}} left today, and {topUpLeft, plural, one{1 bonus listen} other{{topUpLeft} bonus listens}} ready when you need them.",
+  "proBudgetLongPressToast": "You still have {dailyLeft, plural, one{1 free episode} other{{dailyLeft} free episodes}} left today, and {topUpLeft, plural, one{1 bonus episode} other{{topUpLeft} bonus episodes}} ready when you need them.",
   "@proBudgetLongPressToast": {
     "description": "Toast when long-pressing Pro badge; daily and top-up counts",
     "placeholders": {
@@ -1482,4 +1490,3 @@
     "description": "Dismiss optional update dialog"
   }
 }
-

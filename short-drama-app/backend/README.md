@@ -22,11 +22,37 @@ Env vars (see `.env.example`): `PORT` (8080), `JWT_SECRET` (dev default `dev-onl
 These economy env vars only seed the **settings store** (see below) — after first boot the
 admin-editable store values win.
 
-## ⚠️ Dev auth warning
-With `FIREBASE_AUTH_DEV=1`, `POST /auth/firebase` accepts **any** non-empty `idToken`: if it looks like a JWT its
-`sub`/`email`/`name` claims are used, otherwise a stable user is derived from a hash of the token.
-**Production must verify the Firebase ID token** via the Firebase Admin SDK or Google's public keys
-(aud/iss checks) — see the `TODO(production)` comment in `src/auth.js`. Never ship dev mode.
+## Auth modes (`POST /auth/firebase`)
+Three modes, selected by env (see `auth.firebaseAuthMode`):
+- **Real Firebase verification (production)** — set `FIREBASE_PROJECT_ID=<your-project-id>`. ID tokens are
+  verified properly in `src/firebase.js`: RS256 signature against Google's public JWKS
+  (`https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com`, fetched with
+  `node:https` and cached per Cache-Control), `iss=https://securetoken.firebaseio.com/<project>`,
+  `aud=<project>`, `exp`/`iat` checked. No Admin SDK, no npm deps. `FIREBASE_JWKS_URL` can override the JWKS
+  endpoint (used by tests with a local stub keypair). The only remaining human step is creating the Firebase
+  project and putting its id in the env — the code path is complete.
+- **Dev mode** — only with `AUTH_DEV_MODE=1` (or the legacy `FIREBASE_AUTH_DEV=1`): accepts **any** non-empty
+  `idToken`; if it looks like a JWT its `sub`/`email`/`name` claims are used, otherwise a stable user is
+  derived from a hash of the token. ⚠️ Never ship dev mode.
+- **Default (neither set)** — the endpoint rejects with `501 AUTH_NOT_CONFIGURED`, like production.
+
+## Rate limiting
+In-memory sliding-window limiter (`src/ratelimit.js`), keyed by client IP:
+`POST /api/v1/auth/*` — `RATE_LIMIT_AUTH_MAX` (default 60) per `RATE_LIMIT_AUTH_WINDOW_MS` (default 1h;
+tighten toward ~30 in production); all other `/api/v1/*` — `RATE_LIMIT_API_MAX` (default 600) per
+`RATE_LIMIT_API_WINDOW_MS` (default 10 min). Blocked requests return `429 {error:{code:'RATE_LIMITED'}}`
+with a `Retry-After` header. State is per-process (resets on restart, not shared across replicas) — mirror
+the same limits on your reverse proxy / Firebase App Check for multi-instance deployments.
+
+## Signed playback URLs
+When `PLAYBACK_SIGNING_SECRET` is set, `GET /episodes/:id/playback` additionally returns
+`playbackToken {exp, sig}` and a ready-made `signedVideoUrl` (the media URL plus `?exp=&sig=`).
+`sig` is base64url HMAC-SHA256 over `${episodeId}.${userId}.${exp}`; `exp` is a Unix timestamp
+(`PLAYBACK_URL_TTL_SECONDS`, default 3600). **Enforcement belongs at the edge:** put the media files behind
+a CDN or reverse proxy that requires `exp`/`sig` on every media request and validates them — either by
+calling `GET /api/v1/playback/verify?episodeId=&userId=&exp=&sig=` (200 = valid, 403 = invalid/expired)
+or by recomputing the same HMAC at the edge with the shared secret. Without the secret set, playback
+responses are unchanged and the verify endpoint returns 404.
 
 ## Pointing the Flutter app at this server
 Set Firebase Remote Config **`api_base_url`** to this server's origin (e.g. `http://10.0.2.2:8080` for an Android

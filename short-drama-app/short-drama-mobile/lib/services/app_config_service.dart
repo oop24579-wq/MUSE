@@ -51,6 +51,10 @@ class AppConfigService {
   bool get captionsEnabled => feature('captions');
   bool get maintenanceMode => _maintenanceMode;
 
+  /// Launch-paywall frequency cap (`paywall_daily_cap` in GET /config):
+  /// defaults to ON when the config has not loaded or the request failed.
+  bool get paywallDailyCap => feature('paywall_daily_cap');
+
   /// `premium_playback_mode` from `GET /config` (`disabled` |
   /// `premium_content` | `all_playback`); '' when not loaded yet.
   String get premiumPlaybackMode => _premiumPlaybackMode;

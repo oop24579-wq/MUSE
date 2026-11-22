@@ -27,6 +27,16 @@ function send(res, status, obj) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Platform, X-Locale, X-App-Version, X-Device-Id, X-Admin-Token', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS' });
   res.end(body);
 }
+// ---- Signed playback URLs (CODE_READINESS item 3) ----
+// When PLAYBACK_SIGNING_SECRET is set, playback responses additionally carry
+// an expiring HMAC token binding episode+user+expiry. A CDN or reverse
+// proxy in front of the media files should require ?exp=&sig= and validate
+// it against GET /api/v1/playback/verify (or recompute the same HMAC —
+// SHA-256 over `${episodeId}.${userId}.${exp}`, base64url — at the edge).
+const playbackSecret = () => process.env.PLAYBACK_SIGNING_SECRET || '';
+function playbackSig(episodeId, userId, exp) {
+  return crypto.createHmac('sha256', playbackSecret()).update(`${episodeId}.${userId}.${exp}`).digest('base64url');
+}
 // ---- serializers (exact app model fields) ----
 // ---- Phase 2 helpers: XP/levels, streaks, events, missions, daily events ----
 const referralCodeFor = (id) => 'HD' + crypto.createHash('sha256').update(String(id)).digest('hex').slice(0, 10).toUpperCase();
@@ -37,8 +47,64 @@ function levelFromXp(xp) { let L = 1; while (xpForLevel(L + 1) <= (xp || 0)) L++
 function awardXp(userId, n) { if (n) run('UPDATE users SET xp=COALESCE(xp,0)+? WHERE id=?', n, userId); }
 function dateShift(isoDate, days) { const d = new Date(isoDate + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
 function checkinDateSet(userId) { return new Set(all('SELECT claimDate FROM checkins WHERE userId=?', userId).map((r) => r.claimDate)); }
-function streakEnding(userId, endDate) { const set = checkinDateSet(userId); let n = 0; let d = endDate; while (set.has(d)) { n++; d = dateShift(d, -1); } return n; }
-function currentStreak(userId) { const set = checkinDateSet(userId); if (set.has(today())) return streakEnding(userId, today()); return streakEnding(userId, dateShift(today(), -1)); }
+function dayDiff(a, b) { return Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / 86400e3); }
+/**
+ * Streak run anchored at `endDate`, WITH the 1-day grace (CODE_READINESS
+ * item 5): walking backwards, a single missed day inside the run is
+ * forgiven — it pauses the streak instead of resetting it, and the missed
+ * day does NOT count toward the streak length. A second missed day ends
+ * the run. Returns {streak (claimed days only), gapUsed}.
+ */
+function streakRun(userId, endDate) {
+  const set = checkinDateSet(userId);
+  let streak = 0; let gapUsed = false; let d = endDate;
+  while (true) {
+    if (set.has(d)) { streak++; d = dateShift(d, -1); continue; }
+    // A missing day consumes the grace only when the run RESUMES after it
+    // (a claimed day exists on the far side). A missing day that simply
+    // ends the run is its start boundary — no grace spent there.
+    if (!gapUsed && streak > 0 && set.has(dateShift(d, -1))) { gapUsed = true; d = dateShift(d, -1); continue; }
+    break;
+  }
+  return { streak, gapUsed };
+}
+function lastClaimDate(userId) { const r = get('SELECT MAX(claimDate) d FROM checkins WHERE userId=?', userId); return r ? r.d : null; }
+/**
+ * Full streak status for today. The run stays ALIVE while at most one day
+ * has been missed since the last claim (gap = full days between the last
+ * claim and today: 0 claimed today, 1 claimed yesterday, 2 = exactly one
+ * missed day). Missing 2+ days (gap >= 3) resets the streak to 0.
+ *  - graceAvailable: the streak is alive and the user still has their one
+ *    free miss unused (an internal gap not yet consumed and gap <= 1).
+ *  - streakAtRisk: the streak dies if the user does not check in today
+ *    (the grace is already consumed, or today is the last grace day).
+ */
+function streakStatus(userId) {
+  const t = today();
+  const last = lastClaimDate(userId);
+  if (!last) return { streak: 0, alive: false, gapUsed: false, daysSinceLastClaim: null, graceAvailable: false, streakAtRisk: false, claimedToday: false };
+  const gap = dayDiff(t, last);
+  const run = streakRun(userId, last);
+  const alive = gap <= 2 && run.streak > 0;
+  return {
+    streak: alive ? run.streak : 0,
+    alive,
+    gapUsed: run.gapUsed,
+    daysSinceLastClaim: gap,
+    graceAvailable: alive && !run.gapUsed && gap <= 1,
+    streakAtRisk: alive && gap !== 0 && (gap >= 2 || run.gapUsed),
+    claimedToday: gap === 0,
+  };
+}
+function currentStreak(userId) { return streakStatus(userId).streak; }
+/** Streak (claimed days) as it stood before today's check-in — the ladder position base. */
+function streakBeforeToday(userId) {
+  const last = lastClaimDate(userId);
+  if (!last) return 0;
+  const gap = dayDiff(today(), last);
+  if (gap < 1 || gap > 2) return 0; // claimed today (guarded by caller) or 2+ days missed -> reset
+  return streakRun(userId, last).streak;
+}
 function activeEvent() {
   const t = now();
   // NULL bounds are open-ended (an event with no end date must still fire).
@@ -159,9 +225,10 @@ function deleteUserRows(userId) { for (const t of USER_TABLES) run(`DELETE FROM 
 
 function rewardsState(user) {
   const claimedToday = !!get('SELECT 1 x FROM checkins WHERE userId=? AND claimDate=?', user.id, today());
-  // The 7-day ladder follows the CONSECUTIVE streak (a missed day restarts it
-  // at Day 1) — it previously advanced on lifetime claim count, so a broken
-  // streak never reset the ladder.
+  // The 7-day ladder follows the streak WITH the 1-day grace (streakStatus):
+  // one missed day pauses it, 2+ missed days restart it at Day 1 — it
+  // previously advanced on lifetime claim count, so a broken streak never
+  // reset the ladder.
   const streakNow = currentStreak(user.id);
   const cyclePos = claimedToday ? (streakNow - 1) % 7 : streakNow % 7; // days of this cycle already claimed before today
   const currentDay = cyclePos + 1;
@@ -200,7 +267,12 @@ function rewardsState(user) {
         claimed: !!get('SELECT 1 x FROM mission_claims WHERE userId=? AND slug=? AND claimDate=?', user.id, ms.slug, today()) };
     }) : [];
   const ev = activeEvent();
+  const streakInfo = streakStatus(user.id);
   return { coinBalance: fresh.coinBalance, claimedToday, currentDay, days, tasks,
+    // Streak grace (item 5): the app warns when streakAtRisk is true and can
+    // advertise the free miss while graceAvailable is true.
+    graceAvailable: streakInfo.graceAvailable, streakAtRisk: streakInfo.streakAtRisk,
+    daysSinceLastClaim: streakInfo.daysSinceLastClaim,
     wheel: { enabled: !!settings.getSetting('wheel_enabled'), spinsLeft, freeSpinsPerDay: freePerDay, segments: settings.getSetting('wheel_segments'), extraSpinCost: settings.getSetting('wheel_extra_spin_cost') },
     chests, watchTime: { enabled: !!settings.getSetting('watch_time_enabled'), minutesToday: wt.minutesToday, coinsPerBlock: wt.perBlock, blockMinutes: wt.blockMinutes, claimableCoins: wt.claimableCoins, claimedCoinsToday: wt.alreadyPaid, dailyCapCoins: wt.cap },
     missions, currentStreak: currentStreak(user.id), xp, level, nextLevelXp: 100 * level * level,
@@ -218,6 +290,7 @@ async function handle(req, res, url, body) {
     const S = settings.getSettings();
     return ok(res, {
       maintenanceMode: !!S.maintenance_mode, premiumPlaybackMode: S.premium_playback_mode,
+      paywallDailyCap: !!S.paywall_daily_cap,
       features: {
         swipe_next_episode: !!S.player_swipe_next_episode, double_tap_seek: !!S.player_double_tap_seek,
         long_press_2x: !!S.player_long_press_2x, edge_brightness_volume: !!S.player_edge_brightness_volume,
@@ -228,6 +301,7 @@ async function handle(req, res, url, body) {
         share_moment: !!S.player_share_moment, captions: !!S.captions_enabled,
         wheel: !!S.wheel_enabled, chests: !!S.chests_enabled, missions: !!S.missions_enabled,
         referrals: !!S.referrals_enabled, watch_time: !!S.watch_time_enabled, ads: !!S.ads_enabled,
+        paywall_daily_cap: !!S.paywall_daily_cap,
       },
       player: { skipIntroWindowSeconds: S.skip_intro_window_seconds, skipIntroToSeconds: S.skip_intro_to_seconds, autoNextCountdownSeconds: S.auto_next_countdown_seconds },
       visual: { defaultThemePreset: S.default_theme_preset, confettiEnabled: !!S.confetti_enabled, hapticsEnabled: !!S.haptics_enabled, accentColorOverride: S.accent_color_override },
@@ -236,11 +310,34 @@ async function handle(req, res, url, body) {
   }
   // ---------- MAINTENANCE MODE (settings store; admin API is a separate handler and stays up) ----------
   if (settings.getSetting('maintenance_mode')) return err(res, 503, 'MAINTENANCE', 'HERO DRAMA is temporarily down for maintenance. Please try again soon!');
+  // ---------- PLAYBACK TOKEN VERIFY (public: a CDN/reverse proxy calls this; the HMAC is the credential) ----------
+  if (req.method === 'GET' && p === '/playback/verify') {
+    if (!playbackSecret()) return err(res, 404, 'NOT_FOUND', 'Playback signing is not enabled');
+    const episodeId = q.get('episodeId') || ''; const userId = q.get('userId') || '';
+    const exp = parseInt(q.get('exp') || '0', 10); const sig = q.get('sig') || '';
+    const expect = Buffer.from(playbackSig(episodeId, userId, exp));
+    const given = Buffer.from(sig);
+    const valid = given.length === expect.length && crypto.timingSafeEqual(given, expect)
+      && Number.isInteger(exp) && exp > Math.floor(Date.now() / 1000);
+    if (!valid) return err(res, 403, 'INVALID_SIGNATURE', 'Playback token is invalid or expired');
+    return ok(res, { valid: true, episodeId, userId, exp });
+  }
   // ---------- AUTH ----------
   if (req.method === 'POST' && p === '/auth/firebase') {
-    if (process.env.FIREBASE_AUTH_DEV !== '1') return err(res, 501, 'AUTH_NOT_CONFIGURED', 'Production Firebase verification not configured (set FIREBASE_AUTH_DEV=1 for dev)');
+    // Mode gate (auth.firebaseAuthMode): real RS256 verification when
+    // FIREBASE_PROJECT_ID is set; explicit dev mode only via AUTH_DEV_MODE=1
+    // (or legacy FIREBASE_AUTH_DEV=1); otherwise 501 like production.
+    const authMode = auth.firebaseAuthMode();
+    if (authMode === 'none') return err(res, 501, 'AUTH_NOT_CONFIGURED', 'Firebase verification not configured (set FIREBASE_PROJECT_ID, or AUTH_DEV_MODE=1 for local dev)');
     if (!body.idToken) return err(res, 400, 'VALIDATION', 'idToken is required');
-    const claims = auth.devDecodeFirebaseToken(body.idToken);
+    let claims;
+    if (authMode === 'dev') {
+      claims = auth.devDecodeFirebaseToken(body.idToken);
+    } else {
+      try { claims = await auth.verifyFirebaseIdToken(body.idToken); }
+      catch (e) { console.error('[auth] Firebase verification error', e); claims = null; }
+      if (!claims) return err(res, 401, 'INVALID_TOKEN', 'Firebase ID token could not be verified');
+    }
     let user = get('SELECT * FROM users WHERE firebaseUid=?', claims.firebaseUid);
     if (!user) {
       const id = auth.uid(); const t = now();
@@ -436,7 +533,15 @@ async function handle(req, res, url, body) {
     // Quality ladder: all entries currently point at the resolved videoUrl/dub URL —
     // real per-quality transcodes plug in here when a transcoder is added.
     const qualities = ['1080p', '720p', '480p', '360p'].map((label) => ({ label, url: resolvedUrl }));
-    return ok(res, { videoUrl: resolvedUrl, qualities, captionLanguages: captions.readyLanguages(e.id) });
+    const out = { videoUrl: resolvedUrl, qualities, captionLanguages: captions.readyLanguages(e.id) };
+    if (playbackSecret()) {
+      const ttl = parseInt(process.env.PLAYBACK_URL_TTL_SECONDS || '3600', 10) || 3600;
+      const exp = Math.floor(Date.now() / 1000) + ttl;
+      const sig = playbackSig(e.id, user.id, exp);
+      out.playbackToken = { exp, sig };
+      out.signedVideoUrl = `${resolvedUrl}${resolvedUrl.includes('?') ? '&' : '?'}exp=${exp}&sig=${sig}`;
+    }
+    return ok(res, out);
   }
   // ---------- CAPTIONS (raw WebVTT is NOT the JSON envelope — the player fetches it raw) ----------
   if (req.method === 'GET' && (m = /^\/episodes\/([^/]+)\/captions(?:\/([^/]+))?$/.exec(p))) {
@@ -574,15 +679,16 @@ async function handle(req, res, url, body) {
   if (req.method === 'GET' && p === '/rewards') return ok(res, rewardsState(user));
   if (req.method === 'POST' && p === '/rewards/checkin') {
     if (get('SELECT 1 x FROM checkins WHERE userId=? AND claimDate=?', user.id, today())) return ok(res, { success: false, coins: 0 });
-    // The ladder day follows the CONSECUTIVE streak (see rewardsState): a
-    // missed day restarts at Day 1 instead of advancing on lifetime count.
-    const streakBeforeToday = streakEnding(user.id, dateShift(today(), -1));
-    const dayIndex = (streakBeforeToday % 7) + 1;
+    // The ladder day follows the streak WITH the 1-day grace (see
+    // streakStatus): missing exactly one day pauses the ladder, missing
+    // 2+ restarts it at Day 1 instead of advancing on lifetime count.
+    const streakBefore = streakBeforeToday(user.id);
+    const dayIndex = (streakBefore % 7) + 1;
     // Payout: round((base + (level-1)*levelBonus + min(streak, streakCap)*streakBonus) * eventMultiplier)
     const level = levelFromXp(user.xp || 0);
     const coins = Math.round((sCheckin()[dayIndex - 1]
       + (level - 1) * settings.getSetting('checkin_level_bonus')
-      + Math.min(streakBeforeToday, settings.getSetting('checkin_streak_cap')) * settings.getSetting('checkin_streak_bonus')) * eventMultiplier());
+      + Math.min(streakBefore, settings.getSetting('checkin_streak_cap')) * settings.getSetting('checkin_streak_bonus')) * eventMultiplier());
     tx(() => {
       run('INSERT INTO checkins(userId,claimDate,dayIndex,coins,createdAt) VALUES(?,?,?,?,?)', user.id, today(), dayIndex, coins, now());
       grantCoins(user.id, coins, 'checkin', String(dayIndex));

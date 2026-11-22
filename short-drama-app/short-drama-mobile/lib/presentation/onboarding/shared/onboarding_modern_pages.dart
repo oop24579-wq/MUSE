@@ -20,7 +20,7 @@ List<OnboardingPageContent> modernOnboardingPages(BuildContext context) {
       title: 'Bite-Sized Drama',
       description: 'Addictive stories told in fast, vertical episodes.',
       icon: Icons.play_circle_fill_rounded,
-      imageAsset: 'assets/images/onboarding/onboarding_ai_songs.png',
+      imageAsset: 'assets/images/onboarding/onboarding_welcome.png',
       accentColor: AppTheme.accentBlueLight,
     ),
     OnboardingPageContent(
@@ -34,7 +34,7 @@ List<OnboardingPageContent> modernOnboardingPages(BuildContext context) {
       title: 'Earn & Unlock',
       description: 'Collect daily coins and unlock premium episodes.',
       icon: Icons.card_giftcard_rounded,
-      imageAsset: 'assets/images/onboarding/onboarding_ai_music_videos.png',
+      imageAsset: 'assets/images/onboarding/onboarding_welcome.png',
       accentColor: AppTheme.accentBlueMuted,
     ),
   ];

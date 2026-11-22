@@ -16,6 +16,7 @@ import '../../models/drama/playback_model.dart';
 import '../../models/drama/series_model.dart';
 import '../../providers/drama/drama_providers.dart';
 import '../../services/app_config_service.dart';
+import '../../services/player_tutorial.dart';
 import '../../services/drama/drama_entitlement_service.dart';
 import '../../services/drama/drama_service.dart';
 import '../../services/drama/playback_service.dart';
@@ -32,6 +33,7 @@ import 'widgets/player/edge_hud.dart';
 import 'widgets/player/lock_overlay.dart';
 import 'widgets/player/player_platform_service.dart';
 import 'widgets/player/seek_ripple.dart';
+import 'widgets/player_tutorial_overlay.dart';
 
 class EpisodePlayerScreen extends ConsumerStatefulWidget {
   const EpisodePlayerScreen({
@@ -72,6 +74,9 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
 
   /// In-flight guard for the unlock action (double-tap = double charge).
   bool _unlocking = false;
+
+  /// One-time gesture coach-mark overlay (CODE_READINESS item 8).
+  bool _showTutorial = false;
 
   /// Whether this series is in My List (episode-sheet button state).
   bool _inMyList = false;
@@ -181,7 +186,23 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     _loadPrefs();
     _loadHistory();
     _loadMyListState();
+    _maybeShowTutorial();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  /// Show the gesture coach marks on first open (or when replayed from
+  /// Settings). Playback is never blocked on this — failures just skip it.
+  Future<void> _maybeShowTutorial() async {
+    try {
+      if (await PlayerTutorial.shouldShowOnPlayerOpen() && mounted) {
+        setState(() => _showTutorial = true);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _dismissTutorial() async {
+    if (mounted) setState(() => _showTutorial = false);
+    await PlayerTutorial.markSeen();
   }
 
   Future<void> _loadMyListState() async {
@@ -1081,6 +1102,10 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                   setState(() => _controlsLocked = false);
                 },
               ),
+
+            // One-time gesture coach marks (item 8) — topmost layer.
+            if (_showTutorial)
+              PlayerTutorialOverlay(onDismiss: _dismissTutorial),
           ],
         ),
       ),
@@ -1224,7 +1249,8 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                   ),
                 ),
                 if (_cfg.feature('quality_selector') &&
-                    (_playback?.qualities.isNotEmpty ?? false)) ...[
+                    _playback != null &&
+                    qualityMenuVisible(_playback!.qualities)) ...[
                   GestureDetector(
                     onTap: _showQualitySheet,
                     child: Container(

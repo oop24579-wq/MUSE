@@ -222,7 +222,7 @@ await testCase(112, 'two devices, one user: devices tracked; 5 parallel check-in
   const wins = results.filter((r) => r.json && r.json.data && r.json.data.success === true);
   assertEq(wins.length, 1, 'exactly one of 5 parallel check-ins may pay');
   const coins = await req('GET', '/me/coins', { token: u1.tokens.accessToken });
-  assertEq(coins.json.data.balance, 50, 'balance = 30 welcome + 20 day-1 checkin, paid once');
+  assertEq(coins.json.data.balance, 40, 'balance = 30 welcome + 10 day-1 checkin (rebalanced ladder), paid once');
 });
 
 // ---------- streak / date logic (check-in rows seeded straight into the DB) ----------
@@ -239,27 +239,33 @@ await testCase(113, 'streak day 2: yesterday checked in -> payout = day-2 amount
   const r = await req('POST', '/rewards/checkin', { token: u.tokens.accessToken });
   assertEq(r.status, 200, 'checkin status');
   assertEq(r.json.data.success, true, 'checkin succeeds');
-  assertEq(r.json.data.coins, 52, 'day-2 base 50 + min(1,7)*2 streak bonus = 52');
+  assertEq(r.json.data.coins, 22, 'day-2 base 20 (rebalanced ladder) + min(1,7)*2 streak bonus = 22');
   const st = await req('GET', '/rewards', { token: u.tokens.accessToken });
   assertEq(st.json.data.currentStreak, 2, 'currentStreak');
   assertEq(st.json.data.currentDay, 2, 'currentDay');
   assert(st.json.data.days[0].claimed && st.json.data.days[1].claimed, 'days 1-2 claimed');
   assertEq(st.json.data.days[2].claimed, false, 'day 3 not claimed');
 });
-await testCase(114, 'broken streak: check-ins at -3,-2 only -> ladder restarts at day 1 (pays 20)', async () => {
+await testCase(114, 'streak grace (CODE_READINESS item 5): check-ins at -3,-2, one day missed -> streak PAUSED, ladder resumes at day 3', async () => {
+  // Was "broken streak restarts at day 1" before the grace day existed:
+  // missing exactly one day now pauses the streak instead of resetting it.
+  // (A 2+ day gap still resets — covered by suite 3, case 221.)
   const u = await mkUser('critic-streak-broken-token');
   seedCheckins(u.user.id, [-3, -2]);
+  const before = await req('GET', '/rewards', { token: u.tokens.accessToken });
+  assertEq(before.json.data.currentStreak, 2, 'streak preserved at 2 through the missed day');
+  assertEq(before.json.data.streakAtRisk, true, 'streak at risk: grace consumed');
   const r = await req('POST', '/rewards/checkin', { token: u.tokens.accessToken });
-  assertEq(r.json.data.coins, 20, 'day-1 amount, no streak bonus');
+  assertEq(r.json.data.coins, 19, 'ladder day 3 (15) + streak bonus min(2,7)*2 = 19');
   const st = await req('GET', '/rewards', { token: u.tokens.accessToken });
-  assertEq(st.json.data.currentStreak, 1, 'streak restarts at 1');
-  assertEq(st.json.data.currentDay, 1, 'currentDay back to 1');
+  assertEq(st.json.data.currentStreak, 3, 'streak resumes at 3 (missed day not counted)');
+  assertEq(st.json.data.currentDay, 3, 'currentDay resumes at 3');
 });
-await testCase(115, '7-day streak wraps the ladder: day 8 pays day-1 amount + capped streak bonus (34)', async () => {
+await testCase(115, '7-day streak wraps the ladder: day 8 pays day-1 amount + capped streak bonus (24)', async () => {
   const u = await mkUser('critic-streak-7-token');
   seedCheckins(u.user.id, [-1, -2, -3, -4, -5, -6, -7]);
   const r = await req('POST', '/rewards/checkin', { token: u.tokens.accessToken });
-  assertEq(r.json.data.coins, 34, 'day-1 base 20 + min(7,7)*2 = 34');
+  assertEq(r.json.data.coins, 24, 'day-1 base 10 (rebalanced ladder) + min(7,7)*2 = 24');
   const st = await req('GET', '/rewards', { token: u.tokens.accessToken });
   assertEq(st.json.data.currentStreak, 8, 'streak counts all 8 days');
   assertEq(st.json.data.currentDay, 1, 'ladder wrapped to a new cycle');
@@ -314,12 +320,12 @@ await testCase(119, 'overlapping events: the HIGHEST active multiplier wins chec
   try {
     const u1 = await mkUser('critic-event-hi-token');
     const c1 = await req('POST', '/rewards/checkin', { token: u1.tokens.accessToken });
-    assertEq(c1.json.data.coins, 60, 'day-1 20 x highest multiplier 3 = 60');
+    assertEq(c1.json.data.coins, 30, 'day-1 10 (rebalanced ladder) x highest multiplier 3 = 30');
     const del = await req('DELETE', `/events/${e3.json.data.id}`, { admin: true });
     assertEq(del.status, 200, 'delete x3 event');
     const u2 = await mkUser('critic-event-lo-token');
     const c2 = await req('POST', '/rewards/checkin', { token: u2.tokens.accessToken });
-    assertEq(c2.json.data.coins, 40, 'with x3 gone, x2 applies: 20 x 2 = 40');
+    assertEq(c2.json.data.coins, 20, 'with x3 gone, x2 applies: 10 x 2 = 20');
   } finally {
     await req('DELETE', `/events/${e2.json.data.id}`, { admin: true });
     await req('DELETE', `/events/${e3.json.data.id}`, { admin: true });

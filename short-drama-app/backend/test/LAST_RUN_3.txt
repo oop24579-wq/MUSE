@@ -1,0 +1,25 @@
+PASS 201. firebase unit: valid RS256 token verifies and maps claims
+PASS 202. firebase unit: wrong aud -> null
+PASS 203. firebase unit: wrong iss -> null
+PASS 204. firebase unit: expired token -> null
+PASS 205. firebase unit: token signed by a different key -> null
+PASS 206. firebase unit: unknown kid -> null
+PASS 207. firebase unit: tampered payload -> null; garbage -> null
+PASS 208. ratelimit unit: sliding window blocks after max and is per-key
+PASS 209. firebase HTTP: valid token logs in, welcome bonus 30, profile mapped
+PASS 210. firebase HTTP: forged token (wrong key) -> 401 INVALID_TOKEN
+PASS 211. firebase HTTP: expired token -> 401; dev-style plain token -> 401
+PASS 212. auth default mode: POST /auth/firebase -> 501 AUTH_NOT_CONFIGURED
+PASS 213. rate limit: auth bucket allows 3, 4th POST /auth/* -> 429 RATE_LIMITED + Retry-After
+PASS 214. rate limit: general API bucket blocks after RATE_LIMIT_API_MAX
+PASS 215. playback signing: response carries playbackToken + signedVideoUrl when secret set
+PASS 216. playback verify: valid token -> 200 valid:true
+PASS 217. playback verify: tampered sig -> 403; expired-but-valid sig -> 403
+PASS 218. playback signing OFF (no secret): no playbackToken field, verify -> 404
+PASS 219. streak grace: consecutive days — streak counts, check-in pays ladder day 3 + streak bonus
+PASS 220. streak grace: exactly one missed day PRESERVES the streak (pause, not reset)
+PASS 221. streak grace: two missed days RESET the streak
+PASS 222. streak grace: a gap INSIDE the run is forgiven once (claimed days only count)
+
+SUMMARY: total=22 passed=22 failed=0
+RESULT: ALL PASS

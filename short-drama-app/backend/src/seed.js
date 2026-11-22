@@ -15,8 +15,8 @@ const VIDEOS = [
   'https://storage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4',
   'https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
 ];
-// Exact app default: lib/models/drama/reward_models.dart kDailyCheckinRewards
-const CHECKIN = [20, 50, 35, 30, 35, 20, 50];
+// Mirrors settings.js CHECKIN_DEFAULT (rebalanced 2026-11-22, CODE_READINESS item 4)
+const CHECKIN = [10, 20, 15, 15, 20, 10, 30];
 const GENRES = [
   ['genre-romance', 'romance', 'Romance', 'Love stories that melt hearts', '#E63A6E'],
   ['genre-revenge', 'revenge', 'Revenge', 'Sweet payback, served cold', '#B71C1C'],
@@ -42,22 +42,25 @@ const CAST = [
   ['person-wang-hao', 'wang-hao', 'Wang Hao', 'male'], ['person-liu-yan', 'liu-yan', 'Liu Yan', 'female'],
   ['person-zhang-min', 'zhang-min', 'Zhang Min', 'female'], ['person-zhao-lei', 'zhao-lei', 'Zhao Lei', 'male'],
 ];
+// Coin values rebalanced 2026-11-22 (CODE_READINESS item 4): one-shot
+// starter tasks paid 140 unverified coins on day 1; they now pay a token
+// amount, and milestone tasks scale with real effort.
 const TASKS = [
-  ['connect_email', 'Connect your email', 'Link an email to secure your account', 50, 'connect_email', 1, 1],
-  ['rate_app', 'Rate HERO DRAMA', 'Leave a rating in the store', 30, 'rate_app', 2, 1],
-  ['invite_friend', 'Invite a friend', 'Share HERO DRAMA with a friend', 40, 'invite_friend', 3, 1],
-  ['enable_notifications', 'Turn on notifications', 'Never miss a new episode', 20, 'enable_notifications', 4, 1],
-  ['series_watch_3', 'Watch 3 dramas', 'Start 3 different series', 30, 'watch_episodes', 10, 3],
-  ['series_watch_10', 'Watch 10 dramas', 'Start 10 different series', 80, 'watch_episodes', 11, 10],
-  ['series_watch_25', 'Watch 25 dramas', 'Start 25 different series', 200, 'watch_episodes', 12, 25],
-  ['series_collect_5', 'Collect 5 dramas', 'Add 5 series to My List', 50, 'collect_series', 13, 5],
+  ['connect_email', 'Connect your email', 'Link an email to secure your account', 5, 'connect_email', 1, 1],
+  ['rate_app', 'Rate HERO DRAMA', 'Leave a rating in the store', 5, 'rate_app', 2, 1],
+  ['invite_friend', 'Invite a friend', 'Share HERO DRAMA with a friend', 10, 'invite_friend', 3, 1],
+  ['enable_notifications', 'Turn on notifications', 'Never miss a new episode', 5, 'enable_notifications', 4, 1],
+  ['series_watch_3', 'Watch 3 dramas', 'Start 3 different series', 15, 'watch_episodes', 10, 3],
+  ['series_watch_10', 'Watch 10 dramas', 'Start 10 different series', 40, 'watch_episodes', 11, 10],
+  ['series_watch_25', 'Watch 25 dramas', 'Start 25 different series', 100, 'watch_episodes', 12, 25],
+  ['series_collect_5', 'Collect 5 dramas', 'Add 5 series to My List', 20, 'collect_series', 13, 5],
 ];
 const MISSIONS = [
   // slug, title, description, metric, target, coins, sortOrder
   ['watch_3_episodes', 'Watch 3 episodes', 'Watch 3 different episodes today', 'watch_episodes', 3, 20, 1],
-  ['watch_15_minutes', 'Watch 15 minutes', 'Watch for 15 minutes today', 'watch_minutes', 15, 25, 2],
-  ['like_3_series', 'Like 3 series', 'Like 3 series today', 'likes', 3, 15, 3],
-  ['share_1_series', 'Share a series', 'Share a series today', 'shares', 1, 15, 4],
+  ['watch_15_minutes', 'Watch 15 minutes', 'Watch for 15 minutes today', 'watch_minutes', 15, 5, 2],
+  ['like_3_series', 'Like 3 series', 'Like 3 series today', 'likes', 3, 5, 3],
+  ['share_1_series', 'Share a series', 'Share a series today', 'shares', 1, 5, 4],
   ['daily_checkin', 'Daily check-in', 'Check in today', 'checkin', 1, 10, 5],
 ];
 function seedMissions() {

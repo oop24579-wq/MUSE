@@ -168,7 +168,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsProfileSongBalanceHint =>
-      'Pro listening perks available on your account.';
+      'Pro drama perks are available on your account.';
 
   @override
   String get settingsGetFreeSongsRow => 'Get Pro perks';
@@ -845,7 +845,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get paywallSongsExplainerBody =>
-      'Pro unlocks ad-free listening, offline podcast downloads, premium radio stations, and high-quality streams.';
+      'Pro unlocks ad-free watching, offline episode downloads, VIP-only series, and high-quality streams.';
 
   @override
   String get paywallSongsExplainerThanks => 'Thanks 😊';
@@ -995,39 +995,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsFaqDialogTitle => 'Frequently asked questions';
 
   @override
+  String get playerTutorialRow => 'Player tutorial';
+
+  @override
+  String get playerTutorialReplayHint =>
+      'The gesture tutorial will play next time you open the player.';
+
+  @override
   String get settingsFaqQ1 => 'What\'s included in the Free plan?';
 
   @override
   String get settingsFaqA1 =>
-      'The Free plan lets you browse radio stations and podcasts, save favorites, and listen with standard streaming quality. Upgrade to Pro for ad-free listening, offline downloads, and premium stations.';
+      'The Free plan lets you browse short dramas, save favorites, and watch with standard streaming quality. Upgrade to Pro for ad-free watching, offline downloads, and VIP-only series.';
 
   @override
   String get settingsFaqQ2 => 'What does Pro include?';
 
   @override
   String get settingsFaqA2 =>
-      'Pro unlocks ad-free radio and podcasts, offline episode downloads, premium stations, high-quality streams, and unlimited presets and playlists.';
+      'Pro unlocks ad-free watching, offline episode downloads, VIP-only series, high-quality streams, and unlimited watchlist space.';
 
   @override
-  String get settingsFaqQ3 => 'Can I download podcasts for offline listening?';
+  String get settingsFaqQ3 => 'Can I download episodes to watch offline?';
 
   @override
   String get settingsFaqA3 =>
-      'Yes. Pro subscribers can download podcast episodes for offline listening on Wi‑Fi or mobile data, depending on your settings.';
+      'Yes. Pro subscribers can download episodes to watch offline, on Wi-Fi or mobile data, depending on your settings.';
 
   @override
-  String get settingsFaqQ4 => 'Can I listen to live radio worldwide?';
+  String get settingsFaqQ4 => 'Can I watch dramas from anywhere?';
 
   @override
   String get settingsFaqA4 =>
-      'Yes. Browse 100,000+ live radio stations by genre, country, and language. Save presets and jump back to your favorites anytime.';
+      'Yes. Browse short dramas by genre and language, save your favorites, and jump back in anytime.';
 
   @override
   String get settingsFaqQ5 => 'What audio quality is available?';
 
   @override
   String get settingsFaqA5 =>
-      'Free users get standard streaming quality. Pro includes high-quality streams for supported stations and podcasts.';
+      'Free users get standard streaming quality. Pro includes high-quality streams for supported series and episodes.';
 
   @override
   String get settingsFaqQ6 => 'Can I cancel anytime?';
@@ -1051,40 +1058,40 @@ class AppLocalizationsEn extends AppLocalizations {
       'Yes. You can upgrade or downgrade at any time. Changes take effect immediately or at the next billing cycle depending on the plan change.';
 
   @override
-  String get settingsFaqQ9 => 'How do podcast subscriptions work?';
+  String get settingsFaqQ9 => 'How does VIP work?';
 
   @override
   String get settingsFaqA9 =>
-      'Subscribe to any podcast in one tap. New episodes appear in your library, and you can resume playback exactly where you left off.';
+      'VIP unlocks every VIP-only series and episode while your subscription is active. New episodes appear in your library, and you can resume exactly where you left off.';
 
   @override
   String get settingsFaqQ10 => 'How do playlists and presets work?';
 
   @override
   String get settingsFaqA10 =>
-      'Save radio stations as presets, build playlists, and keep your listening history synced across sessions so you can continue where you stopped.';
+      'Save series to your list, keep your favorites close, and keep your viewing history synced across sessions so you can continue where you stopped.';
 
   @override
   String get settingsFaqQ11 => 'Which content is Pro-only?';
 
   @override
   String get settingsFaqA11 =>
-      'Some premium stations, offline downloads, ad-free listening, and high-quality streams require Pro. Free users can still explore most radio and podcast content.';
+      'Some VIP-only series, offline downloads, ad-free watching, and high-quality streams require Pro. Free users can still explore most dramas and episodes.';
 
   @override
-  String get proBudgetHelpTitle => 'How Pro listening works';
+  String get proBudgetHelpTitle => 'How Pro works';
 
   @override
   String get proBudgetHelpBullet1 =>
-      'Pro removes ads from radio and podcast playback and unlocks premium listening features.';
+      'Pro removes ads from episode playback and unlocks premium drama features.';
 
   @override
   String get proBudgetHelpBullet2 =>
-      'Your saved stations, presets, and playlists stay synced while you listen across the app.';
+      'Your watchlist, favorites, and viewing history stay synced across the app.';
 
   @override
   String get proBudgetHelpBullet3 =>
-      'Offline downloads let you save podcast episodes and listen without a connection.';
+      'Offline downloads let you save episodes and watch without a connection.';
 
   @override
   String get proBudgetHelpBullet4 =>
@@ -1377,7 +1384,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String topUpBalanceHint(int count) {
-    return 'Balance: $count listening credits';
+    return 'Balance: $count coins';
   }
 
   @override
@@ -1444,14 +1451,14 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       dailyLeft,
       locale: localeName,
-      other: '$dailyLeft free listens',
-      one: '1 free listen',
+      other: '$dailyLeft free episodes',
+      one: '1 free episode',
     );
     String _temp1 = intl.Intl.pluralLogic(
       topUpLeft,
       locale: localeName,
-      other: '$topUpLeft bonus listens',
-      one: '1 bonus listen',
+      other: '$topUpLeft bonus episodes',
+      one: '1 bonus episode',
     );
     return 'You still have $_temp0 left today, and $_temp1 ready when you need them.';
   }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../services/paywall_frequency.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -143,9 +144,21 @@ class _CustomPaywallScaffoldState extends State<CustomPaywallScaffold>
       duration: const Duration(milliseconds: 800),
     );
 
-    _closeRevealTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _closeButtonVisible = true);
-    });
+    // Repeat paywall shows skip the 2s close-button delay entirely
+    // (CODE_READINESS item 7); only the first-ever show keeps it.
+    if (PaywallFrequency.cachedEverShown) {
+      _closeButtonVisible = true;
+    } else {
+      _closeRevealTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _closeButtonVisible = true);
+      });
+      PaywallFrequency.ensureLoaded().then((_) {
+        if (mounted && PaywallFrequency.cachedEverShown) {
+          _closeRevealTimer?.cancel();
+          setState(() => _closeButtonVisible = true);
+        }
+      });
+    }
 
     _avatarCycleTimer = Timer.periodic(const Duration(milliseconds: 2800), (_) {
       _advanceSocialProofAvatars();

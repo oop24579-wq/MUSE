@@ -174,9 +174,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   static const _onboardingImages = [
     'assets/images/onboarding/onboarding_welcome.png',
-    'assets/images/onboarding/onboarding_ai_songs.png',
     'assets/images/onboarding/onboarding_ai_covers.png',
-    'assets/images/onboarding/onboarding_ai_music_videos.png',
   ];
 
   Future<void> _preloadOnboardingImages(BuildContext context) async {
