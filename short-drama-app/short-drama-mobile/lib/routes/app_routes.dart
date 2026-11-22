@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../presentation/app_settings/app_settings.dart';
+import '../presentation/auth/login_screen.dart';
+import '../presentation/legal/legal_screens.dart';
 import '../presentation/onboarding/ready_to_start_screen.dart';
 import '../presentation/pricing/pricing_page.dart';
 import '../presentation/splash_screen/splash_screen.dart';
@@ -14,6 +16,7 @@ class AppRoutes {
   static const String pricing = '/pricing';
   static const String mainTabs = '/main-tabs';
   static const String readyToStart = '/ready-to-start';
+  static const String login = '/login';
 
   static Map<String, WidgetBuilder> routes = {
     initial: (context) => const SplashScreen(),
@@ -23,5 +26,11 @@ class AppRoutes {
     appSettings: (context) => const AppSettings(),
     pricing: (context) => const PricingPage(),
     readyToStart: (context) => const ReadyToStartScreen(),
+    login: (context) => const LoginScreen(),
+    LegalRoutes.hub: (context) => const LegalHubScreen(),
+    LegalRoutes.privacy: (context) => const PrivacyPolicyScreen(),
+    LegalRoutes.terms: (context) => const TermsOfServiceScreen(),
+    LegalRoutes.subscription: (context) => const SubscriptionTermsScreen(),
+    LegalRoutes.licenses: (context) => const LicensesScreen(),
   };
 }

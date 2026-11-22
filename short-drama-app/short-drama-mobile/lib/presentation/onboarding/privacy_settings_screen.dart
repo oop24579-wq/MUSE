@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../services/onboarding_service.dart';
+import 'shared/onboarding_flow_controller.dart';
 
 /// Privacy Settings Screen - Detailed privacy toggle settings
 /// Dark theme with toggle cards for Technical, Analytics, and Profiling
@@ -64,7 +65,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
     await OnboardingService.instance.refuseNonEssentialPrivacy();
     await OnboardingService.instance.setOnboardingCompleted();
     if (mounted) {
-      Navigator.pushReplacementNamed(context, '/main-tabs');
+      // Session-aware exit (see navigateOnboardingExit): '/login' when
+      // there is no stored session and no Firebase user.
+      navigateOnboardingExit(context, withSessionRoute: '/main-tabs');
     }
   }
 
@@ -72,7 +75,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
     await OnboardingService.instance.acceptAllPrivacy();
     await OnboardingService.instance.setOnboardingCompleted();
     if (mounted) {
-      Navigator.pushReplacementNamed(context, '/main-tabs');
+      // Session-aware exit (see navigateOnboardingExit): '/login' when
+      // there is no stored session and no Firebase user.
+      navigateOnboardingExit(context, withSessionRoute: '/main-tabs');
     }
   }
 
@@ -84,7 +89,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
     );
     await OnboardingService.instance.setOnboardingCompleted();
     if (mounted) {
-      Navigator.pushReplacementNamed(context, '/main-tabs');
+      // Session-aware exit (see navigateOnboardingExit): '/login' when
+      // there is no stored session and no Firebase user.
+      navigateOnboardingExit(context, withSessionRoute: '/main-tabs');
     }
   }
 

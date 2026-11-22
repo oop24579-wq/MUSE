@@ -332,3 +332,152 @@ Verification after this round: **backend 123/123** (57 + 36 + 22 + 8 new),
 4. Supply real series titles for the catalog seed (item 11).
 5. Translate the two new tutorial l10n keys + the legacy-residue strings
    (item 6) beyond English, or delete the legacy template screens.
+
+## Round 3 (2026-11-22) — nuclear wiring review + auth/account/legal
+
+Verification after this round: **backend 134/134** (57 + 36 + 22 + 8 + 11
+new suite 5), **security probes 54: 49 BLOCKED / 0 CONFIRMED / 2
+ACCEPTED-RISK / 3 INFO** (unchanged), **Flutter tests 70/70** (58 + 4 auth
+flow + 8 account), **`flutter analyze` 0 errors**.
+
+### R3-1. Nuclear wiring audit → docs/WIRING_MATRIX_V2.md
+
+Per-control matrix (not per-feature): **170 verdict rows** traced control →
+handler → service → endpoint → backend handler → table/setting → UI state:
+128 WIRED · 28 WIRED-WITH-NOTE · 8 GAP-FIXED · 6 GAP-OPEN. Fixes inside the
+audit territory:
+
+- **Follow button existed nowhere**: `toggleFollow` + `POST /series/:id/follow`
+  + `isFollowing` parsing were all built but no control called them (v1 row
+  42's claimed UI entry was wrong). Bell-icon Follow/Following action added
+  to the series detail screen.
+- **Onboarding session-exit**: `completeOnboarding()` and the privacy
+  consent/settings completion paths navigated straight home session-less;
+  new guarded `navigateOnboardingExit()` routes to `/login` when there is no
+  stored session and no Firebase user (see R3-2).
+- **Broken named routes** in the (orphaned) consent chain:
+  `'/privacy-consent'` / `'/privacy-settings'` were pushed but never
+  registered; replaced with direct page routes.
+- `api_client.dart` verified against the backend envelope — no change needed.
+
+GAP-OPEN (need product/backend decisions, documented in the matrix):
+purchase-history screen calls `GET /user/orders`, which has no backend
+handler or table, and the screen itself is orphaned; series-detail Download
+action is a toast-only dead end (no offline pipeline exists); maintenance
+mode has no app screen (backend 503s, flag parsed, nothing renders it); the
+GettingStarted/PrivacyConsent screens are unreachable in the active flow
+(their legal text spans also lack tap recognizers) — activating the consent
+chain is a legal/product call.
+
+### R3-2. Splash → auth flow
+
+- **Bootstrap**: the unconditional `ensureAuthenticated()` (silent guest on
+  every cold start) is now gated on an existing Firebase user or a stored
+  refresh token — a fresh install reaches splash with NO session.
+- **Splash**: returning launches now run `AuthService.restoreSession()`
+  (fetchMe; ApiClient refreshes on 401 once; failure clears the token
+  store) and route to the new `/login` when no session restores. The
+  paywall-cap returning flow is unchanged after a successful restore.
+- **AuthService additions** (append-only; existing `signOut()` untouched):
+  `hasStoredSession`, `restoreSession()`, `signInAsGuest()`,
+  `signOutToLogin()` (best-effort `POST /auth/logout`, clears secure
+  storage, Firebase sign-out, NO anonymous re-sign-in). Note: the social
+  methods return `false` for real errors as well as user cancellation, so
+  the login UI treats `false` as "cancelled" — surfacing social error
+  banners would require those methods to rethrow.
+- **Login screen** (`lib/presentation/auth/login_screen.dart`, route
+  `/login`): email+password sign-in; register mode (name/email/password)
+  gated by a terms checkbox — "I agree to the Terms of Service and Privacy
+  Policy and confirm I am 13 or older" with tappable legal spans; Google
+  and Apple buttons through the existing Firebase ID-token → backend
+  exchange (incl. guest link/relink); Guest button with a "link later"
+  caption; forgot-password via Firebase reset email; plain-language errors
+  via `getAuthErrorMessage`; loading states; footer legal links. Built
+  behind an injectable `AuthActions` seam (production impl delegates to
+  AuthService; tests use a fake — rendering never initializes Firebase).
+  Tokens were already in flutter_secure_storage (TokenStore) — no change.
+- Tests: `test/auth_flow_test.dart` (renders all four entry methods,
+  register blocked without the checkbox, guest tap navigates, error banner).
+
+### R3-3. Backend account endpoints (new suite 5, 11 cases)
+
+- **POST /auth/logout** — revokes ALL of the caller's refresh tokens
+  (family revocation across sessions/devices).
+- **PATCH /auth/me** — strict allow-list (name 1–60, image ≤500,
+  autoplayNext, videoQuality enum, locale, notificationsEnabled); unknown
+  key → 400 BAD_FIELD; caller-only. New `notificationsEnabled` column
+  (db.js ALTER pattern) surfaced in userJson.
+- **GET /me/transactions** — caller's coin_transactions only, newest first,
+  limit/offset paging, `{items, total}`.
+- Probes disclosure: the probes harness now sets a high
+  `RATE_LIMIT_AUTH_MAX` for its spawned server only (the burst of 100+
+  probe logins exhausted the production default bucket; suite 3 covers the
+  limiter itself). Production defaults untouched.
+
+### R3-4. Professional account page
+
+- **ProfileContent rewritten as the account hub**: avatar (bundled asset /
+  network / initials), display name, email or "Guest account", provider
+  badge (Guest/Google/Apple/Email from Firebase providerData with model
+  fallback), VIP chip + expiry. Rows: Edit profile, My coins, Subscription
+  (store-managed note for Pro), Link account (guests — reuses the existing
+  sign-in sheets + relink), Settings, Legal, Log out (→ `/login`).
+- **New screens** (`lib/presentation/account/`, behind an injectable
+  AccountService seam): EditProfileScreen (name 1–60 validation, 6-avatar
+  picker, persists via PATCH /auth/me), CoinHistoryScreen (balance header,
+  paginated history, empty + error/retry states), DeleteAccountDialog
+  (type DELETE to enable, optional password for email users).
+- **AppSettings completed**: Playback section added (autoplay-next +
+  video-quality, persisted via PATCH /auth/me with optimistic revert);
+  Clear cache is real (image cache + temp-dir sweep with freed-count
+  toast); About shows real package version; notifications toggle now also
+  persists to the backend; language choice syncs locale to the backend;
+  sign-out goes through `signOutToLogin()` → `/login`; delete account
+  upgraded to the type-to-confirm dialog. `UserModel` additively gained
+  `notificationsEnabled` and `locale`.
+- Tests: `test/account_page_test.dart` (model parsing, provider label,
+  edit-profile save flow, coin history states, delete-dialog gating).
+- Integration fixes by the lead: registered the five LegalRoutes in
+  app_routes.dart; fixed a `Provider` symbol clash (riverpod vs provider)
+  in profile_content.dart; removed two dead declarations in app_settings.
+
+### R3-5. Legal (store-compliant texts + screens)
+
+- Full English texts in `lib/presentation/legal/legal_texts.dart`: Privacy
+  Policy (2,730 words — data collected, purposes, named processors:
+  Firebase/Google, Apple, RevenueCat, AdMob, OneSignal; retention; rights
+  incl. the in-app deletion path; under-13 exclusion; security; transfers;
+  changes; contact), Terms of Service (2,597 words — 13+ eligibility,
+  guest accounts, content licence/IP, virtual coins: no cash value,
+  non-transferable, refunds only where law/store policy requires; VIP
+  auto-renew via the stores; acceptable use; liability; termination),
+  Subscription & Purchases terms (1,037 words — per-store billing,
+  24-hour renewal, iOS/Android cancel steps, restore, price changes,
+  store-handled refunds).
+- Screens (`legal_screens.dart`): Legal hub + the three text screens
+  (scrollable, selectable) + Licenses/About (showLicensePage), reachable
+  from Login (footer + register links), Profile and AppSettings; routes
+  `/legal`, `/legal/privacy`, `/legal/terms`, `/legal/subscription`,
+  `/legal/licenses`.
+- Docs: `docs/PRIVACY_POLICY.md` + `docs/TERMS_OF_SERVICE.md` (standalone,
+  identical text, for hosting as the store-listing URLs) and
+  `docs/LEGAL.md` (console steps + Google Play Data Safety mapping, 15
+  rows, + Apple nutrition-label mapping, 12 rows, + account-deletion URL
+  note).
+- **Owner steps that remain** (in LEGAL.md): replace the placeholder
+  contact email `support@herodrama.app` and the `[Your Jurisdiction]`
+  governing-law placeholder; host the two policy docs and paste the URLs
+  into Play Console / App Store Connect; complete the Data Safety form
+  from the mapping; confirm whether AdMob ships personalised or
+  non-personalised ads (decides Apple's tracking label + ATT prompt).
+
+### Still needs the user's real accounts/keys (Round 3 delta)
+
+- Firebase project + native config files (google-services.json /
+  GoogleService-Info.plist) so Firebase Auth (email/Google/Apple/reset)
+  actually runs — until then the login screen's Firebase paths report
+  their not-configured errors honestly and the backend stays in dev mode.
+- Store consoles: privacy-policy URL fields, Data Safety / App Privacy
+  forms, and the real support email + jurisdiction in the legal texts.
+- Product decisions on the GAP-OPEN items above (purchase-history backend,
+  downloads, maintenance screen, consent-chain activation).

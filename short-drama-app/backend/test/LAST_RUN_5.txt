@@ -1,0 +1,17 @@
+Server booted on http://127.0.0.1:38397 with temp DB /tmp/dramanow-test5-1fxYZZ/app.db
+PASS 401. logout: refresh works before; after logout the caller refresh AND a second session refresh are 401 (family revocation)
+PASS 402. logout: no token and garbage token -> 401
+PASS 403. PATCH /auth/me: happy path persists every allowed field and is visible via GET /auth/me
+PASS 404. PATCH /auth/me: unknown key -> 400 BAD_FIELD (and nothing is persisted)
+PASS 405. PATCH /auth/me: empty body -> 400; unauthenticated -> 401
+PASS 406. PATCH /auth/me: invalid values -> 400 (videoQuality, name length, wrong types, locale, image length)
+PASS 407. userJson.notificationsEnabled: defaults true for a new user; false/true round-trip via PATCH + GET /auth/me
+PASS 408. PATCH /auth/me: patch only ever affects the caller (user B patching leaves user A untouched)
+PASS 409. GET /me/transactions: seeded grants come back newest-first with the exact item shape and matching total
+PASS 410. GET /me/transactions: limit/offset paging is stable and non-overlapping; oversized limit is clamped
+PASS 411. GET /me/transactions: user isolation (B sees only own rows) and 401 without a token
+
+===== SUITE 5 SUMMARY =====
+TOTAL: 11  PASSED: 11  FAILED: 0
+ALL PASS
+

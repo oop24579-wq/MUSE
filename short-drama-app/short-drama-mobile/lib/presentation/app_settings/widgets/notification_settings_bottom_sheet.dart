@@ -4,6 +4,7 @@ import 'package:sizer/sizer.dart';
 
 import '../../../core/app_export.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../services/account_service.dart';
 import '../../../services/onesignal_service.dart';
 
 class NotificationSettingsBottomSheet extends StatefulWidget {
@@ -46,22 +47,28 @@ class _NotificationSettingsBottomSheetState
   Future<void> _toggle(bool value) async {
     if (_loading) return;
     setState(() => _loading = true);
+    bool effective = value;
     if (value) {
-      final granted = await OneSignalService.enable();
-      if (mounted) {
-        setState(() {
-          _enabled = granted;
-          _loading = false;
-        });
-      }
+      effective = await OneSignalService.enable();
     } else {
       await OneSignalService.disable();
-      if (mounted) {
-        setState(() {
-          _enabled = false;
-          _loading = false;
-        });
-      }
+      effective = false;
+    }
+    // OneSignal enable/disable already mirrors the choice to the
+    // SharedPreferences 'notifications_enabled' key the app reads.
+    // Also persist it to the backend profile (PATCH /auth/me) —
+    // fire-and-forget: the local + OneSignal state is already correct.
+    () async {
+      try {
+        await AccountService.instance
+            .updateProfile(notificationsEnabled: effective);
+      } catch (_) {}
+    }();
+    if (mounted) {
+      setState(() {
+        _enabled = effective;
+        _loading = false;
+      });
     }
   }
 

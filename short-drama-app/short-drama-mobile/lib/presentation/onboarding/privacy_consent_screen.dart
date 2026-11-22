@@ -4,6 +4,8 @@ import 'package:sizer/sizer.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/onboarding_service.dart';
+import 'privacy_settings_screen.dart';
+import 'shared/onboarding_flow_controller.dart';
 
 /// Privacy Consent Screen - "Customize your experience" 
 /// Dark theme with Accept All, Refuse, and Customize Preferences options
@@ -54,7 +56,9 @@ class _PrivacyConsentScreenState extends State<PrivacyConsentScreen>
     await OnboardingService.instance.acceptAllPrivacy();
     await OnboardingService.instance.setOnboardingCompleted();
     if (mounted) {
-      Navigator.pushReplacementNamed(context, '/main-tabs');
+      // Session-aware exit (see navigateOnboardingExit): '/login' when
+      // there is no stored session and no Firebase user.
+      navigateOnboardingExit(context, withSessionRoute: '/main-tabs');
     }
   }
 
@@ -62,12 +66,18 @@ class _PrivacyConsentScreenState extends State<PrivacyConsentScreen>
     await OnboardingService.instance.refuseNonEssentialPrivacy();
     await OnboardingService.instance.setOnboardingCompleted();
     if (mounted) {
-      Navigator.pushReplacementNamed(context, '/main-tabs');
+      navigateOnboardingExit(context, withSessionRoute: '/main-tabs');
     }
   }
 
   void _onCustomizePreferences() {
-    Navigator.pushNamed(context, '/privacy-settings');
+    // Wiring v2: '/privacy-settings' is not registered in
+    // AppRoutes.routes, so the named push threw at runtime. Push the
+    // screen directly instead.
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PrivacySettingsScreen()),
+    );
   }
 
   @override

@@ -555,6 +555,100 @@ class AuthService {
     return error.toString();
   }
 
+  // ── Session restore / explicit sign-in gate (login flow) ──────────────
+  // Added for the gated-auth flow: a fresh install must reach the login
+  // screen with NO session instead of silently becoming a guest (see
+  // bootstrap.dart). The methods below are additive; the existing
+  // anonymous-first behaviour of [signOut]/[ensureAuthenticated] is
+  // unchanged for their current callers.
+
+  /// True when a web refresh token survived from a previous session.
+  bool get hasStoredSession {
+    final refresh = TokenStore.instance.refreshToken;
+    return refresh != null && refresh.isNotEmpty;
+  }
+
+  /// Attempts to restore a previous web session.
+  ///
+  /// Returns false when there is no stored session. Otherwise asks the
+  /// backend for the profile via [fetchMe] — [ApiClient] transparently
+  /// refreshes the access token on a 401 (and falls back to a Firebase
+  /// re-exchange), so an expired access token still restores. On failure
+  /// the stored tokens are cleared so the next launch doesn't retry a
+  /// dead session.
+  Future<bool> restoreSession() async {
+    if (!hasStoredSession) return false;
+    try {
+      // fetchMe() swallows API errors and returns the cached profile
+      // (null on a cold start), so capture whether THIS call produced a
+      // fresh profile by clearing the cache first.
+      _webProfile = null;
+      final profile = await fetchMe();
+      if (profile != null) return true;
+    } catch (e) {
+      debugPrint('⚠️ restoreSession failed: $e');
+    }
+    await TokenStore.instance.clear();
+    ApiClient.instance.reset();
+    _webProfile = null;
+    return false;
+  }
+
+  /// Explicit guest entry from the login screen ("Continue as Guest").
+  Future<bool> signInAsGuest() async {
+    try {
+      final cred = await signInAnonymously();
+      if (cred == null) return false;
+      // signInAnonymously already exchanges via _onFirebaseUser; make
+      // sure the web session exists before reporting success.
+      if (TokenStore.instance.accessToken == null) {
+        return await exchangeFirebaseToken();
+      }
+      return true;
+    } catch (e) {
+      debugPrint('❌ Guest sign-in error: $e');
+      return false;
+    }
+  }
+
+  /// Full sign-out that lands the user on the login screen.
+  ///
+  /// Unlike [signOut] (which immediately re-signs-in anonymously for its
+  /// existing in-app callers), this revokes the session server-side and
+  /// leaves the app with NO session at all.
+  Future<void> signOutToLogin() async {
+    // Best-effort server-side revocation of the whole refresh family.
+    try {
+      final refresh = TokenStore.instance.refreshToken;
+      await ApiClient.instance.post(
+        '/auth/logout',
+        data: {
+          if (refresh != null && refresh.isNotEmpty)
+            'refreshToken': refresh,
+        },
+      );
+    } catch (e) {
+      debugPrint('⚠️ /auth/logout failed (continuing local sign-out): $e');
+    }
+    try {
+      await RevenueCatService.logOut();
+    } catch (_) {}
+    try {
+      await OneSignalService.clearUserSession();
+    } catch (_) {}
+    await TokenStore.instance.clear();
+    ApiClient.instance.reset();
+    _webProfile = null;
+    try {
+      await _auth.signOut();
+    } catch (e) {
+      debugPrint('⚠️ Firebase signOut failed: $e');
+    }
+    // Deliberately NO anonymous re-sign-in here — the login gate owns
+    // the next session.
+    authEpoch.value++;
+  }
+
   String _generateNonce([int length = 32]) {
     const charset =
         '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';

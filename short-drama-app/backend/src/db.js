@@ -142,6 +142,7 @@ try { db.exec('ALTER TABLE reward_tasks ADD COLUMN active INTEGER DEFAULT 1'); }
 try { db.exec('ALTER TABLE users ADD COLUMN xp INTEGER DEFAULT 0'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE users ADD COLUMN referralCode TEXT'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE users ADD COLUMN referredBy TEXT'); } catch { /* already present */ }
+try { db.exec('ALTER TABLE users ADD COLUMN notificationsEnabled INTEGER DEFAULT 1'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE watch_time_daily ADD COLUMN paidCoins INTEGER DEFAULT 0'); } catch { /* already present */ }
 try { db.exec('ALTER TABLE caption_jobs ADD COLUMN targets TEXT'); } catch { /* already present */ }
 // Generate referral codes for users that do not have one yet:

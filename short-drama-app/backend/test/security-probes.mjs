@@ -76,6 +76,11 @@ const child = spawn(process.execPath, [path.join(BACKEND, 'src', 'server.js')], 
   env: {
     ...process.env, PORT: String(port), DB_PATH: dbPath, FIREBASE_AUTH_DEV: '1',
     ADMIN_TOKEN, JWT_SECRET,
+    // The probes create 100+ accounts in a burst (RL1) plus dozens of logins;
+    // the default auth bucket (60/h) would 429 the harness itself mid-run.
+    // Raise it for THIS test server only (production defaults unchanged;
+    // the limiter itself is covered by run-tests-3.mjs cases 213-214).
+    RATE_LIMIT_AUTH_MAX: '100000',
     // Deliberately shell-metachar WHISPER_CMD: spawn() must NOT run a shell,
     // so the `; touch` must never execute.
     WHISPER_CMD: 'echo hi; touch /tmp/pwned-marker-secprobe-7f3a {file}',

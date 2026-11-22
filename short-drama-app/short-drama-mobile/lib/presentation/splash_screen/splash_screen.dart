@@ -11,6 +11,7 @@ import '../../services/marketing/marketing_analytics_service.dart';
 import '../../services/marketing/marketing_event_names.dart' show PaywallTrigger;
 import '../../services/marketing/marketing_funnel_events.dart';
 import '../../services/firebase/remote_config_service.dart';
+import '../../services/auth/auth_service.dart';
 import '../../services/onboarding_service.dart';
 import '../../services/paywall_frequency.dart';
 import '../../services/paywall_preload_service.dart';
@@ -220,8 +221,25 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!isOnboardingCompleted) {
       // First time — onboarding only; paywall is shown on later app opens.
+      // NOTE (login gate): onboarding completion itself navigates straight
+      // to '/home' (OnboardingFlowController.completeOnboarding) without
+      // creating a session — bootstrap no longer creates a guest session
+      // on fresh installs. That first post-onboarding Home visit is
+      // therefore session-less by design for now; the login gate below
+      // applies from the NEXT launch onwards. Restructuring onboarding's
+      // completion navigation is out of scope for the auth change.
       Navigator.pushReplacementNamed(context, '/ready-to-start');
     } else {
+      // Login gate (returning users): a stored session must restore
+      // before any paywall/home routing. No stored session — or a dead
+      // one — goes to '/login' and stops here.
+      final restored = await AuthService.instance.restoreSession();
+      if (!mounted) return;
+      if (!restored) {
+        Navigator.pushReplacementNamed(context, '/login');
+        return;
+      }
+
       // Returning user — show paywall each launch until subscribed.
       try {
         final userProvider =

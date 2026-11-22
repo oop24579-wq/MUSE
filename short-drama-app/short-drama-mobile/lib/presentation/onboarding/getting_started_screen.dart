@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sizer/sizer.dart';
 import 'dart:math' as math;
 
+import 'privacy_consent_screen.dart';
+
 /// Getting Started Screen - First screen shown after splash
 /// Light theme with hands holding polaroid photos aesthetic
 class GettingStartedScreen extends StatefulWidget {
@@ -413,7 +415,13 @@ class _GettingStartedScreenState extends State<GettingStartedScreen>
       height: 7.h,
       child: ElevatedButton(
         onPressed: () {
-          Navigator.pushReplacementNamed(context, '/privacy-consent');
+          // Wiring v2: '/privacy-consent' is not registered in
+          // AppRoutes.routes, so the named push threw at runtime. Push the
+          // screen directly instead (same replacement semantics).
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const PrivacyConsentScreen()),
+          );
         },
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF1A1A1A),

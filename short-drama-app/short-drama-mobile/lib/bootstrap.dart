@@ -42,8 +42,21 @@ class AppBootstrap {
       unawaited(AppConfigService.instance.load());
       try {
         await AuthService.instance.initialize();
-        await AuthService.instance.ensureAuthenticated();
-        debugPrint('✅ Auth + web API session ready');
+        // Gated auth: only ensure a session when one already exists —
+        // a live Firebase user (initialize() already exchanged for it)
+        // or a stored web refresh token the splash can restore. A truly
+        // fresh install must reach the splash/login flow with NO
+        // session; ensureAuthenticated() would otherwise silently
+        // create an anonymous guest session on every cold start.
+        final auth = AuthService.instance;
+        if (auth.currentUser != null || auth.hasStoredSession) {
+          await auth.ensureAuthenticated();
+          debugPrint('✅ Auth + web API session ready');
+        } else {
+          debugPrint(
+            '🔐 No existing session — deferring to the login gate',
+          );
+        }
       } catch (e) {
         debugPrint('❌ Auth initialization failed: $e');
       }

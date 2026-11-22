@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -16,6 +18,8 @@ import '../../services/legal_url_launcher.dart';
 import '../../services/theme_provider.dart';
 import '../../services/onesignal_service.dart';
 import '../../services/player_tutorial.dart';
+import '../../services/account_service.dart';
+import '../account/delete_account_dialog.dart';
 import './widgets/email_auth_bottom_sheet.dart';
 import './widgets/language_selection_bottom_sheet.dart';
 import './widgets/settings_anon_account_row.dart';
@@ -59,10 +63,15 @@ class _AppSettingsState extends State<AppSettings>
     });
   }
 
+  // Optimistic playback overrides (null = use the server profile value).
+  bool? _autoplayOverride;
+  String? _qualityOverride;
+
   @override
   void dispose() {
     _signInSheetGoogleBusy.dispose();
     _signInSheetAppleBusy.dispose();
+    _deleteAccountBusy.dispose();
     _settingsListEntranceController.dispose();
     super.dispose();
   }
@@ -278,6 +287,86 @@ class _AppSettingsState extends State<AppSettings>
                                 isDark: isDark,
                                 secondaryTextColor: secondaryTextColor,
                                 children: [
+                                  _buildSettingsSwitchRow(
+                                    icon: Icons.play_circle_outline,
+                                    title: 'Autoplay next episode',
+                                    textColor: textColor,
+                                    secondaryTextColor: secondaryTextColor,
+                                    value: _autoplayOverride ??
+                                        userProvider.user?.autoplayNext ??
+                                        true,
+                                    onChanged: _setAutoplay,
+                                  ),
+                                  _buildSettingsRow(
+                                    icon: Icons.high_quality_outlined,
+                                    title: 'Video quality',
+                                    isDark: isDark,
+                                    textColor: textColor,
+                                    secondaryTextColor: secondaryTextColor,
+                                    onTap: () => _showQualityPicker(
+                                      current: _qualityOverride ??
+                                          userProvider.user?.videoQuality ??
+                                          'auto',
+                                    ),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          _qualityOverride ??
+                                              userProvider
+                                                  .user?.videoQuality ??
+                                              'auto',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: secondaryTextColor,
+                                          ),
+                                        ),
+                                        SizedBox(width: 1.w),
+                                        Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: secondaryTextColor,
+                                          size: 20,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: 2.h),
+                            _settingsListEntrance(
+                              index: listAnimIndex++,
+                              child: SettingsMenuCard(
+                                isDark: isDark,
+                                secondaryTextColor: secondaryTextColor,
+                                children: [
+                                  _buildSettingsRow(
+                                    icon: Icons.cleaning_services_outlined,
+                                    title: 'Clear cache',
+                                    isDark: isDark,
+                                    textColor: textColor,
+                                    secondaryTextColor: secondaryTextColor,
+                                    onTap: _clearCache,
+                                  ),
+                                  _buildSettingsRow(
+                                    icon: Icons.info_outline,
+                                    title: 'About',
+                                    isDark: isDark,
+                                    textColor: textColor,
+                                    secondaryTextColor: secondaryTextColor,
+                                    onTap: _showAbout,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: 2.h),
+                            _settingsListEntrance(
+                              index: listAnimIndex++,
+                              child: SettingsMenuCard(
+                                isDark: isDark,
+                                secondaryTextColor: secondaryTextColor,
+                                children: [
                                   _buildSettingsRow(
                                     icon: Icons.help_outline,
                                     title: l10n.settingsFaqDialogTitle,
@@ -421,8 +510,7 @@ class _AppSettingsState extends State<AppSettings>
                                     isDark: isDark,
                                     textColor: textColor,
                                     secondaryTextColor: secondaryTextColor,
-                                    onTap: () =>
-                                        LegalUrlLauncher.openPrivacy(context),
+                                    onTap: () => _openLegal(privacy: true),
                                   ),
                                   _buildSettingsRow(
                                     icon: Icons.description_outlined,
@@ -430,8 +518,7 @@ class _AppSettingsState extends State<AppSettings>
                                     isDark: isDark,
                                     textColor: textColor,
                                     secondaryTextColor: secondaryTextColor,
-                                    onTap: () =>
-                                        LegalUrlLauncher.openTerms(context),
+                                    onTap: () => _openLegal(privacy: false),
                                   ),
                                 ],
                               ),
@@ -498,28 +585,6 @@ class _AppSettingsState extends State<AppSettings>
       icon,
       size: 20,
       color: secondaryTextColor.withValues(alpha: 0.9),
-    );
-  }
-
-  Widget _buildMenuCardHeader({
-    required IconData icon,
-    required String title,
-    required Color textColor,
-    required Color secondaryTextColor,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: secondaryTextColor),
-        SizedBox(width: 2.w),
-        Text(
-          title,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: textColor.withValues(alpha: 0.85),
-          ),
-        ),
-      ],
     );
   }
 
@@ -701,9 +766,18 @@ class _AppSettingsState extends State<AppSettings>
               SettingsOpacityTap(
                 focusDebugLabel: 'settings_sign_out',
                 onTap: () async {
-                  await AuthService.instance.signOut();
+                  try {
+                    await AuthService.instance.signOutToLogin();
+                  } catch (e) {
+                    if (context.mounted) {
+                      showTopToastError(context,
+                          AuthService.instance.getAuthErrorMessage(e));
+                    }
+                    return;
+                  }
                   if (context.mounted) {
-                    showTopToastSuccess(context, l10n.signedOutSuccessfully);
+                    Navigator.of(context)
+                        .pushNamedAndRemoveUntil('/login', (_) => false);
                   }
                 },
                 child: Padding(
@@ -814,6 +888,20 @@ class _AppSettingsState extends State<AppSettings>
             context,
             onLocaleChanged: () {
               if (mounted) setState(() {});
+              // Mirror the choice to the backend profile (fire-and-forget);
+              // LocaleProvider/LanguageService already switched the UI locale.
+              final code =
+                  Provider.of<LocaleProvider>(context, listen: false)
+                          .locale
+                          ?.languageCode ??
+                      currentLanguage;
+              () async {
+                try {
+                  await AccountService.instance.updateProfile(locale: code);
+                } catch (e) {
+                  debugPrint('⚠️ locale sync failed: $e');
+                }
+              }();
             },
           ),
           trailing: Row(
@@ -956,113 +1044,33 @@ class _AppSettingsState extends State<AppSettings>
     required Color textColor,
     required Color secondaryTextColor,
   }) async {
-    final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        backgroundColor: surfaceColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        insetPadding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 4.h),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(5.w, 2.5.h, 5.w, 2.h),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: const Color(0xFFE53935),
-                size: 9.w,
-              ),
-              SizedBox(height: 1.5.h),
-              Text(
-                l10n.deleteAccountTitle,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: textColor,
-                ),
-              ),
-              SizedBox(height: 1.5.h),
-              Text(
-                l10n.deleteAccountWarning,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                  height: 1.45,
-                  color: secondaryTextColor,
-                ),
-              ),
-              SizedBox(height: 2.5.h),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(dialogContext, true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE53935),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    padding: EdgeInsets.symmetric(vertical: 1.4.h),
-                  ),
-                  child: Text(
-                    l10n.deleteAccountConfirm,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(height: 1.h),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                  style: TextButton.styleFrom(
-                    foregroundColor: secondaryTextColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    padding: EdgeInsets.symmetric(vertical: 1.2.h),
-                  ),
-                  child: Text(
-                    l10n.deleteAccountCancel,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    // Type-to-confirm dialog (upgraded from the old one-tap confirm):
+    // the user must type DELETE; email users may supply their password
+    // for re-authentication.
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final isEmailUser = !userProvider.isAnonymous &&
+        (userProvider.user?.email?.isNotEmpty ?? false);
+    await DeleteAccountDialog.show(
+      context,
+      showPasswordField: isEmailUser,
+      onConfirm: (password) => _performAccountDeletion(password: password),
     );
-
-    if (confirmed != true || !mounted) return;
-    await _performAccountDeletion();
   }
 
-  Future<void> _performAccountDeletion() async {
+  Future<void> _performAccountDeletion({String? password}) async {
     if (_deleteAccountBusy.value) return;
     _deleteAccountBusy.value = true;
     final l10n = AppLocalizations.of(context)!;
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final success = await AuthService.instance.deleteAccount(
+        password: password,
         profile: userProvider.user,
       );
       if (!mounted) return;
       if (success) {
         Navigator.of(context).pushNamedAndRemoveUntil(
-          AppRoutes.initial,
+          '/login',
           (route) => false,
         );
       } else {
@@ -1070,11 +1078,129 @@ class _AppSettingsState extends State<AppSettings>
       }
     } catch (e) {
       if (mounted) {
-        showTopToastError(context, l10n.deleteAccountFailed);
+        showTopToastError(
+          context,
+          AuthService.instance.getAuthErrorMessage(e),
+        );
       }
     } finally {
       _deleteAccountBusy.value = false;
     }
+  }
+
+  // ── Account-settings helpers (playback / cache / about / legal) ────────
+
+  void _openLegal({required bool privacy}) {
+    try {
+      Navigator.of(context).pushNamed('/legal');
+      return;
+    } catch (_) {
+      // '/legal' route not registered yet — fall back to the configured
+      // legal URLs so the row is never dead.
+    }
+    if (privacy) {
+      LegalUrlLauncher.openPrivacy(context);
+    } else {
+      LegalUrlLauncher.openTerms(context);
+    }
+  }
+
+  Future<void> _setAutoplay(bool value) async {
+    setState(() => _autoplayOverride = value);
+    try {
+      await AccountService.instance.updateProfile(autoplayNext: value);
+      if (mounted) {
+        await Provider.of<UserProvider>(context, listen: false).refreshUser();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _autoplayOverride = null);
+        showTopToastError(context, 'Could not save autoplay setting');
+      }
+    }
+  }
+
+  Future<void> _showQualityPicker({required String current}) async {
+    const qualities = ['auto', '1080p', '720p', '480p', '360p'];
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final q in qualities)
+              ListTile(
+                title: Text(q == 'auto' ? 'Auto' : q),
+                trailing: q == current
+                    ? const Icon(Icons.check_circle_rounded)
+                    : null,
+                onTap: () => Navigator.pop(sheetContext, q),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || picked == current || !mounted) return;
+    setState(() => _qualityOverride = picked);
+    try {
+      await AccountService.instance.updateProfile(videoQuality: picked);
+      if (mounted) {
+        await Provider.of<UserProvider>(context, listen: false).refreshUser();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _qualityOverride = null);
+        showTopToastError(context, 'Could not save quality setting');
+      }
+    }
+  }
+
+  Future<void> _clearCache() async {
+    var freed = 0;
+    try {
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+      final dir = await getTemporaryDirectory();
+      if (await dir.exists()) {
+        await for (final entity in dir.list(recursive: true)) {
+          if (entity is File) {
+            try {
+              await entity.delete();
+              freed++;
+            } catch (_) {}
+          }
+        }
+      }
+      if (mounted) {
+        showTopToastSuccess(
+          context,
+          freed > 0 ? 'Cache cleared ($freed files)' : 'Cache cleared',
+        );
+      }
+    } catch (e) {
+      if (mounted) showTopToastError(context, 'Could not clear cache');
+    }
+  }
+
+  Future<void> _showAbout() async {
+    final info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(info.appName.isNotEmpty ? info.appName : 'HERO DRAMA'),
+        content: Text(
+          'Version ${info.version} (build ${info.buildNumber})\n\n'
+          'Short dramas, anytime.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
   
 
@@ -1097,7 +1223,6 @@ class _AppSettingsState extends State<AppSettings>
       }
     } catch (e) {
       if (mounted) {
-        final l10n = AppLocalizations.of(context)!;
         showTopToastError(
           context,
           AuthService.instance.getAuthErrorMessage(e),

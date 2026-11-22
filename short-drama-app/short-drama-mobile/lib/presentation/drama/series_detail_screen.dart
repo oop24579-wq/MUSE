@@ -32,6 +32,7 @@ class SeriesDetailScreen extends ConsumerStatefulWidget {
 
 class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
   bool? _favOverride;
+  bool? _followOverride;
   bool? _likeOverride;
   int? _likeCountOverride;
   bool _expandedSynopsis = false;
@@ -63,6 +64,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
             detail.cast,
             _favOverride ?? detail.isFavorite,
             _likeOverride ?? detail.isLiked,
+            _followOverride ?? detail.isFollowing,
             isDark,
             detail.resumeEpisodeNumber,
             detail.resumeEpisodeId,
@@ -78,7 +80,8 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     return _content(s, const [], const [], const [], const [],
-        _favOverride ?? false, _likeOverride ?? false, isDark, null, null, true);
+        _favOverride ?? false, _likeOverride ?? false, _followOverride ?? false,
+        isDark, null, null, true);
   }
 
   Widget _errorView(bool isDark) => SafeArea(
@@ -100,6 +103,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     List<CastMember> cast,
     bool isFav,
     bool isLiked,
+    bool isFollowing,
     bool isDark,
     int? resumeEp,
     String? resumeId, [
@@ -122,7 +126,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(height: 2.h),
-                    _actionRow(s, isFav, isLiked),
+                    _actionRow(s, isFav, isLiked, isFollowing),
                     SizedBox(height: 2.h),
                     if (s.synopsis != null && s.synopsis!.isNotEmpty)
                       _synopsis(s, textColor),
@@ -283,7 +287,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     );
   }
 
-  Widget _actionRow(SeriesModel s, bool isFav, bool isLiked) {
+  Widget _actionRow(SeriesModel s, bool isFav, bool isLiked, bool isFollowing) {
     final likeCount = _likeCountOverride ?? s.likeCount;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -319,6 +323,32 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
           active: isLiked,
           activeColor: const Color(0xFFFF4D6D),
           onTap: () => _toggleLike(s, isLiked, likeCount),
+        ),
+        _action(
+          icon: isFollowing
+              ? Icons.notifications_active_rounded
+              : Icons.notifications_none_rounded,
+          label: isFollowing ? 'Following' : 'Follow',
+          active: isFollowing,
+          onTap: () async {
+            // Wiring v2: toggleFollow + POST /series/:id/follow + the
+            // server's isFollowing flag all existed, but no control ever
+            // called them (v1 row 42's claimed UI entry did not exist).
+            // Mirrors the My List handler: toggleFollow returns the
+            // requested state on success, so only the follow (add) path
+            // can distinguish failure — roll that path back on failure.
+            final follow = !isFollowing;
+            setState(() => _followOverride = follow);
+            final ok = await DramaService.instance.toggleFollow(s.id, follow);
+            if (!mounted) return;
+            if (follow && !ok) {
+              setState(() => _followOverride = isFollowing);
+              showTopToastError(context, 'Could not update follow');
+              return;
+            }
+            showTopToastSuccess(
+                context, follow ? 'Following this series' : 'Unfollowed');
+          },
         ),
         _action(
           icon: Icons.share_outlined,

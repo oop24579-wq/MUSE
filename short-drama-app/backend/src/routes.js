@@ -144,6 +144,7 @@ function userJson(u) {
   return { id: u.id, firebaseUid: u.firebaseUid, email: u.email, name: u.name, displayName: u.name, image: u.image, photoUrl: u.image,
     deviceId: u.deviceId, isGuest: !!u.isGuest, isAnonymous: !!u.isGuest, isPro: isPro(u), isVip: isPro(u),
     coinBalance: u.coinBalance, autoplayNext: !!u.autoplayNext, videoQuality: u.videoQuality || 'auto',
+    notificationsEnabled: u.notificationsEnabled == null ? true : !!u.notificationsEnabled,
     subscriptionExpirationDate: u.subscriptionExpirationDate, platform: u.platform, appVersion: u.appVersion, locale: u.locale,
     referralCode: u.referralCode || referralCodeFor(u.id), xp, level: levelFromXp(xp),
     createdAt: u.createdAt, updatedAt: u.updatedAt, linkedAt: u.linkedAt || u.updatedAt };
@@ -427,6 +428,62 @@ async function handle(req, res, url, body) {
     return ok(res, { success: true });
   }
   if (req.method === 'GET' && p === '/auth/me') return ok(res, { user: userJson(user) });
+  if (req.method === 'POST' && p === '/auth/logout') {
+    // Family revocation: EVERY refresh token this user holds (all sessions /
+    // devices) is revoked, not just the one optionally named in the body.
+    // Access tokens are stateless and simply expire on their own (<= 1h).
+    run('UPDATE refresh_tokens SET revoked=1 WHERE userId=?', user.id);
+    return ok(res, { success: true });
+  }
+  if (req.method === 'PATCH' && p === '/auth/me') {
+    // Strict allow-list patch of the CALLER's own profile (user is always the
+    // authenticated caller — there is no id parameter to abuse).
+    const ALLOWED = ['name', 'image', 'autoplayNext', 'videoQuality', 'locale', 'notificationsEnabled'];
+    const keys = Object.keys(body || {});
+    for (const k of keys) if (!ALLOWED.includes(k)) return err(res, 400, 'BAD_FIELD', `Unknown field: ${k}`);
+    if (!keys.length) return err(res, 400, 'VALIDATION', 'At least one field is required');
+    const bad = (msg) => err(res, 400, 'VALIDATION', msg);
+    const sets = {}; // column -> value
+    if (body.name !== undefined) {
+      if (typeof body.name !== 'string') return bad('name must be a string');
+      const v = body.name.trim();
+      if (v.length < 1 || v.length > 60) return bad('name must be 1-60 characters');
+      sets.name = v;
+    }
+    if (body.image !== undefined) {
+      if (typeof body.image !== 'string' || body.image.length > 500) return bad('image must be a string of at most 500 characters');
+      sets.image = body.image;
+    }
+    if (body.autoplayNext !== undefined) {
+      if (typeof body.autoplayNext !== 'boolean') return bad('autoplayNext must be a boolean');
+      sets.autoplayNext = body.autoplayNext ? 1 : 0;
+    }
+    if (body.videoQuality !== undefined) {
+      if (!['auto', '1080p', '720p', '480p', '360p'].includes(body.videoQuality)) return bad('videoQuality must be one of auto|1080p|720p|480p|360p');
+      sets.videoQuality = body.videoQuality;
+    }
+    if (body.locale !== undefined) {
+      if (typeof body.locale !== 'string' || body.locale.length < 2 || body.locale.length > 10) return bad('locale must be a string of 2-10 characters');
+      sets.locale = body.locale;
+    }
+    if (body.notificationsEnabled !== undefined) {
+      if (typeof body.notificationsEnabled !== 'boolean') return bad('notificationsEnabled must be a boolean');
+      sets.notificationsEnabled = body.notificationsEnabled ? 1 : 0;
+    }
+    const cols = Object.keys(sets);
+    run(`UPDATE users SET ${cols.map((c) => c + '=?').join(',')}, updatedAt=? WHERE id=?`, ...cols.map((c) => sets[c]), now(), user.id);
+    return ok(res, { user: userJson(get('SELECT * FROM users WHERE id=?', user.id)) });
+  }
+  if (req.method === 'GET' && p === '/me/transactions') {
+    const rawTxLimit = parseInt(q.get('limit') || '50', 10);
+    const txLimit = Number.isFinite(rawTxLimit) ? Math.max(1, Math.min(rawTxLimit, 100)) : 50;
+    const rawTxOffset = parseInt(q.get('offset') || '0', 10);
+    const txOffset = Number.isFinite(rawTxOffset) ? Math.max(0, rawTxOffset) : 0;
+    const total = get('SELECT COUNT(*) c FROM coin_transactions WHERE userId=?', user.id).c;
+    const items = all('SELECT * FROM coin_transactions WHERE userId=? ORDER BY createdAt DESC, rowid DESC LIMIT ? OFFSET ?', user.id, txLimit, txOffset)
+      .map((t) => ({ id: t.id, amount: t.amount, type: t.type, refId: t.refId, balanceAfter: t.balanceAfter, createdAt: t.createdAt }));
+    return ok(res, { items, total });
+  }
   if (req.method === 'POST' && p === '/auth/referral') {
     if (!settings.getSetting('referrals_enabled')) return err(res, 403, 'FEATURE_DISABLED', 'Referrals are disabled');
     if (user.referredBy) return err(res, 409, 'ALREADY_REFERRED', 'A referral code was already applied to this account');

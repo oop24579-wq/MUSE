@@ -12,6 +12,8 @@ class UserModel {
   final int coinBalance;
   final bool autoplayNext;
   final String videoQuality;
+  final bool notificationsEnabled;
+  final String? locale;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -28,6 +30,8 @@ class UserModel {
     this.coinBalance = 0,
     this.autoplayNext = true,
     this.videoQuality = 'auto',
+    this.notificationsEnabled = true,
+    this.locale,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -57,6 +61,8 @@ class UserModel {
       coinBalance: (json['coinBalance'] as num?)?.toInt() ?? 0,
       autoplayNext: (json['autoplayNext'] as bool?) ?? true,
       videoQuality: (json['videoQuality'] as String?) ?? 'auto',
+      notificationsEnabled: (json['notificationsEnabled'] as bool?) ?? true,
+      locale: json['locale'] as String?,
       createdAt: createdAt != null ? DateTime.parse(createdAt) : now,
       updatedAt: linkedAt != null ? DateTime.parse(linkedAt) : now,
     );
@@ -76,6 +82,8 @@ class UserModel {
     final coinBalance = json['coinBalance'] ?? json['coin_balance'];
     final autoplayNext = json['autoplayNext'] ?? json['autoplay_next'];
     final videoQuality = json['videoQuality'] ?? json['video_quality'];
+    final notificationsEnabled =
+        json['notificationsEnabled'] ?? json['notifications_enabled'];
     final createdAt = json['created_at'] ?? json['createdAt'];
     final updatedAt = json['updated_at'] ?? json['updatedAt'];
 
@@ -92,6 +100,8 @@ class UserModel {
       coinBalance: (coinBalance as int?) ?? 0,
       autoplayNext: (autoplayNext as bool?) ?? true,
       videoQuality: (videoQuality as String?) ?? 'auto',
+      notificationsEnabled: (notificationsEnabled as bool?) ?? true,
+      locale: json['locale'] as String?,
       createdAt: DateTime.parse(createdAt as String),
       updatedAt: DateTime.parse(updatedAt as String),
     );
@@ -122,6 +132,8 @@ class UserModel {
     int? coinBalance,
     bool? autoplayNext,
     String? videoQuality,
+    bool? notificationsEnabled,
+    String? locale,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -139,6 +151,8 @@ class UserModel {
       coinBalance: coinBalance ?? this.coinBalance,
       autoplayNext: autoplayNext ?? this.autoplayNext,
       videoQuality: videoQuality ?? this.videoQuality,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      locale: locale ?? this.locale,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
