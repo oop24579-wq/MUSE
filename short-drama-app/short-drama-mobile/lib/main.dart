@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'package:drama_now/core/app_export.dart';
 import 'package:drama_now/core/app_navigator.dart';
+import 'package:drama_now/presentation/app_lock/app_lock_gate.dart';
 import 'package:drama_now/widgets/custom_error_widget.dart';
 import 'package:drama_now/services/theme_provider.dart';
 import 'package:drama_now/services/user_provider.dart';
@@ -108,7 +109,10 @@ class MyApp extends StatelessWidget {
                 data: MediaQuery.of(context).copyWith(
                   textScaler: TextScaler.linear(1.0),
                 ),
-                child: child!,
+                // Round 5 (item 12): the app-lock gate sits above the
+                // Navigator; it renders its child untouched until the
+                // lock arms (home shell) and locks.
+                child: AppLockGate(child: child!),
               );
             },
             // 🚨 END CRITICAL SECTION

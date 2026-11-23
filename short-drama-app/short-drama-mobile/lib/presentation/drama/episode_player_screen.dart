@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,7 +17,11 @@ import '../../models/drama/playback_model.dart';
 import '../../models/drama/series_model.dart';
 import '../../providers/drama/drama_providers.dart';
 import '../../services/app_config_service.dart';
+import '../../services/content_protection_service.dart';
+import '../../services/haptics_service.dart';
+import '../../services/luxury_settings_service.dart';
 import '../../services/player_tutorial.dart';
+import '../../services/wakelock_service.dart';
 import '../../services/drama/drama_entitlement_service.dart';
 import '../../services/drama/drama_service.dart';
 import '../../services/drama/playback_service.dart';
@@ -80,6 +85,32 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
 
   /// In-flight guard for the unlock action (double-tap = double charge).
   bool _unlocking = false;
+
+  // --- Round 5 (luxury) state ------------------------------------------------
+  /// Smart-back gate: PopScope only lets a pop through once the smart
+  /// back handler has approved it (see _onBackIntent).
+  bool _allowPop = false;
+
+  /// iOS screen-capture in progress → privacy overlay covers the video.
+  bool _captureBlocked = false;
+  StreamSubscription<bool>? _captureSub;
+  StreamSubscription<void>? _screenshotSub;
+
+  /// Last play state pushed to the wakelock / PiP native side, so the
+  /// per-tick listener only calls out on real transitions.
+  bool? _sideEffectPlaying;
+
+  /// Smart preload (item 9): the next episode's controller, initialized
+  /// paused at 0 and adopted by _load() when the user advances to it.
+  VideoPlayerController? _preloadedController;
+  int _preloadedIndex = -1;
+  bool _preloading = false;
+
+  /// PiP (item 6): while in Picture-in-Picture the app reports a
+  /// paused lifecycle state even though the video is on screen — the
+  /// background-pause logic must not stop playback then.
+  bool _inPip = false;
+  DateTime? _pipIntentAt;
 
   /// One-time gesture coach-mark overlay (CODE_READINESS item 8).
   bool _showTutorial = false;
@@ -169,8 +200,9 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
   bool get _hasDubs => widget.series.dubLanguages.isNotEmpty;
 
   void _haptic() {
-    if (!_cfg.hapticsEnabled) return;
-    HapticFeedback.mediumImpact();
+    // Routed through HapticsService (round 5, item 13): honours both
+    // the remote-config kill switch and the user's local toggle.
+    HapticsService.instance.medium();
   }
 
   double get _captionFontSizePx => switch (_captionFontSize) {
@@ -201,7 +233,57 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     _loadHistory();
     _loadMyListState();
     _maybeShowTutorial();
+    _initLuxury();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  /// Round 5 entry setup: immersive playback (item 2) and content
+  /// protection (item 3). All platform calls fail soft.
+  void _initLuxury() {
+    // Immersive: hide status + navigation bars while in the player;
+    // dispose() restores the app-wide edge-to-edge mode.
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    final level = LuxurySettingsService.instance.protectionLevel;
+    if (ContentProtectionService.protectsPlayer(level)) {
+      unawaited(ContentProtectionService.instance.setSecure(true));
+    }
+    // iOS capture reactions: cover the video while a recording /
+    // mirroring session is active; a screenshot (which iOS cannot
+    // block) earns a brief in-app notice.
+    _captureSub =
+        ContentProtectionService.instance.captureChanges.listen((captured) {
+      if (!mounted) return;
+      setState(() => _captureBlocked = captured);
+      if (captured) _controller?.pause();
+    });
+    _screenshotSub =
+        ContentProtectionService.instance.screenshotEvents.listen((_) {
+      if (mounted) {
+        showTopToastInfo(
+            context, 'Screenshots are disabled for protected content');
+      }
+    });
+    unawaited(ContentProtectionService.instance
+        .isCaptured()
+        .then((captured) {
+      if (captured && mounted) setState(() => _captureBlocked = true);
+    }));
+    PlayerPlatformService.instance.setPipModeListener((inPip) {
+      _inPip = inPip;
+    });
+  }
+
+  /// Push play-state transitions to the wakelock (item 1) and to the
+  /// native PiP state (item 6). Called from the tick listener only when
+  /// the play state actually flips.
+  void _syncPlaybackSideEffects(bool playing) {
+    unawaited(WakelockService.instance.sync(isPlaying: playing));
+    final c = _controller;
+    final aspect = (c != null && c.value.aspectRatio > 0)
+        ? c.value.aspectRatio
+        : 9 / 16;
+    unawaited(PlayerPlatformService.instance
+        .setPlaybackState(playing: playing, aspectRatio: aspect));
   }
 
   /// Show the gesture coach marks on first open (or when replayed from
@@ -279,6 +361,14 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Background audio ON = keep playing; OFF = pause when app goes inactive.
     if (_bgAudioOn) return;
+    // In PiP the (still visible) activity reports paused — don't stop
+    // playback for it, nor for the transition right after a PiP tap.
+    if (_inPip) return;
+    if (_pipIntentAt != null &&
+        DateTime.now().difference(_pipIntentAt!) <
+            const Duration(seconds: 2)) {
+      return;
+    }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       final c = _controller;
@@ -300,6 +390,12 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     _showResumeBanner = false;
     _resumeBannerSeconds = null;
     _disposeController();
+    // A preload for a different episode than the one now loading is
+    // worthless (episode skipped, language switched, retry, …) — drop
+    // it. A preload FOR this episode survives to the adoption below.
+    if (_preloadedController != null && _preloadedIndex != _index) {
+      _disposePreload();
+    }
     final episode = _current;
     final access = DramaEntitlementService.instance.accessFor(episode, _isVip);
     setState(() {
@@ -362,8 +458,13 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       }
     }
 
-    final ok = await _initController(url,
-        seekTo: seekTo ?? resumeSeek, autoPlay: true);
+    // Round 5 (item 9): prefer the preloaded controller for this
+    // episode when one is ready; fall back to a fresh init otherwise.
+    var ok = await _adoptPreloaded(seekTo: seekTo ?? resumeSeek);
+    if (!ok) {
+      ok = await _initController(url,
+          seekTo: seekTo ?? resumeSeek, autoPlay: true);
+    }
     if (!ok || gen != _loadGen) return;
     if (_resumeBannerSeconds != null && mounted) {
       setState(() => _showResumeBanner = true);
@@ -377,6 +478,112 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       _captionCues = const [];
     }
     DramaService.instance.incrementView('episode', episode.id);
+    unawaited(_maybePreloadNext());
+  }
+
+  /// Round 5 (item 9): adopt the preloaded controller for the current
+  /// episode. Returns false on any mismatch/failure, in which case the
+  /// caller falls back to a normal network init.
+  Future<bool> _adoptPreloaded({Duration? seekTo}) async {
+    final pre = _preloadedController;
+    if (pre == null || _preloadedIndex != _index) return false;
+    _preloadedController = null;
+    _preloadedIndex = -1;
+    if (!pre.value.isInitialized) {
+      await pre.dispose();
+      return false;
+    }
+    _controller = pre;
+    pre.addListener(_onTick);
+    try {
+      await pre.setPlaybackSpeed(_speed);
+      if (seekTo != null && seekTo > Duration.zero) {
+        await pre.seekTo(seekTo);
+      }
+      await pre.play();
+    } catch (_) {
+      if (identical(_controller, pre)) _disposeController();
+      return false;
+    }
+    if (mounted) {
+      setState(() {
+        _initializing = false;
+        _loadFailed = false;
+      });
+    }
+    return true;
+  }
+
+  /// Round 5 (item 9): best-effort preload of the NEXT episode —
+  /// Wi-Fi/ethernet only (unknown connectivity counts as allowed),
+  /// never for a locked episode, and every failure is silent: a failed
+  /// preload must never affect the episode currently playing.
+  Future<void> _maybePreloadNext() async {
+    if (_preloading) return;
+    final nextIndex = _index + 1;
+    if (nextIndex >= _episodes.length) return;
+    if (_preloadedController != null && _preloadedIndex == nextIndex) {
+      return;
+    }
+    final next = _episodes[nextIndex];
+    if (DramaEntitlementService.instance.accessFor(next, _isVip) !=
+        EpisodeAccess.playable) {
+      return;
+    }
+    try {
+      final results = await Connectivity().checkConnectivity();
+      final known = results.isNotEmpty &&
+          !results.contains(ConnectivityResult.none);
+      final onUnmetered = results.contains(ConnectivityResult.wifi) ||
+          results.contains(ConnectivityResult.ethernet);
+      if (known && !onUnmetered) return; // mobile data → skip preload
+    } catch (_) {
+      // Connectivity unknown → treated as allowed.
+    }
+    if (!mounted || _index + 1 != nextIndex) return;
+    _preloading = true;
+    try {
+      // Resolve the URL exactly like _load() does (playback payload
+      // first, stored quality applied, legacy single-URL fallback).
+      final playback = await PlaybackService.instance
+          .getPlayback(next.id, lang: _selectedLang);
+      var url = playback?.videoUrl;
+      if (url == null) {
+        final res = await DramaService.instance
+            .resolveEpisodeVideoUrl(next.id, lang: _selectedLang);
+        url = res.url;
+      }
+      if (url == null || url.isEmpty) return;
+      if (_qualityLabel != 'Auto' && playback != null) {
+        url = playback.urlForLabel(_qualityLabel) ?? url;
+      }
+      if (!mounted || _index + 1 != nextIndex) return;
+      final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+      try {
+        await controller.initialize();
+      } catch (_) {
+        await controller.dispose();
+        return;
+      }
+      if (!mounted || _index + 1 != nextIndex) {
+        await controller.dispose();
+        return;
+      }
+      _disposePreload();
+      _preloadedController = controller;
+      _preloadedIndex = nextIndex;
+      // Deliberately left paused at 0; _adoptPreloaded starts it.
+    } catch (_) {
+      // Silent by design.
+    } finally {
+      _preloading = false;
+    }
+  }
+
+  void _disposePreload() {
+    _preloadedController?.dispose();
+    _preloadedController = null;
+    _preloadedIndex = -1;
   }
 
   Future<bool> _initController(String url,
@@ -440,6 +647,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       _initializing = true;
     });
     _disposeController();
+    _disposePreload(); // preloaded URL carries the old quality
     await _initController(url, seekTo: pos, autoPlay: wasPlaying);
   }
 
@@ -478,6 +686,13 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
   void _onTick() {
     final c = _controller;
     if (c == null || !c.value.isInitialized) return;
+    // Round 5: wakelock + native PiP state follow real play/pause
+    // transitions only (this listener fires several times a second).
+    final playingNow = c.value.isPlaying;
+    if (playingNow != _sideEffectPlaying) {
+      _sideEffectPlaying = playingNow;
+      _syncPlaybackSideEffects(playingNow);
+    }
     final pos = c.value.position.inSeconds;
     final dur = c.value.duration.inSeconds;
     final atEnd = dur > 0 && pos >= dur - 1;
@@ -517,15 +732,28 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       }
       return;
     }
-    if (_index >= _episodes.length - 1) return;
-    if (_cfg.feature('binge_mode') && _bingeOn) {
-      _playNext();
-      return;
-    }
-    if (_cfg.feature('auto_next')) {
-      _startAutoNext();
-    } else {
-      _playNext();
+    // Round 5 (item 8): never auto-advance into a LOCKED episode — no
+    // countdown, no silent jump; the ended state stays and the user
+    // reaches the existing locked UX manually (Next button / swipe).
+    final hasNext = _index < _episodes.length - 1;
+    final nextPlayable = hasNext &&
+        DramaEntitlementService.instance
+                .accessFor(_episodes[_index + 1], _isVip) ==
+            EpisodeAccess.playable;
+    final action = decideNextEpisodeAction(
+      hasNext: hasNext,
+      nextPlayable: nextPlayable,
+      bingeOn: _bingeOn,
+      bingeFeatureOn: _cfg.feature('binge_mode'),
+      autoNextFeatureOn: _cfg.feature('auto_next'),
+    );
+    switch (action) {
+      case NextEpisodeAction.none:
+        break;
+      case NextEpisodeAction.playNow:
+        _playNext();
+      case NextEpisodeAction.countdown:
+        _startAutoNext();
     }
   }
 
@@ -724,6 +952,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
       final res = await DramaService.instance.unlockEpisode(_current.id);
       if (res['success'] == true) {
         if (mounted) {
+          HapticsService.instance.success();
           showTopToastSuccess(context, 'Episode unlocked');
           context.read<UserProvider>().refreshUserInBackground();
         }
@@ -793,6 +1022,67 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     TabRouter.goTo(TabRouter.rewards);
   }
 
+  // --- Smart back (round 5, item 5a/5d) ---------------------------------------
+  /// Single entry point for every back intent in the player (system
+  /// back via PopScope, the top-bar back button, the lock overlay's
+  /// Back button):
+  ///   * screen locked → stay, with a hint;
+  ///   * unlock/purchase in flight → ask first;
+  ///   * controls hidden (immersive) → first back just reveals them;
+  ///   * otherwise → leave.
+  void _onBackIntent() {
+    if (_controlsLocked) {
+      showTopToastInfo(
+          context, 'Screen is locked — long-press the lock icon to unlock');
+      return;
+    }
+    if (_unlocking) {
+      _confirmExitDuringUnlock();
+      return;
+    }
+    if (!_controlsVisible) {
+      setState(() => _controlsVisible = true);
+      return;
+    }
+    _exitPlayer();
+  }
+
+  void _exitPlayer() {
+    setState(() => _allowPop = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).maybePop();
+    });
+  }
+
+  void _confirmExitDuringUnlock() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.backgroundDark,
+        title: const Text('Purchase in progress',
+            style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'An unlock is still being processed. Leaving now may lose its '
+          'result — wait a moment, or leave anyway.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Stay'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _exitPlayer();
+            },
+            child: const Text('Leave anyway'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _disposeController() {
     _controller?.removeListener(_onTick);
     _controller?.dispose();
@@ -809,6 +1099,27 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     _rippleAnim.dispose();
     if (_episodes.isNotEmpty) _record();
     _disposeController();
+    _disposePreload();
+    // Round 5 teardown: release the wakelock, clear the native PiP
+    // state, drop player-only content protection, and restore the
+    // app-wide edge-to-edge system UI (mirrors main.dart).
+    unawaited(WakelockService.instance.release());
+    unawaited(PlayerPlatformService.instance
+        .setPlaybackState(playing: false, aspectRatio: 9 / 16));
+    final level = LuxurySettingsService.instance.protectionLevel;
+    if (ContentProtectionService.releasesOnPlayerExit(level)) {
+      unawaited(ContentProtectionService.instance.setSecure(false));
+    }
+    _captureSub?.cancel();
+    _screenshotSub?.cancel();
+    PlayerPlatformService.instance.setPipModeListener(null);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarContrastEnforced: false,
+    ));
     super.dispose();
   }
 
@@ -931,6 +1242,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
   }
 
   Future<void> _enterPip() async {
+    _pipIntentAt = DateTime.now();
     final ok = await PlayerPlatformService.instance.enterPip();
     if (!ok && mounted) {
       showTopToastInfo(context, 'PiP not supported here');
@@ -967,7 +1279,12 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
     final c = _controller;
     final size = MediaQuery.of(context).size;
     final caption = _activeCaption;
-    return Scaffold(
+    return PopScope(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _onBackIntent();
+      },
+      child: Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
         onTap: () {
@@ -995,8 +1312,13 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                 ),
               )
             else
-              _PosterBackdrop(
-                  url: _current.thumbnailUrl ?? widget.series.posterUrl),
+              // Hero pair with the series detail hero (round 5, item
+              // 11): same tag, so detail → player animates the poster.
+              Hero(
+                tag: 'series-poster-${widget.series.id}',
+                child: _PosterBackdrop(
+                    url: _current.thumbnailUrl ?? widget.series.posterUrl),
+              ),
 
             // Brightness fallback dim overlay
             if (_dimOpacity > 0)
@@ -1169,11 +1491,17 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                     'EP ${_episodes[_index + 1].episodeNumber} · ${_episodes[_index + 1].displayTitle}',
                 progress: _autoNextProgress,
                 secondsLeft: _autoNextSecondsLeft,
+                posterUrl: _episodes[_index + 1].thumbnailUrl ??
+                    widget.series.posterUrl,
                 onNext: () {
+                  HapticsService.instance.light();
                   _cancelAutoNext();
                   _playNext();
                 },
-                onCancel: _cancelAutoNext,
+                onCancel: () {
+                  HapticsService.instance.selection();
+                  _cancelAutoNext();
+                },
               ),
 
             // Controls lock overlay
@@ -1185,11 +1513,35 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                 },
               ),
 
+            // iOS capture privacy cover (round 5, item 3): while the
+            // screen is being recorded/mirrored the video is hidden.
+            if (_captureBlocked)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black,
+                  alignment: Alignment.center,
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.screen_lock_portrait_rounded,
+                          color: Colors.white54, size: 44),
+                      SizedBox(height: 12),
+                      Text(
+                        'Content hidden while screen is being recorded',
+                        style:
+                            TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             // One-time gesture coach marks (item 8) — topmost layer.
             if (_showTutorial)
               PlayerTutorialOverlay(onDismiss: _dismissTutorial),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1259,7 +1611,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
           ),
           SizedBox(height: 2.h),
           TextButton(
-            onPressed: () => Navigator.of(context).maybePop(),
+            onPressed: _onBackIntent,
             child: const Text('Back', style: TextStyle(color: Colors.white70)),
           ),
         ],
@@ -1282,7 +1634,7 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                 HeaderGlassIconButton(
                   isDark: true,
                   icon: Icons.arrow_back_ios_new_rounded,
-                  onTap: () => Navigator.of(context).maybePop(),
+                  onTap: _onBackIntent,
                 ),
                 SizedBox(width: 3.w),
                 Expanded(
@@ -1323,13 +1675,19 @@ class _EpisodePlayerScreenState extends ConsumerState<EpisodePlayerScreen>
                   ),
                   SizedBox(width: 2.w),
                 ],
-                if (_cfg.feature('pip'))
+                // PiP is Android-only (round 5, item 6): iOS's
+                // video_player rendering path has no PiP bridge, so
+                // the button simply doesn't appear there.
+                if (_cfg.feature('pip') &&
+                    defaultTargetPlatform == TargetPlatform.android)
                   HeaderGlassIconButton(
                     isDark: true,
                     icon: Icons.picture_in_picture_alt_rounded,
                     onTap: _enterPip,
                   ),
-                if (_cfg.feature('pip')) SizedBox(width: 2.w),
+                if (_cfg.feature('pip') &&
+                    defaultTargetPlatform == TargetPlatform.android)
+                  SizedBox(width: 2.w),
                 if (_cfg.feature('lock_controls'))
                   HeaderGlassIconButton(
                     isDark: true,

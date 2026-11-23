@@ -1,10 +1,16 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/app_export.dart';
 import '../../core/tab_router.dart';
+import '../../services/app_lock_service.dart';
+import '../../services/double_back_guard.dart';
+import '../../services/drama/drama_service.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/main_tab_bar.dart';
+import '../../widgets/top_toast.dart';
 import '../drama/discover_content.dart';
 import '../drama/shorts_content.dart';
 import '../drama/rewards_content.dart';
@@ -25,7 +31,23 @@ class MainTabs extends StatefulWidget {
 class _MainTabsState extends State<MainTabs>
     with SingleTickerProviderStateMixin {
   int _currentIndex = 0;
-  DateTime? _lastBackPressedAt;
+
+  /// Double-back-to-exit window logic (round 5, item 5b).
+  final DoubleBackGuard _exitGuard = DoubleBackGuard();
+
+  /// Section titles shown by the collapsed smart header (item 4).
+  static const _tabTitles = [
+    'Discover',
+    'Shorts',
+    'Rewards',
+    'My List',
+    'Profile',
+  ];
+
+  /// Progress (0..1) of the most recent in-progress Continue Watching
+  /// entry, shown as a thin bar in the collapsed header. Null = no
+  /// in-progress entry → the bar is hidden (never faked).
+  double? _cwProgress;
 
   /// Drives the collapsing app header on the Home tab.
   /// 1.0 = header fully shown, 0.0 = header fully hidden (only the tabs remain).
@@ -34,8 +56,6 @@ class _MainTabsState extends State<MainTabs>
   /// Distance from the very top before we allow the header to hide, so a tiny
   /// scroll near the top does not flicker the header away.
   static const double _hideThreshold = 8;
-
-  static const _exitConfirmWindow = Duration(seconds: 2);
 
   List<Widget> get _tabs => [
         const DiscoverContent(),
@@ -62,6 +82,29 @@ class _MainTabsState extends State<MainTabs>
     // Let pushed screens (e.g. the player after a failed unlock) jump to a
     // tab — see TabRouter.
     TabRouter.register(_onTabTapped);
+    // Round 5 (item 12): reaching the home shell arms the app lock —
+    // this is the first "content" surface after splash routing, so an
+    // enabled lock gates here, never during the splash/consent chain.
+    AppLockService.instance.arm();
+    _loadContinueWatching();
+  }
+
+  /// Latest in-progress Continue Watching entry → header progress bar.
+  Future<void> _loadContinueWatching() async {
+    try {
+      final history = await DramaService.instance.fetchWatchHistory(limit: 5);
+      if (!mounted) return;
+      double? progress;
+      for (final e in history) {
+        if (!e.completed && e.episodeProgress > 0) {
+          progress = e.episodeProgress;
+          break;
+        }
+      }
+      if (progress != _cwProgress) setState(() => _cwProgress = progress);
+    } catch (_) {
+      // Header decoration only; failures keep the previous value.
+    }
   }
 
   @override
@@ -75,6 +118,8 @@ class _MainTabsState extends State<MainTabs>
     if (_currentIndex != index) {
       setState(() => _currentIndex = index);
       _revealHeader();
+      _exitGuard.reset();
+      if (index == 0) _loadContinueWatching();
     }
   }
 
@@ -117,13 +162,13 @@ class _MainTabsState extends State<MainTabs>
       _onTabTapped(0);
       return false;
     }
-    final now = DateTime.now();
-    if (_lastBackPressedAt == null ||
-        now.difference(_lastBackPressedAt!) > _exitConfirmWindow) {
-      _lastBackPressedAt = now;
-      return false;
+    // Round 5 (item 5b): first press arms the guard and tells the
+    // user; a second press inside the window actually exits.
+    if (_exitGuard.registerPress(DateTime.now())) {
+      SystemNavigator.pop();
+    } else if (mounted) {
+      showTopToastInfo(context, 'Press back again to exit');
     }
-    SystemNavigator.pop();
     return false;
   }
 
@@ -140,7 +185,11 @@ class _MainTabsState extends State<MainTabs>
         backgroundColor: AppTheme.pageBackground(isDark),
         body: Column(
           children: [
-            _CollapsingHeader(controller: _headerController),
+            _CollapsingHeader(
+              controller: _headerController,
+              title: _tabTitles[_currentIndex],
+              progress: _cwProgress,
+            ),
             Expanded(
               child: NotificationListener<ScrollNotification>(
                 onNotification: _onHomeScroll,
@@ -165,10 +214,25 @@ class _MainTabsState extends State<MainTabs>
 /// The `RadioPod` app header row that smoothly collapses and fades as the Home
 /// feed is scrolled down, letting the tab chips rise into its place. The top
 /// status-bar inset is always preserved so content never slides under the notch.
+///
+/// Round 5 (item 4 — "smart header"): instead of vanishing completely,
+/// the header collapses INTO a slim frosted bar that keeps the current
+/// section title visible plus a thin Continue Watching progress bar
+/// (hidden when there is no in-progress entry).
 class _CollapsingHeader extends StatefulWidget {
-  const _CollapsingHeader({required this.controller});
+  const _CollapsingHeader({
+    required this.controller,
+    required this.title,
+    required this.progress,
+  });
 
   final AnimationController controller;
+
+  /// Contextual section title for the collapsed slim bar.
+  final String title;
+
+  /// Continue Watching progress 0..1, or null to hide the bar.
+  final double? progress;
 
   @override
   State<_CollapsingHeader> createState() => _CollapsingHeaderState();
@@ -221,7 +285,89 @@ class _CollapsingHeaderState extends State<_CollapsingHeader> {
             },
             child: const AppHeader(includeTopSafeArea: false),
           ),
+          // Slim smart bar: grows in exactly as the full header leaves.
+          AnimatedBuilder(
+            animation: curved,
+            builder: (context, _) {
+              final t = curved.value;
+              final height = (1 - t) * 38.0;
+              if (height < 1) return const SizedBox.shrink();
+              return ClipRect(
+                child: SizedBox(
+                  height: height,
+                  child: Opacity(
+                    opacity: (1 - t).clamp(0.0, 1.0),
+                    child: _SlimSmartBar(
+                      title: widget.title,
+                      progress: widget.progress,
+                      isDark: isDark,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// The collapsed form of the smart header: frosted slim bar with the
+/// current section title and an optional watch-progress hairline.
+class _SlimSmartBar extends StatelessWidget {
+  const _SlimSmartBar({
+    required this.title,
+    required this.progress,
+    required this.isDark,
+  });
+
+  final String title;
+  final double? progress;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = AppTheme.pageBackground(isDark);
+    final textColor =
+        isDark ? AppTheme.textPrimaryDark : AppTheme.textPrimaryLight;
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          color: bg.withValues(alpha: 0.78),
+          child: Column(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (progress != null)
+                LinearProgressIndicator(
+                  value: progress!.clamp(0.0, 1.0),
+                  minHeight: 2,
+                  backgroundColor: textColor.withValues(alpha: 0.12),
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(AppTheme.accentBlue),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

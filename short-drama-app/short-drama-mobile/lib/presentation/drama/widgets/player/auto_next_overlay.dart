@@ -1,5 +1,32 @@
 import 'package:flutter/material.dart';
 
+/// What the player should do when an episode ends (round 5, item 8).
+enum NextEpisodeAction {
+  /// Stay on the ended state (no next episode, or it is locked — the
+  /// existing locked UX is reached manually, never by auto-advance).
+  none,
+
+  /// Advance immediately (binge mode, or the countdown feature is off).
+  playNow,
+
+  /// Show the countdown overlay; advance when it elapses.
+  countdown,
+}
+
+/// Pure end-of-episode decision, extracted for unit tests.
+NextEpisodeAction decideNextEpisodeAction({
+  required bool hasNext,
+  required bool nextPlayable,
+  required bool bingeOn,
+  required bool bingeFeatureOn,
+  required bool autoNextFeatureOn,
+}) {
+  if (!hasNext || !nextPlayable) return NextEpisodeAction.none;
+  if (bingeFeatureOn && bingeOn) return NextEpisodeAction.playNow;
+  if (autoNextFeatureOn) return NextEpisodeAction.countdown;
+  return NextEpisodeAction.playNow;
+}
+
 /// Full-screen "Up next" overlay with an animated countdown ring.
 class AutoNextOverlay extends StatelessWidget {
   const AutoNextOverlay({
@@ -9,10 +36,14 @@ class AutoNextOverlay extends StatelessWidget {
     required this.secondsLeft,
     required this.onNext,
     required this.onCancel,
+    this.posterUrl,
   });
 
   /// e.g. "EP 12 · <title>"
   final String nextLabel;
+
+  /// Optional thumbnail of the next episode / series poster (round 5).
+  final String? posterUrl;
 
   /// 0..1 countdown progress remaining.
   final double progress;
@@ -36,6 +67,19 @@ class AutoNextOverlay extends StatelessWidget {
                     color: Colors.white70,
                     fontSize: 13,
                     fontWeight: FontWeight.w600)),
+            if (posterUrl != null && posterUrl!.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  posterUrl!,
+                  width: 84,
+                  height: 112,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             Text(
               nextLabel,

@@ -5,6 +5,8 @@ import 'package:video_player/video_player.dart';
 import '../../models/drama/short_item.dart';
 import '../../services/app_config_service.dart';
 import '../../services/drama/drama_service.dart';
+import '../../services/haptics_service.dart';
+import '../../services/wakelock_service.dart';
 import '../../widgets/tile_image.dart';
 import '../../widgets/top_toast.dart';
 import 'drama_navigation.dart';
@@ -155,8 +157,19 @@ class _ShortPageState extends State<_ShortPage> {
 
   @override
   void dispose() {
+    _controller?.removeListener(_syncWakelock);
+    if (widget.active) WakelockService.instance.release();
     _controller?.dispose();
     super.dispose();
+  }
+
+  /// Round 5 (item 1): the Shorts feed holds the wakelock exactly
+  /// while the visible clip is playing.
+  void _syncWakelock() {
+    final c = _controller;
+    WakelockService.instance.sync(
+      isPlaying: widget.active && (c?.value.isPlaying ?? false),
+    );
   }
 
   Future<void> _ensureController() async {
@@ -174,6 +187,7 @@ class _ShortPageState extends State<_ShortPage> {
     }
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
     _controller = controller;
+    controller.addListener(_syncWakelock);
     try {
       await controller.initialize();
     } catch (_) {
@@ -205,6 +219,7 @@ class _ShortPageState extends State<_ShortPage> {
   }
 
   Future<void> _toggleLike() async {
+    HapticsService.instance.selection();
     final next = !_liked;
     setState(() {
       _liked = next;

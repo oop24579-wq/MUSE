@@ -6,6 +6,8 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:drama_now/core/app_navigator.dart';
 import 'package:drama_now/services/api/api_client.dart';
 import 'package:drama_now/services/app_config_service.dart';
+import 'package:drama_now/services/content_protection_service.dart';
+import 'package:drama_now/services/luxury_settings_service.dart';
 import 'package:drama_now/services/auth/auth_service.dart';
 import 'package:drama_now/services/firebase/firebase_service.dart';
 import 'package:drama_now/services/firebase/remote_config_service.dart';
@@ -21,6 +23,13 @@ class AppBootstrap {
   static Future<void> ensureInitialized() => _future ??= _run();
 
   static Future<void> _run() async {
+    // Round 5: local luxury settings load first (cheap, on-device) —
+    // haptics/wakelock/protection readers all consult the cache. Then
+    // apply whole-app content protection if the user selected it.
+    await LuxurySettingsService.instance.load();
+    unawaited(ContentProtectionService.instance
+        .applyAtStartup(LuxurySettingsService.instance.protectionLevel));
+
     // Round 4: any 503 MAINTENANCE response anywhere in the app routes to
     // the MaintenanceScreen (single global handling in ApiClient; the
     // latch there prevents stacks/loops).

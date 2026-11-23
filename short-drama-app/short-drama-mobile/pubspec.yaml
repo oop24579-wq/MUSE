@@ -60,6 +60,12 @@ dependencies:
   purchases_flutter: ^9.10.1
   video_player: ^2.9.2
 
+  # Round 5 (luxury/UX): keep-screen-on during playback, poster palette
+  # extraction, and biometric app lock. All free, on-device only.
+  wakelock_plus: ^1.2.10
+  palette_generator: ^0.3.3+5
+  local_auth: ^2.3.0
+
   
   universal_html: ^2.2.4
   url_launcher: ^6.3.1

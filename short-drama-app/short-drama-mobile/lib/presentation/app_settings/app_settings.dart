@@ -10,8 +10,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/app_export.dart';
 import '../../services/user_provider.dart';
 import 'package:drama_now/services/auth/auth_service.dart';
+import '../../services/app_lock_service.dart';
+import '../../services/content_protection_service.dart';
 import '../../services/language_service.dart';
 import '../../services/locale_provider.dart';
+import '../../services/luxury_settings_service.dart';
 import '../../services/revenuecat_service.dart';
 import '../../services/rating_service.dart';
 import '../../services/legal_url_launcher.dart';
@@ -61,11 +64,21 @@ class _AppSettingsState extends State<AppSettings>
       if (!mounted) return;
       _settingsListEntranceController.forward();
     });
+    _refreshAppLockState();
+  }
+
+  Future<void> _refreshAppLockState() async {
+    final has = await AppLockService.instance.hasPin();
+    if (mounted) setState(() => _appLockHasPin = has);
   }
 
   // Optimistic playback overrides (null = use the server profile value).
   bool? _autoplayOverride;
   String? _qualityOverride;
+
+  /// Round 5: whether an app-lock PIN exists in secure storage
+  /// (refreshed after every app-lock flow).
+  bool _appLockHasPin = false;
 
   @override
   void dispose() {
@@ -316,6 +329,110 @@ class _AppSettingsState extends State<AppSettings>
                                               userProvider
                                                   .user?.videoQuality ??
                                               'auto',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: secondaryTextColor,
+                                          ),
+                                        ),
+                                        SizedBox(width: 1.w),
+                                        Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: secondaryTextColor,
+                                          size: 20,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: 2.h),
+                            _settingsListEntrance(
+                              index: listAnimIndex++,
+                              child: SettingsMenuCard(
+                                isDark: isDark,
+                                secondaryTextColor: secondaryTextColor,
+                                children: [
+                                  ListenableBuilder(
+                                    listenable:
+                                        LuxurySettingsService.instance,
+                                    builder: (context, _) {
+                                      final luxury =
+                                          LuxurySettingsService.instance;
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          _buildSettingsSwitchRow(
+                                            icon: Icons
+                                                .stay_current_portrait_rounded,
+                                            title:
+                                                'Keep screen on while watching',
+                                            textColor: textColor,
+                                            secondaryTextColor:
+                                                secondaryTextColor,
+                                            value: luxury.keepScreenOn,
+                                            onChanged:
+                                                luxury.setKeepScreenOn,
+                                          ),
+                                          _buildSettingsSwitchRow(
+                                            icon: Icons.vibration_rounded,
+                                            title: 'Haptic feedback',
+                                            textColor: textColor,
+                                            secondaryTextColor:
+                                                secondaryTextColor,
+                                            value: luxury.hapticsEnabled,
+                                            onChanged:
+                                                luxury.setHapticsEnabled,
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                  _buildSettingsRow(
+                                    icon: Icons.no_photography_outlined,
+                                    title: 'Content protection',
+                                    isDark: isDark,
+                                    textColor: textColor,
+                                    secondaryTextColor: secondaryTextColor,
+                                    onTap: _showProtectionPicker,
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          _protectionLabel(
+                                              LuxurySettingsService.instance
+                                                  .protectionLevel),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: secondaryTextColor,
+                                          ),
+                                        ),
+                                        SizedBox(width: 1.w),
+                                        Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: secondaryTextColor,
+                                          size: 20,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  _buildSettingsRow(
+                                    icon: Icons.lock_rounded,
+                                    title: 'App lock',
+                                    isDark: isDark,
+                                    textColor: textColor,
+                                    secondaryTextColor: secondaryTextColor,
+                                    onTap: _showAppLockSheet,
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          LuxurySettingsService.instance
+                                                  .appLockEnabled
+                                              ? 'On'
+                                              : 'Off',
                                           style: GoogleFonts.inter(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w500,
@@ -1102,6 +1219,224 @@ class _AppSettingsState extends State<AppSettings>
       LegalUrlLauncher.openPrivacy(context);
     } else {
       LegalUrlLauncher.openTerms(context);
+    }
+  }
+
+  // ── Round 5 luxury settings (protection / app lock) ─────────────────
+
+  String _protectionLabel(ProtectionLevel level) => switch (level) {
+        ProtectionLevel.off => 'Off',
+        ProtectionLevel.playerOnly => 'Player only',
+        ProtectionLevel.wholeApp => 'Whole app',
+      };
+
+  Future<void> _showProtectionPicker() async {
+    final current = LuxurySettingsService.instance.protectionLevel;
+    final picked = await showModalBottomSheet<ProtectionLevel>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final level in ProtectionLevel.values)
+              ListTile(
+                title: Text(_protectionLabel(level)),
+                subtitle: Text(
+                  switch (level) {
+                    ProtectionLevel.off =>
+                      'Screenshots and recording are allowed',
+                    ProtectionLevel.playerOnly =>
+                      'Block screenshots/recording in the video player',
+                    ProtectionLevel.wholeApp =>
+                      'Block screenshots/recording across the whole app',
+                  },
+                  style: const TextStyle(fontSize: 12),
+                ),
+                trailing: level == current
+                    ? const Icon(Icons.check_circle_rounded)
+                    : null,
+                onTap: () => Navigator.pop(sheetContext, level),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || picked == current || !mounted) return;
+    await LuxurySettingsService.instance.setProtectionLevel(picked);
+    // Apply immediately: whole-app turns the secure flag on now; the
+    // other levels clear it here and let the player apply its own.
+    await ContentProtectionService.instance
+        .setSecure(picked == ProtectionLevel.wholeApp);
+    if (mounted) setState(() {});
+  }
+
+  /// Numeric PIN entry dialog. Returns the PIN, or null when cancelled.
+  Future<String?> _promptPin({
+    required String title,
+    String? subtitle,
+  }) async {
+    final controller = TextEditingController();
+    var error = '';
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: Text(title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (subtitle != null) ...[
+                Text(subtitle, style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 12),
+              ],
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: '4–6 digits',
+                  errorText: error.isEmpty ? null : error,
+                ),
+                onChanged: (_) {
+                  if (error.isNotEmpty) setDlg(() => error = '');
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final pin = controller.text.trim();
+                if (!AppLockService.isValidPinFormat(pin)) {
+                  setDlg(() => error = 'Enter 4–6 digits');
+                  return;
+                }
+                Navigator.pop(ctx, pin);
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _verifyAppLockPin(String title) async {
+    final pin = await _promptPin(title: title);
+    if (pin == null) return false;
+    final ok = await AppLockService.instance.verifyPin(pin);
+    if (!ok && mounted) {
+      showTopToastError(context, 'Incorrect PIN');
+    }
+    return ok;
+  }
+
+  Future<void> _setupAppLockPin() async {
+    final pin = await _promptPin(
+      title: 'Create app-lock PIN',
+      subtitle: 'Choose a 4–6 digit PIN. Biometrics can also unlock '
+          'when your device offers them.',
+    );
+    if (pin == null || !mounted) return;
+    final confirm = await _promptPin(
+      title: 'Confirm PIN',
+      subtitle: 'Enter the same PIN again.',
+    );
+    if (confirm == null || !mounted) return;
+    if (confirm != pin) {
+      showTopToastError(context, 'PINs did not match');
+      return;
+    }
+    final ok = await AppLockService.instance.createPin(pin);
+    if (!mounted) return;
+    if (!ok) {
+      showTopToastError(context, 'Could not save the PIN on this device');
+      return;
+    }
+    await LuxurySettingsService.instance.setAppLockEnabled(true);
+    await _refreshAppLockState();
+    if (mounted) {
+      setState(() {});
+      showTopToastSuccess(context, 'App lock is on');
+    }
+  }
+
+  Future<void> _showAppLockSheet() async {
+    final enabled = LuxurySettingsService.instance.appLockEnabled;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!_appLockHasPin)
+              ListTile(
+                leading: const Icon(Icons.pin_rounded),
+                title: const Text('Set up app lock'),
+                subtitle: const Text('Create a PIN to lock the app'),
+                onTap: () => Navigator.pop(sheetContext, 'setup'),
+              ),
+            if (_appLockHasPin && !enabled)
+              ListTile(
+                leading: const Icon(Icons.lock_rounded),
+                title: const Text('Turn on app lock'),
+                onTap: () => Navigator.pop(sheetContext, 'enable'),
+              ),
+            if (_appLockHasPin && enabled)
+              ListTile(
+                leading: const Icon(Icons.lock_open_rounded),
+                title: const Text('Turn off app lock'),
+                onTap: () => Navigator.pop(sheetContext, 'disable'),
+              ),
+            if (_appLockHasPin) ...[
+              ListTile(
+                leading: const Icon(Icons.password_rounded),
+                title: const Text('Change PIN'),
+                onTap: () => Navigator.pop(sheetContext, 'change'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded),
+                title: const Text('Remove PIN'),
+                onTap: () => Navigator.pop(sheetContext, 'remove'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+    switch (action) {
+      case 'setup':
+        await _setupAppLockPin();
+      case 'enable':
+        await LuxurySettingsService.instance.setAppLockEnabled(true);
+        if (mounted) {
+          setState(() {});
+          showTopToastSuccess(context, 'App lock is on');
+        }
+      case 'disable':
+        if (await _verifyAppLockPin('Enter PIN to turn off app lock')) {
+          await LuxurySettingsService.instance.setAppLockEnabled(false);
+          if (mounted) setState(() {});
+        }
+      case 'change':
+        if (await _verifyAppLockPin('Enter current PIN')) {
+          await _setupAppLockPin();
+        }
+      case 'remove':
+        if (await _verifyAppLockPin('Enter PIN to remove it')) {
+          await AppLockService.instance.clearPin();
+          await LuxurySettingsService.instance.setAppLockEnabled(false);
+          await _refreshAppLockState();
+          if (mounted) setState(() {});
+        }
     }
   }
 

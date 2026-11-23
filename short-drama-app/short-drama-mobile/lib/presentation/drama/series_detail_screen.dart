@@ -10,6 +10,8 @@ import '../../models/drama/season_model.dart';
 import '../../models/drama/series_model.dart';
 import '../../providers/drama/drama_providers.dart';
 import '../../services/drama/drama_service.dart';
+import '../../services/haptics_service.dart';
+import '../../services/poster_palette_service.dart';
 import '../../widgets/header_glass_chip.dart';
 import '../../widgets/tile_image.dart';
 import '../../widgets/tile_image_shimmer.dart';
@@ -37,6 +39,23 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
   int? _likeCountOverride;
   bool _expandedSynopsis = false;
   int _selectedSeason = 1;
+
+  /// Round 5 (item 10): dominant poster color tinting the hero
+  /// gradient; null = plain theme background (also the fallback when
+  /// extraction fails).
+  Color? _posterTint;
+  String? _paletteRequestedFor;
+
+  void _loadPalette(SeriesModel s) {
+    final url = s.posterUrl ?? s.bannerUrl;
+    PosterPaletteService.instance
+        .colorFor(seriesId: s.id, posterUrl: url)
+        .then((color) {
+      if (mounted && color != null && _paletteRequestedFor == s.id) {
+        setState(() => _posterTint = color);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -112,6 +131,12 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     final textColor =
         isDark ? AppTheme.textPrimaryDark : AppTheme.textPrimaryLight;
 
+    // Kick off poster-palette extraction once per series (item 10).
+    if (_paletteRequestedFor != s.id) {
+      _paletteRequestedFor = s.id;
+      _loadPalette(s);
+    }
+
     return Stack(
       children: [
         RefreshIndicator(
@@ -171,16 +196,29 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
 
   Widget _hero(SeriesModel s, List<EpisodeModel> episodes, bool isDark,
       int? resumeEp, String? resumeId) {
+    // Item 10: blend the poster's dominant color into the page
+    // background for the hero's fade-out base (plain background when
+    // no palette is available).
+    final pageBg = AppTheme.pageBackground(isDark);
+    final heroBase = _posterTint == null
+        ? pageBg
+        : Color.alphaBlend(_posterTint!.withValues(alpha: 0.45), pageBg);
     return Stack(
       children: [
-        SizedBox(
-          height: 44.h,
-          width: double.infinity,
-          child: TileImage(
-            imageUrl: s.bannerUrl,
-            fallbackIcon: Icons.movie_rounded,
-            borderRadius: 0,
-            isDark: isDark,
+        // Item 11: Hero pair with the player's poster backdrop — the
+        // tag is unique to this series and only used on this one
+        // detail → player path.
+        Hero(
+          tag: 'series-poster-${s.id}',
+          child: SizedBox(
+            height: 44.h,
+            width: double.infinity,
+            child: TileImage(
+              imageUrl: s.bannerUrl,
+              fallbackIcon: Icons.movie_rounded,
+              borderRadius: 0,
+              isDark: isDark,
+            ),
           ),
         ),
         Positioned.fill(
@@ -191,8 +229,8 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  AppTheme.pageBackground(isDark).withValues(alpha: 0.4),
-                  AppTheme.pageBackground(isDark),
+                  heroBase.withValues(alpha: 0.4),
+                  heroBase,
                 ],
                 stops: const [0.4, 0.8, 1.0],
               ),
@@ -297,6 +335,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
           label: 'My List',
           active: isFav,
           onTap: () async {
+            HapticsService.instance.selection();
             final add = !isFav;
             setState(() => _favOverride = add);
             final ok = await DramaService.instance.toggleFavorite(s.id, add);
@@ -365,6 +404,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
   }
 
   Future<void> _toggleLike(SeriesModel s, bool isLiked, int likeCount) async {
+    HapticsService.instance.selection();
     final like = !isLiked;
     // Optimistic update.
     setState(() {
